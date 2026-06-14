@@ -28,7 +28,7 @@ from seju_face_lab.sns_metrics import (
     write_engagement_manifest,
     write_handles_manifest,
 )
-from seju_face_lab.workers import WorkerConfig, _split_paths, distribute_vectorize
+from seju_face_lab.workers import WorkerConfig, _split_paths, distribute_vectorize, run_local_evaluate
 
 
 class AnalysisModuleTests(unittest.TestCase):
@@ -182,6 +182,41 @@ class AnalysisModuleTests(unittest.TestCase):
             )
 
             self.assertEqual([score["image_id"] for score in scores], ["selected"])
+
+    def test_worker_evaluate_reports_failed_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "raw"
+            raw.mkdir()
+            _write_image(raw / "a.png", (230, 210, 200))
+            bad = root / "bad.png"
+            bad.write_text("not an image", encoding="utf-8")
+
+            model = root / "model"
+            out = root / "worker_out"
+            self.assertEqual(main(["build", "--images", str(raw), "--out", str(model)]), 0)
+            scores = run_local_evaluate([bad], model, out, backend="deterministic")
+            summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+
+            self.assertEqual(scores, [])
+            self.assertEqual(summary["failed_count"], 1)
+            self.assertEqual(summary["failed_paths"], [str(bad)])
+
+    def test_distribute_vectorize_rejects_remote_workers_until_sync_exists(self) -> None:
+        with self.assertRaisesRegex(NotImplementedError, "remote worker subset evaluation"):
+            distribute_vectorize(
+                [Path("image.png")],
+                Path("model"),
+                Path("out"),
+                workers=[
+                    WorkerConfig(
+                        name="remote-test",
+                        python="python",
+                        project_dir="repo",
+                        remote_host="nicolas2025",
+                    )
+                ],
+            )
 
     def test_organizer_parses_downloader_and_legacy_filenames(self) -> None:
         self.assertEqual(

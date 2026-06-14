@@ -60,6 +60,12 @@ def distribute_vectorize(
     active_workers = workers or [LOCAL_4090]
     if not image_paths:
         return []
+    remote_workers = [worker.name for worker in active_workers if worker.remote_host is not None]
+    if remote_workers:
+        raise NotImplementedError(
+            "remote worker subset evaluation needs an explicit shared-path or sync manifest: "
+            + ", ".join(remote_workers)
+        )
 
     out_dir.mkdir(parents=True, exist_ok=True)
     tmp_root = tmp_dir or out_dir / ".worker_tmp"
@@ -106,7 +112,6 @@ def run_local_evaluate(
 ) -> list[dict]:
     """Run evaluation for an explicit image-path subset on the local machine."""
     from .backends import get_vector_backend
-    from .embeddings import vectorize_batch_parallel
     from .metrics import _score_vector, write_scores
     from .model import load_model
 
@@ -114,13 +119,19 @@ def run_local_evaluate(
     backend_obj = get_vector_backend(backend)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    vectors = vectorize_batch_parallel(image_paths, backend_obj, workers=4)
+    vectors = []
+    failed_paths = []
+    for path in image_paths:
+        try:
+            vectors.append(backend_obj.vectorize(path, crop="center"))
+        except Exception:  # noqa: BLE001 - record per-path worker failures in the summary.
+            failed_paths.append(str(path))
     scores = sorted(
         [_score_vector(model, vector) for vector in vectors],
         key=lambda item: item.centroid_score,
         reverse=True,
     )
-    write_scores(scores, out_dir)
+    write_scores(scores, out_dir, failed_paths=failed_paths)
     return [
         {
             "image_id": s.image_id, "path": s.path,
