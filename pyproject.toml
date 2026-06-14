@@ -32,6 +32,7 @@ analysis = [
   "pandas>=2.2",
   "scikit-learn>=1.5",
   "matplotlib>=3.9",
+  "scipy>=1.13",
 ]
 all = [
   "opencv-python>=4.10",
@@ -46,6 +47,7 @@ all = [
   "pandas>=2.2",
   "scikit-learn>=1.5",
   "matplotlib>=3.9",
+  "scipy>=1.13",
 ]
 
 [project.scripts]

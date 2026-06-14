@@ -121,6 +121,49 @@ def main(argv: list[str] | None = None) -> int:
         default="seju-face-lab/0.1 (+local research; contact: local)",
     )
 
+    scrape_handles_parser = source_subparsers.add_parser(
+        "scrape-handles",
+        help="re-fetch talent profile pages and extract SNS handles (Instagram/Twitter/TikTok)",
+    )
+    scrape_handles_parser.add_argument("--manifest", type=Path, required=True,
+                                       help="existing sources manifest (e.g. data/processed/seju_sources_official_2026-06-14.jsonl)")
+    scrape_handles_parser.add_argument("--out", type=Path, required=True,
+                                       help="output .jsonl for SNS handles (e.g. data/processed/sns_handles.jsonl)")
+    scrape_handles_parser.add_argument("--max-profiles", type=int, default=None)
+    scrape_handles_parser.add_argument("--delay-seconds", type=float, default=1.0)
+    scrape_handles_parser.add_argument(
+        "--user-agent",
+        default="seju-face-lab/0.1 (+local research; contact: local)",
+    )
+
+    fetch_eng_parser = source_subparsers.add_parser(
+        "fetch-engagement",
+        help="fetch SNS follower + engagement metrics for all talents in a handles manifest",
+    )
+    fetch_eng_parser.add_argument("--handles", type=Path, required=True,
+                                   help="handles manifest from scrape-handles")
+    fetch_eng_parser.add_argument("--out", type=Path, required=True,
+                                   help="output .jsonl for engagement records")
+    fetch_eng_parser.add_argument("--platforms", nargs="+",
+                                   choices=["instagram", "twitter", "tiktok"],
+                                   default=["instagram", "twitter", "tiktok"])
+    fetch_eng_parser.add_argument("--delay-seconds", type=float, default=2.0)
+
+    # analyze command group
+    analyze_parser = subparsers.add_parser("analyze", help="statistical analysis of face scores and SNS engagement")
+    analyze_subparsers = analyze_parser.add_subparsers(dest="analyze_command", required=True)
+
+    corr_parser = analyze_subparsers.add_parser(
+        "correlation",
+        help="correlate face centroid scores against SNS engagement metrics",
+    )
+    corr_parser.add_argument("--face-scores", type=Path, required=True,
+                              help="subject_reviews.json from review-subjects command")
+    corr_parser.add_argument("--engagement", type=Path, required=True,
+                              help="engagement .jsonl from sources fetch-engagement")
+    corr_parser.add_argument("--out", type=Path, required=True,
+                              help="output directory for correlation report")
+
     args = parser.parse_args(argv)
     if args.command == "build":
         return _build(args.images, args.out, args.crop, args.backend)
@@ -143,6 +186,12 @@ def main(argv: list[str] | None = None) -> int:
         return _sources_discover(args)
     if args.command == "sources" and args.sources_command == "download":
         return _sources_download(args)
+    if args.command == "sources" and args.sources_command == "scrape-handles":
+        return _sources_scrape_handles(args)
+    if args.command == "sources" and args.sources_command == "fetch-engagement":
+        return _sources_fetch_engagement(args)
+    if args.command == "analyze" and args.analyze_command == "correlation":
+        return _analyze_correlation(args)
     parser.error(f"Unknown command: {args.command}")
     return 2
 
@@ -153,7 +202,15 @@ def _build(images: Path, out: Path, crop: str, backend_name: str) -> int:
         raise SystemExit(f"No supported images found under {images}")
 
     backend = get_vector_backend(backend_name)
-    vectors = [backend.vectorize(path, crop=crop) for path in paths]
+    vectors = []
+    failed_vectors = []
+    for path in paths:
+        try:
+            vectors.append(backend.vectorize(path, crop=crop))
+        except Exception as exc:  # noqa: BLE001 - keep model builds usable with noisy source folders.
+            failed_vectors.append({"path": str(path), "reason": str(exc)})
+    if not vectors:
+        raise SystemExit(f"No usable images found under {images}")
     embeddings = np.stack([vector.embedding for vector in vectors])
     appearances = np.stack([vector.appearance for vector in vectors])
     model = build_centroid_model(
@@ -178,9 +235,15 @@ def _build(images: Path, out: Path, crop: str, backend_name: str) -> int:
         json.dumps(descriptor_payload, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+    if failed_vectors:
+        (vector_dir / "image_vector_failures.json").write_text(
+            json.dumps({"failed_count": len(failed_vectors), "failures": failed_vectors}, indent=2),
+            encoding="utf-8",
+        )
 
     print(f"built model: {out}")
-    print(f"images: {len(paths)}")
+    print(f"images: {len(vectors)}")
+    print(f"failed images: {len(failed_vectors)}")
     print(f"backend: {backend.name}")
     print(f"embedding_dim: {model.embedding_dim}")
     print(f"prompt: {out / 'prompt.txt'}")
@@ -243,9 +306,11 @@ def _render(model_dir: Path, kind: str, out: Path) -> int:
 def _evaluate(model_dir: Path, images: Path, out: Path, crop: str, backend_name: str) -> int:
     model = load_model(model_dir)
     backend = get_vector_backend(backend_name)
-    scores = score_generated_images(model, images, crop=crop, backend=backend)
-    write_scores(scores, out)
+    failed_paths: list[str] = []
+    scores = score_generated_images(model, images, crop=crop, backend=backend, failed_paths=failed_paths)
+    write_scores(scores, out, failed_paths=failed_paths)
     print(f"evaluated images: {len(scores)}")
+    print(f"failed images: {len(failed_paths)}")
     print(f"scores: {out / 'scores.csv'}")
     return 0
 
@@ -313,3 +378,88 @@ def _sources_download(args: argparse.Namespace) -> int:
     print(f"failed: {failed}")
     print(f"out: {args.out}")
     return 1 if failed else 0
+
+
+def _sources_scrape_handles(args: argparse.Namespace) -> int:
+    from .sns_metrics import scrape_talent_sns_handles
+
+    records = scrape_talent_sns_handles(
+        manifest_path=args.manifest,
+        out_path=args.out,
+        delay_seconds=args.delay_seconds,
+        max_profiles=args.max_profiles,
+        user_agent=args.user_agent,
+    )
+    with_sns = sum(1 for r in records if r.sns_handles)
+    total_handles = sum(len(r.sns_handles) for r in records)
+    print(f"profiles scraped: {len(records)}")
+    print(f"profiles with SNS handles: {with_sns}")
+    print(f"total handles found: {total_handles}")
+    print(f"manifest: {args.out}")
+
+    # Print summary
+    for r in records:
+        if r.sns_handles:
+            handles_str = "  ".join(f"{p}=@{h}" for p, h in r.sns_handles.items())
+            print(f"  {r.talent_slug}: {handles_str}")
+        else:
+            print(f"  {r.talent_slug}: (no SNS found)")
+    return 0
+
+
+def _sources_fetch_engagement(args: argparse.Namespace) -> int:
+    from .sns_metrics import fetch_all_talent_engagement
+
+    records = fetch_all_talent_engagement(
+        handles_path=args.handles,
+        out_path=args.out,
+        delay_between_talents=args.delay_seconds,
+        platforms=args.platforms,
+    )
+    ok_count = sum(
+        1 for r in records
+        for e in r.engagements if e.fetch_status in ("ok", "partial")
+    )
+    blocked = sum(
+        1 for r in records
+        for e in r.engagements if e.fetch_status == "blocked"
+    )
+    print(f"talents processed: {len(records)}")
+    print(f"engagements fetched (ok/partial): {ok_count}")
+    print(f"blocked: {blocked}")
+    print(f"output: {args.out}")
+    return 0
+
+
+def _analyze_correlation(args: argparse.Namespace) -> int:
+    from .correlation import build_correlation_dataset, compute_correlations, write_correlation_report
+
+    print(f"loading face scores: {args.face_scores}")
+    print(f"loading engagement data: {args.engagement}")
+    rows = build_correlation_dataset(
+        subject_reviews_json=args.face_scores,
+        engagement_manifest=args.engagement,
+    )
+    print(f"dataset rows: {len(rows)}")
+    with_face = sum(1 for r in rows if r.face_mean_centroid_score is not None)
+    with_ig = sum(1 for r in rows if r.ig_followers is not None)
+    with_tw = sum(1 for r in rows if r.tw_followers is not None)
+    with_tk = sum(1 for r in rows if r.tk_followers is not None)
+    print(f"  with face score: {with_face}")
+    print(f"  with Instagram: {with_ig}")
+    print(f"  with Twitter: {with_tw}")
+    print(f"  with TikTok: {with_tk}")
+
+    correlations = compute_correlations(rows)
+    write_correlation_report(rows, correlations, args.out)
+
+    print("\nTop correlations (by |Spearman r|):")
+    top = sorted(
+        [c for c in correlations if c.spearman_r is not None],
+        key=lambda c: -abs(c.spearman_r),
+    )[:5]
+    for c in top:
+        print(f"  {c.variable_a} × {c.variable_b}: ρ={c.spearman_r:+.3f} (n={c.n}) [{c.interpretation}]")
+
+    print(f"\nreport: {args.out / 'correlation_report.md'}")
+    return 0

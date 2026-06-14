@@ -7,6 +7,7 @@ from argparse import Namespace
 from pathlib import Path
 from unittest.mock import patch
 
+import numpy as np
 from PIL import Image, ImageDraw
 
 import bootstrap  # noqa: F401
@@ -40,7 +41,9 @@ class PipelineTests(unittest.TestCase):
             _write_face_like_image(raw / "a.png", (235, 205, 190), eye_offset=0)
             _write_face_like_image(raw / "b.png", (225, 198, 184), eye_offset=2)
             _write_face_like_image(raw / "c.png", (240, 210, 196), eye_offset=-2)
+            (raw / "broken.jpg").write_text("not an image", encoding="utf-8")
             _write_face_like_image(generated / "candidate.png", (232, 202, 188), eye_offset=1)
+            (generated / "broken.jpg").write_text("not an image", encoding="utf-8")
             _write_face_like_image(generated_alt / "candidate_alt.png", (170, 145, 130), eye_offset=7)
             _write_face_like_image(subjects / "near_subject" / "near.png", (232, 202, 188), eye_offset=1)
             _write_face_like_image(subjects / "far_subject" / "far.png", (170, 145, 130), eye_offset=7)
@@ -51,6 +54,22 @@ class PipelineTests(unittest.TestCase):
                 main(["build", "--images", str(raw), "--out", str(root / "model_backend"), "--backend", "deterministic"]),
                 0,
             )
+            with patch("seju_face_lab.backends._import_cv2", return_value=_FakeCV2()):
+                self.assertEqual(
+                    main(
+                        [
+                            "build",
+                            "--images",
+                            str(raw),
+                            "--out",
+                            str(root / "model_opencv"),
+                            "--backend",
+                            "opencv-face",
+                        ]
+                    ),
+                    0,
+                )
+            self.assertTrue((root / "model_opencv" / "centroids.npz").exists())
             model = load_model(model_dir)
             self.assertEqual(len(model.image_ids), 3)
             self.assertGreater(model.embedding_dim, 100)
@@ -66,6 +85,10 @@ class PipelineTests(unittest.TestCase):
             )
             self.assertIn("hair covering face", generation_manifest["negative_prompt"])
             self.assertIn("illustration", generation_manifest["negative_prompt"])
+            vector_failures = json.loads(
+                (model_dir / "vectors" / "image_vector_failures.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(vector_failures["failed_count"], 1)
 
             self.assertEqual(
                 main(["render", "--model", str(model_dir), "--kind", "mean", "--out", str(root / "mean.png")]),
@@ -107,6 +130,9 @@ class PipelineTests(unittest.TestCase):
             self.assertIn("candidate", scores)
             self.assertIn("centroid_score", scores)
             self.assertTrue((eval_dir / "summary.json").exists())
+            eval_summary = json.loads((eval_dir / "summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(eval_summary["image_count"], 1)
+            self.assertEqual(eval_summary["failed_count"], 1)
             self.assertEqual(
                 main(
                     [
@@ -187,13 +213,14 @@ class PipelineTests(unittest.TestCase):
             )
             self.assertEqual(run_compare["run_count"], 2)
             self.assertEqual(run_compare["best_run_dir"], str(generated))
+            self.assertEqual(run_compare["runs"][0]["failed_count"], 1)
             self.assertTrue((run_compare_dir / "generation_run_reviews.csv").exists())
             self.assertEqual(
                 main(
                     [
                         "compare-runs",
                         "--runs",
-                        str(generated_empty),
+                        str(generated_empty / "evaluation"),
                         "--out",
                         str(empty_run_compare_dir),
                     ]
@@ -282,6 +309,33 @@ def _write_face_like_image(path: Path, skin: tuple[int, int, int], eye_offset: i
     draw.ellipse((56 + eye_offset, 40, 60 + eye_offset, 44), fill=(40, 35, 34))
     draw.arc((40, 52, 58, 66), start=0, end=180, fill=(150, 80, 82), width=2)
     image.save(path)
+
+
+class _FakeCV2:
+    COLOR_RGB2GRAY = 1
+
+    class data:
+        haarcascades = "."
+
+    @staticmethod
+    def cvtColor(rgb: np.ndarray, _code: int) -> np.ndarray:
+        return np.mean(rgb, axis=2).astype(np.uint8)
+
+    class CascadeClassifier:
+        def __init__(self, _path: str) -> None:
+            pass
+
+        def empty(self) -> bool:
+            return False
+
+        def detectMultiScale(
+            self,
+            _gray: np.ndarray,
+            scaleFactor: float,
+            minNeighbors: int,
+            minSize: tuple[int, int],
+        ) -> np.ndarray:
+            return np.asarray([[24, 16, 52, 60]], dtype=np.int32)
 
 
 if __name__ == "__main__":

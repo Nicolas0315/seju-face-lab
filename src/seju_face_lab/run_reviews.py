@@ -12,6 +12,7 @@ class GenerationRunReview:
     model_id: str
     status: str
     image_count: int
+    failed_count: int
     best_image_id: str | None
     best_centroid_score: float | None
     mean_centroid_score: float | None
@@ -47,14 +48,14 @@ def write_generation_run_reviews(reviews: list[GenerationRunReview], out_dir: Pa
 
 
 def _review_generation_run(run_dir: Path) -> GenerationRunReview:
-    summary_path = run_dir / "evaluation" / "summary.json"
+    summary_path = _summary_path(run_dir)
     if not summary_path.exists():
         raise ValueError(
             f"Missing evaluation summary for {run_dir}. Run evaluate with "
-            f"--out {run_dir / 'evaluation'} first."
+            f"--out {run_dir / 'evaluation'} first, or pass an evaluation output directory."
         )
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
-    generation_run_path = run_dir / "generation_run.json"
+    generation_run_path = _generation_run_path(run_dir)
     generation_run = (
         json.loads(generation_run_path.read_text(encoding="utf-8"))
         if generation_run_path.exists()
@@ -69,6 +70,7 @@ def _review_generation_run(run_dir: Path) -> GenerationRunReview:
         model_id=str(config.get("model_id", "")),
         status=str(result.get("status", "")),
         image_count=int(summary.get("image_count", 0)),
+        failed_count=int(summary.get("failed_count", 0)),
         best_image_id=summary.get("best_image_id"),
         best_centroid_score=_optional_float(summary.get("best_centroid_score")),
         mean_centroid_score=_optional_float(summary.get("mean_centroid_score")),
@@ -77,10 +79,24 @@ def _review_generation_run(run_dir: Path) -> GenerationRunReview:
     )
 
 
+def _summary_path(run_dir: Path) -> Path:
+    nested = run_dir / "evaluation" / "summary.json"
+    if nested.exists():
+        return nested
+    return run_dir / "summary.json"
+
+
+def _generation_run_path(run_dir: Path) -> Path:
+    direct = run_dir / "generation_run.json"
+    if direct.exists():
+        return direct
+    return run_dir.parent / "generation_run.json"
+
+
 def _render_generation_run_reviews_csv(reviews: list[GenerationRunReview]) -> str:
     lines = [
         "rank,run_dir,provider,model_id,status,image_count,best_image_id,"
-        "best_centroid_score,mean_centroid_score,median_centroid_score,prompt_words"
+        "failed_count,best_centroid_score,mean_centroid_score,median_centroid_score,prompt_words"
     ]
     for rank, review in enumerate(reviews, start=1):
         lines.append(
@@ -93,6 +109,7 @@ def _render_generation_run_reviews_csv(reviews: list[GenerationRunReview]) -> st
                     _csv(review.status),
                     str(review.image_count),
                     _csv(review.best_image_id or ""),
+                    str(review.failed_count),
                     _format_optional(review.best_centroid_score),
                     _format_optional(review.mean_centroid_score),
                     _format_optional(review.median_centroid_score),
@@ -108,11 +125,11 @@ def _render_generation_run_reviews_md(reviews: list[GenerationRunReview]) -> str
     if not reviews:
         lines.extend(["No generation runs provided.", ""])
         return "\n".join(lines)
-    lines.append("| rank | run | images | best_score | mean_score | median_score | best_image |")
-    lines.append("| --- | --- | ---: | ---: | ---: | ---: | --- |")
+    lines.append("| rank | run | images | failed | best_score | mean_score | median_score | best_image |")
+    lines.append("| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |")
     for rank, review in enumerate(reviews, start=1):
         lines.append(
-            f"| {rank} | {review.run_dir} | {review.image_count} | "
+            f"| {rank} | {review.run_dir} | {review.image_count} | {review.failed_count} | "
             f"{_format_optional(review.best_centroid_score)} | "
             f"{_format_optional(review.mean_centroid_score)} | "
             f"{_format_optional(review.median_centroid_score)} | "

@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 from PIL import Image, ImageOps
+
+if TYPE_CHECKING:
+    from .backends import VectorBackend
 
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
 APPEARANCE_SIZE = 64
@@ -33,6 +38,10 @@ def iter_image_paths(root: Path) -> list[Path]:
 def load_normalized_image(path: Path, crop: str = "center") -> Image.Image:
     image = Image.open(path)
     image = ImageOps.exif_transpose(image).convert("RGB")
+    return normalize_image(image, crop=crop)
+
+
+def normalize_image(image: Image.Image, crop: str = "center") -> Image.Image:
     if crop == "center":
         image = _center_square_crop(image)
     elif crop != "none":
@@ -42,6 +51,10 @@ def load_normalized_image(path: Path, crop: str = "center") -> Image.Image:
 
 def vectorize_image(path: Path, crop: str = "center") -> ImageVector:
     image = load_normalized_image(path, crop=crop)
+    return vectorize_normalized_image(path, image)
+
+
+def vectorize_normalized_image(path: Path, image: Image.Image) -> ImageVector:
     rgb = np.asarray(image, dtype=np.float32) / 255.0
     gray = np.asarray(image.convert("L").resize((EMBED_SIZE, EMBED_SIZE)), dtype=np.float32) / 255.0
 
@@ -165,6 +178,42 @@ def _region_features(gray: np.ndarray, rgb: np.ndarray) -> np.ndarray:
         ]
     )
     return np.asarray(values, dtype=np.float32)
+
+
+def vectorize_batch_parallel(
+    paths: list[Path],
+    backend: "VectorBackend",
+    crop: str = "center",
+    workers: int = 4,
+) -> list[ImageVector]:
+    """Vectorize a batch of images using a thread pool.
+
+    Thread-based parallelism works well for I/O-bound deterministic backend and
+    for GPU backends (ONNX Runtime releases the GIL during inference).
+    Failed images are skipped with a warning.
+    """
+    if not paths:
+        return []
+
+    results: dict[int, ImageVector] = {}
+    errors: list[tuple[int, Exception]] = []
+
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        future_to_idx = {
+            executor.submit(backend.vectorize, path, crop): idx
+            for idx, path in enumerate(paths)
+        }
+        for future in as_completed(future_to_idx):
+            idx = future_to_idx[future]
+            try:
+                results[idx] = future.result()
+            except Exception as exc:  # noqa: BLE001
+                errors.append((idx, exc))
+
+    for idx, exc in errors:
+        print(f"  warn: vectorize failed for {paths[idx].name}: {exc}")
+
+    return [results[i] for i in sorted(results)]
 
 
 def _l2_normalize(vector: np.ndarray) -> np.ndarray:

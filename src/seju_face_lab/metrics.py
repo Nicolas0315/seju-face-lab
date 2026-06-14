@@ -41,9 +41,17 @@ def score_generated_images(
     images_dir: Path,
     crop: str = "center",
     backend: VectorBackend | None = None,
+    failed_paths: list[str] | None = None,
 ) -> list[Score]:
     active_backend = backend or get_vector_backend("deterministic")
-    vectors = [active_backend.vectorize(path, crop=crop) for path in iter_image_paths(images_dir)]
+    vectors: list[ImageVector] = []
+    for path in iter_image_paths(images_dir):
+        try:
+            vectors.append(active_backend.vectorize(path, crop=crop))
+        except Exception:  # noqa: BLE001 - keep batch evaluation running and report failures.
+            if failed_paths is None:
+                raise
+            failed_paths.append(str(path))
     scores = [_score_vector(model, vector) for vector in vectors]
     return sorted(scores, key=lambda item: item.centroid_score, reverse=True)
 
@@ -98,7 +106,7 @@ def write_subject_reviews(reviews: list[SubjectReview], out_dir: Path) -> None:
     )
 
 
-def write_scores(scores: list[Score], out_dir: Path) -> None:
+def write_scores(scores: list[Score], out_dir: Path, failed_paths: list[str] | None = None) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     csv_lines = [
         "image_id,path,cosine_to_mean,cosine_to_median,euclidean_to_mean,euclidean_to_median,centroid_score"
@@ -118,9 +126,12 @@ def write_scores(scores: list[Score], out_dir: Path) -> None:
             )
         )
     (out_dir / "scores.csv").write_text("\n".join(csv_lines) + "\n", encoding="utf-8-sig")
-    (out_dir / "evaluation.md").write_text(_render_scores(scores), encoding="utf-8")
+    (out_dir / "evaluation.md").write_text(
+        _render_scores(scores, failed_paths or []),
+        encoding="utf-8",
+    )
     (out_dir / "summary.json").write_text(
-        json.dumps(_score_summary(scores), ensure_ascii=False, indent=2),
+        json.dumps(_score_summary(scores, failed_paths or []), ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
 
@@ -198,21 +209,26 @@ def _cosine(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.dot(a, b) / denom)
 
 
-def _render_scores(scores: list[Score]) -> str:
+def _render_scores(scores: list[Score], failed_paths: list[str]) -> str:
     lines = ["# generated-image centroid evaluation", ""]
     if not scores:
         lines.extend(["No generated images found.", ""])
-        return "\n".join(lines)
-    lines.append("| rank | image_id | centroid_score | cosine_mean | cosine_median |")
-    lines.append("| --- | --- | ---: | ---: | ---: |")
-    for rank, score in enumerate(scores, start=1):
-        lines.append(
-            f"| {rank} | {score.image_id} | {score.centroid_score:.4f} | "
-            f"{score.cosine_to_mean:.4f} | {score.cosine_to_median:.4f} |"
-        )
+    else:
+        lines.append("| rank | image_id | centroid_score | cosine_mean | cosine_median |")
+        lines.append("| --- | --- | ---: | ---: | ---: |")
+        for rank, score in enumerate(scores, start=1):
+            lines.append(
+                f"| {rank} | {score.image_id} | {score.centroid_score:.4f} | "
+                f"{score.cosine_to_mean:.4f} | {score.cosine_to_median:.4f} |"
+            )
+        lines.append("")
+    if failed_paths:
+        lines.append("## Failed Images")
+        lines.append("")
+        lines.extend(f"- {path}" for path in failed_paths)
+        lines.append("")
     lines.extend(
         [
-            "",
             "Scores are approximate vector similarity against this local centroid model.",
             "",
         ]
@@ -248,10 +264,12 @@ def _render_subject_reviews(reviews: list[SubjectReview]) -> str:
     return "\n".join(lines)
 
 
-def _score_summary(scores: list[Score]) -> dict:
+def _score_summary(scores: list[Score], failed_paths: list[str]) -> dict:
     if not scores:
         return {
             "image_count": 0,
+            "failed_count": len(failed_paths),
+            "failed_paths": failed_paths[:20],
             "best_image_id": None,
             "best_centroid_score": None,
             "mean_centroid_score": None,
@@ -262,6 +280,8 @@ def _score_summary(scores: list[Score]) -> dict:
     best = scores[0]
     return {
         "image_count": len(scores),
+        "failed_count": len(failed_paths),
+        "failed_paths": failed_paths[:20],
         "best_image_id": best.image_id,
         "best_centroid_score": round(float(best.centroid_score), 6),
         "mean_centroid_score": round(float(np.mean(centroid_scores)), 6),
