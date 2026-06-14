@@ -5,6 +5,7 @@ import unittest
 from datetime import date
 from pathlib import Path
 
+import bootstrap  # noqa: F401
 from seju_face_lab.sources import (
     SourceCandidate,
     parse_profile,

@@ -6,6 +6,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
+import bootstrap  # noqa: F401
 from seju_face_lab.cli import main
 from seju_face_lab.model import load_model
 
