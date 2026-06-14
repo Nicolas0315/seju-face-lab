@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
@@ -11,6 +12,9 @@ import numpy as np
 from PIL import Image, ImageOps
 
 from .embeddings import ImageVector, normalize_image, vectorize_image, vectorize_normalized_image
+
+_DLL_DIRECTORY_HANDLES: list[Any] = []
+_ADDED_DLL_DIRS: set[str] = set()
 
 
 class VectorBackend(Protocol):
@@ -84,6 +88,7 @@ class InsightFaceBackend:
                     "insightface is not installed. "
                     "Run: pip install insightface onnxruntime-gpu"
                 ) from exc
+            _prepare_windows_torch_cuda_dlls()
             providers = (
                 ["CUDAExecutionProvider", "CPUExecutionProvider"]
                 if self.gpu_id >= 0
@@ -332,6 +337,48 @@ def _import_deepface() -> Any:
             "backend=deepface."
         ) from exc
     return DeepFace
+
+
+def _prepare_windows_torch_cuda_dlls() -> Path | None:
+    if not _is_windows() or importlib.util.find_spec("torch") is None:
+        return None
+    try:
+        import torch
+    except Exception:
+        return None
+
+    torch_file = getattr(torch, "__file__", None)
+    if not torch_file:
+        return None
+    dll_dir = Path(torch_file).resolve().parent / "lib"
+    if not (dll_dir / "cublasLt64_12.dll").exists():
+        return None
+
+    dll_dir_text = str(dll_dir)
+    key = dll_dir_text.casefold()
+    if key in _ADDED_DLL_DIRS:
+        return dll_dir
+
+    path_entries = [entry.casefold() for entry in os.environ.get("PATH", "").split(os.pathsep) if entry]
+    if key not in path_entries:
+        os.environ["PATH"] = dll_dir_text + os.pathsep + os.environ.get("PATH", "")
+
+    _add_windows_dll_directory(dll_dir_text)
+    _ADDED_DLL_DIRS.add(key)
+    return dll_dir
+
+
+def _is_windows() -> bool:
+    return os.name == "nt"
+
+
+def _add_windows_dll_directory(dll_dir: str) -> None:
+    add_dll_directory = getattr(os, "add_dll_directory", None)
+    if callable(add_dll_directory):
+        try:
+            _DLL_DIRECTORY_HANDLES.append(add_dll_directory(dll_dir))
+        except OSError:
+            pass
 
 
 def _l2_normalize(vector: np.ndarray) -> np.ndarray:

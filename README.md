@@ -237,6 +237,10 @@ Implemented now:
 - `deepface`: optional `.[deepface]` backend using `DeepFace.represent`, defaulting to ArcFace
 - `clip-style`: optional `.[clip]` image-style scoring via `style-evaluate`; kept separate from face geometry
 
+On Windows, the InsightFace backend automatically adds torch's bundled CUDA DLL directory
+to the process search path when it exists, so ONNXRuntime-GPU can use `CUDAExecutionProvider`
+without hand-editing `PATH`.
+
 Use the OpenCV face-crop backend after installing the optional vision dependencies:
 
 ```powershell

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
 import urllib.error
@@ -12,6 +13,7 @@ import bootstrap  # noqa: F401
 import numpy as np
 from PIL import Image
 from scripts.organize_by_talent import _talent_slug_from_filename
+from seju_face_lab import backends as backends_module
 from seju_face_lab.backends import DeepFaceBackend, InsightFaceBackend
 from seju_face_lab.cli import main
 from seju_face_lab.correlation import (
@@ -1156,6 +1158,51 @@ class AnalysisModuleTests(unittest.TestCase):
         with patch("seju_face_lab.backends._import_cv2", return_value=_FakeCV2()):
             with self.assertRaisesRegex(ValueError, "No face detected"):
                 backend.vectorize(Path("missing-face.jpg"))
+
+    def test_prepare_windows_torch_cuda_dlls_adds_torch_lib_once(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            torch_init = root / "torch" / "__init__.py"
+            dll_dir = torch_init.parent / "lib"
+            dll_dir.mkdir(parents=True)
+            torch_init.write_text("", encoding="utf-8")
+            (dll_dir / "cublasLt64_12.dll").write_text("", encoding="utf-8")
+            fake_torch = SimpleNamespace(__file__=str(torch_init))
+
+            backends_module._ADDED_DLL_DIRS.clear()  # noqa: SLF001
+            backends_module._DLL_DIRECTORY_HANDLES.clear()  # noqa: SLF001
+            with (
+                patch("seju_face_lab.backends._is_windows", return_value=True),
+                patch("seju_face_lab.backends.importlib.util.find_spec", return_value=object()),
+                patch.dict("sys.modules", {"torch": fake_torch}),
+                patch.dict(os.environ, {"PATH": "C:\\base"}),
+                patch("seju_face_lab.backends._add_windows_dll_directory") as add_dll_directory,
+            ):
+                first = backends_module._prepare_windows_torch_cuda_dlls()  # noqa: SLF001
+                second = backends_module._prepare_windows_torch_cuda_dlls()  # noqa: SLF001
+
+            self.assertEqual(first, dll_dir.resolve())
+            self.assertEqual(second, dll_dir.resolve())
+            self.assertEqual(add_dll_directory.call_count, 1)
+
+    def test_prepare_windows_torch_cuda_dlls_ignores_non_windows(self) -> None:
+        with patch("seju_face_lab.backends._is_windows", return_value=False):
+            self.assertIsNone(backends_module._prepare_windows_torch_cuda_dlls())  # noqa: SLF001
+
+    def test_prepare_windows_torch_cuda_dlls_ignores_broken_torch_import(self) -> None:
+        real_import = __import__
+
+        def broken_torch_import(name: str, *args: object, **kwargs: object) -> object:
+            if name == "torch":
+                raise OSError("broken torch")
+            return real_import(name, *args, **kwargs)
+
+        with (
+            patch("seju_face_lab.backends._is_windows", return_value=True),
+            patch("seju_face_lab.backends.importlib.util.find_spec", return_value=object()),
+            patch("builtins.__import__", side_effect=broken_torch_import),
+        ):
+            self.assertIsNone(backends_module._prepare_windows_torch_cuda_dlls())  # noqa: SLF001
 
     def test_deepface_backend_vectorizes_largest_detected_face(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

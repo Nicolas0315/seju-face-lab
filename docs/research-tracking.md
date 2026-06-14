@@ -29,7 +29,7 @@ Retrieval/design date: 2026-06-14.
 
 Create and track these issues:
 
-- `P1 GPU face embeddings`: run full-set InsightFace/ONNXRuntime-GPU comparisons on RTX machines, then record `backend-diagnostics` plus `compare-backends` summaries.
+- `P1 GPU face embeddings`: run larger generated batches through full-set InsightFace/ONNXRuntime-GPU comparisons, then record rank agreement across multiple candidates.
 - `P1 Celebrity subject review workflow`: collect reviewed subject folders and run `review-subjects`.
 - `P1 Generation loop`: connect `generation_manifest.json` to Diffusers or ComfyUI batches.
 - `P1 SNS correlation workflow`: run handle extraction, engagement manifesting, and correlation reports.
@@ -71,6 +71,7 @@ Create and track these issues:
 - Detector-friendly RTX 4090 v2 produced one QA-passing candidate out of two; v3/v4 showed why QA is needed by producing extreme crops, off-center faces, and collages.
 - The current committed route is detector-friendly generation, then `review-generated` or deterministic/OpenCV evaluation + `qa-images` + `compare-runs` with QA-gated ranking before any visual interpretation.
 - InsightFace sample `compare-backends` succeeded on `data/raw/seju_official_sample` against `outputs/generated_detector_v5`: 2 usable reference images, 1 generated image, 512D embeddings, best generated image `candidate_0001_seed_260623`, best InsightFace centroid score `0.052322`.
-- Current ONNXRuntime reports `TensorrtExecutionProvider`, `CUDAExecutionProvider`, and `CPUExecutionProvider`; this is provider visibility evidence, while per-dataset backend success is tracked through `compare-backends`.
+- Full-set InsightFace `compare-backends` succeeded against `outputs/generated_detector_v5` after Windows torch CUDA DLL path preparation: deterministic refs `259/259`, InsightFace refs `224/259`, generated images `1/1`, InsightFace embedding dimension `512`, best generated image `candidate_0001_seed_260623`, best InsightFace centroid score `0.038486`.
+- Current ONNXRuntime reports `TensorrtExecutionProvider`, `CUDAExecutionProvider`, and `CPUExecutionProvider`; the full-set comparison log confirms applied providers `CUDAExecutionProvider, CPUExecutionProvider`.
 - `compare-backends` is now the committed review path for checking whether deterministic/OpenCV and neural embeddings rank the same generated or subject images.
 - Full committed workflow notes are in `docs/gpu-generation-log.md`.
