@@ -87,8 +87,8 @@ class PipelineTests(unittest.TestCase):
             self.assertIn("hair covering face", generation_manifest["negative_prompt"])
             self.assertIn("illustration", generation_manifest["negative_prompt"])
             self.assertIn("detector-friendly", generation_manifest["prompt_profiles"])
-            self.assertIn("both eyes fully visible", generation_manifest["prompt_profiles"]["detector-friendly"])
-            self.assertIn("profile view", generation_manifest["negative_prompt_profiles"]["detector-friendly"])
+            self.assertIn("passport headshot", generation_manifest["prompt_profiles"]["detector-friendly"])
+            self.assertIn("side profile", generation_manifest["negative_prompt_profiles"]["detector-friendly"])
             vector_failures = json.loads(
                 (model_dir / "vectors" / "image_vector_failures.json").read_text(encoding="utf-8")
             )
@@ -247,8 +247,8 @@ class PipelineTests(unittest.TestCase):
                 (detector_generation_dir / "generation_run.json").read_text(encoding="utf-8")
             )
             self.assertEqual(detector_run["config"]["prompt_profile"], "detector-friendly")
-            self.assertIn("both eyes fully visible", detector_run["config"]["prompt"])
-            self.assertIn("profile view", detector_run["config"]["negative_prompt"])
+            self.assertIn("passport headshot", detector_run["config"]["prompt"])
+            self.assertIn("side profile", detector_run["config"]["negative_prompt"])
             self.assertEqual(
                 main(
                     [

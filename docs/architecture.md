@@ -28,12 +28,15 @@ Retrieval/design date: 2026-06-14.
 6. `style-evaluate`
    - generated candidates are scored against mean/median rendered appearances with OpenCLIP image embeddings
    - this is a style/photographic axis, not a face-geometry score
-7. `compare-runs`
+7. `qa-images`
+   - generated candidates are checked for exactly one centered frontal OpenCV face
+   - this catches collages, extreme crops, off-center faces, and no-face detector failures before review
+8. `compare-runs`
    - generation batches are ranked by face score, or by best per-image combined face/style score when style outputs are present
-8. `review-subjects`
+9. `review-subjects`
    - per-person image folders are ranked against the local seju centroid
    - output is CSV, Markdown, and JSON for review and tracking
-9. SNS and correlation analysis
+10. SNS and correlation analysis
    - `sources scrape-handles` writes reviewed SNS handle manifests
    - `sources fetch-engagement` writes best-effort public engagement manifests
    - `analyze correlation` joins `subject_reviews.json` to SNS metrics
@@ -72,6 +75,7 @@ identity recognition, attractiveness scoring, ethnicity classification, or an ob
 - Keep raw image sets and generated candidates Git-ignored.
 - Use `insightface` or `deepface` for face-embedding cross-checks after deterministic results are stable.
 - Use Diffusers or ComfyUI to generate candidates from `generation_manifest.json`, then score them with `evaluate` and `style-evaluate`.
+- Run `qa-images` before trusting generated-image scores; a collage can score well if one crop matches the centroid.
 - Keep generated-image prompts aggregate-only; avoid copying a specific real person.
 - `seju_face_lab.workers` contains local/SSH worker helpers; treat remote writes as explicit ops steps, not default CLI behavior.
 
@@ -91,6 +95,12 @@ Detector-friendly generation pass:
 
 ```powershell
 python -m seju_face_lab generate --model outputs/seju_model --out outputs/generated_detector --provider diffusers --prompt-profile detector-friendly --count 8 --device cuda
+```
+
+Generated-image QA:
+
+```powershell
+python -m seju_face_lab qa-images --images outputs/generated_detector --out outputs/generated_detector/quality
 ```
 
 Style-axis evaluation:

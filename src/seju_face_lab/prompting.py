@@ -12,20 +12,24 @@ def prompt_from_descriptors(descriptors: dict[str, float], profile: str = "balan
     warmth = _warmth(descriptors)
     structure = _structure(descriptors)
     texture = _texture(descriptors)
-    prompt = (
+    traits = f"{tone}, {contrast}, {warmth}, {structure}, {texture}"
+    if profile == "detector-friendly":
+        return (
+            "Aggregate traits seju-face photoreal passport headshot, "
+            "new fictional person, no celebrity likeness, "
+            f"{traits}, "
+            "full face visible, centered head and shoulders, both eyes visible, "
+            "looking at camera, plain background, "
+            "natural expression, realistic skin."
+        )
+    return (
         "Aggregate traits seju-face photoreal close-up portrait, "
         "new fictional person, "
         "no celebrity likeness, "
-        f"{tone}, {contrast}, {warmth}, {structure}, {texture}, "
+        f"{traits}, "
         "frontal unobscured face, clear eyes, natural expression, "
         "soft editorial light, realistic skin."
     )
-    if profile == "detector-friendly":
-        prompt += (
-            " Centered head and shoulders, both eyes fully visible, looking into camera, "
-            "face fills frame, plain background, no hair covering eyes, no hands near face."
-        )
-    return prompt
 
 
 def negative_prompt_for_profile(profile: str) -> str:
@@ -33,8 +37,8 @@ def negative_prompt_for_profile(profile: str) -> str:
         return ""
     if profile == "detector-friendly":
         return (
-            "profile view, side face, turned head, closed eyes, sunglasses, mask, "
-            "hand over face, hair over eyes, cropped face, multiple people"
+            "side profile, turned head, extreme close-up, cropped face, closed eyes, "
+            "sunglasses, mask, hair over eyes, hands, multiple people, grid, collage, split screen"
         )
     raise ValueError(f"Unsupported prompt profile: {profile}")
 

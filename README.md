@@ -95,6 +95,15 @@ For batches meant to pass face detectors before scoring, use the detector-friend
 python -m seju_face_lab generate --model outputs/seju_model --out outputs/generated_detector --provider diffusers --prompt-profile detector-friendly --count 8
 ```
 
+Run the OpenCV generated-image QA gate before trusting a high score from a generated batch:
+
+```powershell
+python -m seju_face_lab qa-images --images outputs/generated_detector --out outputs/generated_detector/quality
+```
+
+This writes `image_quality.csv`, `image_quality.md`, and `image_quality.json`. A candidate passes only
+when OpenCV sees one centered frontal face with a usable crop size.
+
 Review other public-figure or celebrity image sets by folder:
 
 ```text
@@ -228,6 +237,7 @@ See `docs/gpu-generation-log.md` for RTX 4090 generation smoke results.
 - evaluation `summary.json`: best/mean/median generated-image similarity for quick comparisons.
 - style evaluation `style_scores.csv`: OpenCLIP image-style similarity to mean/median renderings.
 - style evaluation `style_summary.json`: best/mean/median style-axis scores.
+- image quality `image_quality.csv`: OpenCV single-face QA for generated candidates.
 - generation run reviews: rank evaluated candidate batches by local centroid scores.
 - generation run reviews include style and per-image combined scores with matched paths when style outputs exist.
 - subject review outputs: per-person approximate similarity rankings.

@@ -18,6 +18,7 @@ from seju_face_lab.correlation import (
     compute_correlations,
     write_correlation_report,
 )
+from seju_face_lab.quality import ImageQuality, judge_face_quality, review_image_quality
 from seju_face_lab.run_reviews import review_generation_runs, write_generation_run_reviews
 from seju_face_lab.sns_metrics import (
     SnsEngagement,
@@ -37,6 +38,55 @@ from seju_face_lab.workers import WorkerConfig, _split_paths, distribute_vectori
 
 
 class AnalysisModuleTests(unittest.TestCase):
+    def test_generated_image_quality_gate_flags_collage_and_cropping(self) -> None:
+        self.assertEqual(judge_face_quality(1, 0.20, 0.10), (True, "single centered face"))
+        self.assertEqual(judge_face_quality(4, 0.20, 0.10), (False, "requires exactly one detected face"))
+        self.assertEqual(judge_face_quality(1, 0.70, 0.10), (False, "detected face is too close or cropped"))
+        self.assertEqual(judge_face_quality(1, 0.20, 0.40), (False, "detected face is off center"))
+
+    def test_cli_qa_images_writes_quality_report(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            out = root / "quality"
+            with patch(
+                "seju_face_lab.cli.review_image_quality",
+                return_value=[
+                    ImageQuality(
+                        image_id="candidate",
+                        path="candidate.png",
+                        face_count=1,
+                        largest_face_area_ratio=0.2,
+                        center_offset=0.1,
+                        qa_pass=True,
+                        reason="single centered face",
+                    )
+                ],
+            ):
+                self.assertEqual(main(["qa-images", "--images", str(root), "--out", str(out)]), 0)
+
+            summary = json.loads((out / "image_quality.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["pass_count"], 1)
+
+    def test_image_quality_records_per_file_failures(self) -> None:
+        with patch("seju_face_lab.quality._import_cv2", return_value=object()):
+            with patch(
+                "seju_face_lab.quality.iter_image_paths",
+                return_value=[Path("bad.png"), Path("good.png")],
+            ):
+                with patch(
+                    "seju_face_lab.quality._review_one_image",
+                    side_effect=[
+                        ValueError("broken image"),
+                        ImageQuality("good", "good.png", 1, 0.2, 0.1, True, "single centered face"),
+                    ],
+                ):
+                    reviews = review_image_quality(Path("images"))
+
+        self.assertEqual(len(reviews), 2)
+        self.assertFalse(reviews[0].qa_pass)
+        self.assertIn("broken image", reviews[0].reason)
+        self.assertTrue(reviews[1].qa_pass)
+
     def test_extract_sns_handles_ignores_navigation_paths(self) -> None:
         handles = extract_sns_handles_from_links(
             [

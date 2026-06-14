@@ -12,6 +12,7 @@ from .generation import build_generation_config, run_diffusers_generation, write
 from .metrics import review_subject_directories, score_generated_images, write_scores, write_subject_reviews
 from .model import build_centroid_model, load_model, save_model
 from .prompting import prompt_from_descriptors
+from .quality import review_image_quality, write_image_quality
 from .run_reviews import review_generation_runs, write_generation_run_reviews
 from .sources import discover_sources, download_source_images, read_source_manifest, write_source_manifest
 from .style import OpenClipStyleBackend, score_style_images, write_style_scores
@@ -95,6 +96,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     compare_runs_parser.add_argument("--runs", type=Path, nargs="+", required=True)
     compare_runs_parser.add_argument("--out", type=Path, required=True)
+
+    qa_parser = subparsers.add_parser(
+        "qa-images",
+        help="flag generated images that are not a single centered frontal face",
+    )
+    qa_parser.add_argument("--images", type=Path, required=True)
+    qa_parser.add_argument("--out", type=Path, required=True)
 
     review_parser = subparsers.add_parser(
         "review-subjects",
@@ -210,6 +218,8 @@ def main(argv: list[str] | None = None) -> int:
         return _style_evaluate(args)
     if args.command == "compare-runs":
         return _compare_runs(args.runs, args.out)
+    if args.command == "qa-images":
+        return _qa_images(args.images, args.out)
     if args.command == "review-subjects":
         return _review_subjects(args.model, args.subjects, args.out, args.crop, args.backend)
     if args.command == "backends":
@@ -372,6 +382,16 @@ def _compare_runs(run_dirs: list[Path], out: Path) -> int:
     write_generation_run_reviews(reviews, out)
     print(f"compared runs: {len(reviews)}")
     print(f"reviews: {out / 'generation_run_reviews.csv'}")
+    return 0
+
+
+def _qa_images(images: Path, out: Path) -> int:
+    reviews = review_image_quality(images)
+    write_image_quality(reviews, out)
+    pass_count = sum(1 for review in reviews if review.qa_pass)
+    print(f"reviewed images: {len(reviews)}")
+    print(f"qa pass: {pass_count}")
+    print(f"qa report: {out / 'image_quality.csv'}")
     return 0
 
 

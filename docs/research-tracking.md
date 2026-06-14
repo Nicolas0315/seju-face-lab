@@ -16,6 +16,7 @@ Retrieval/design date: 2026-06-14.
 - `compare-runs` reports style and same-image combined scores when style outputs are present.
 - Image-generation dry-run planning and local RTX 4090 Diffusers smoke runs are implemented.
 - `generate --prompt-profile detector-friendly` records detector-oriented prompt settings for frontal, unobscured candidate batches.
+- `qa-images` flags generated candidates that are collages, extreme crops, off-center faces, or missing a frontal OpenCV face.
 
 ## GitHub Issue Plan
 
@@ -47,17 +48,18 @@ Create and track these issues:
 6. For detector-visible scoring batches, use `generate --prompt-profile detector-friendly`.
 7. Generate with Diffusers/ComfyUI on a GPU worker and score with `evaluate`.
 8. Run `style-evaluate` so generated candidates have both face-geometry and style-axis scores.
-9. Rank evaluated generated batches with `compare-runs`, including combined face/style scores when available.
-10. Run SNS handle/engagement manifests and `analyze correlation` for reviewable metric joins.
-11. Compare deterministic scores against InsightFace/DeepFace on the same ignored image sets.
+9. Run `qa-images` before visual review so collages/extreme crops do not win on score alone.
+10. Rank evaluated generated batches with `compare-runs`, including combined face/style scores when available.
+11. Run SNS handle/engagement manifests and `analyze correlation` for reviewable metric joins.
+12. Compare deterministic scores against InsightFace/DeepFace on the same ignored image sets.
 
 ## GPU Generation Notes
 
 - RTX 4090 smoke generation succeeded with `.venv` Python 3.12.13, torch 2.12.0+cu126, and Diffusers 0.38.0.
 - Small generated batches were evaluated locally; generated images and per-run scores remain ignored under `outputs/`.
 - OpenCV face-crop build succeeded on the local official image set with 173 usable face crops from 259 source images.
-- Existing generated smoke candidates did not pass OpenCV face detection, so the next generation pass should optimize for detector-visible frontal faces.
-- The detector-friendly prompt profile is the committed route for that next generation pass.
+- Detector-friendly RTX 4090 v2 produced one QA-passing candidate out of two; v3/v4 showed why QA is needed by producing extreme crops, off-center faces, and collages.
+- The current committed route is detector-friendly generation, deterministic/OpenCV evaluation, then `qa-images` filtering before any visual interpretation.
 - InsightFace sample build/evaluate succeeded on `data/raw/seju_official_sample` with 2 usable images and 512D embeddings.
 - Current ONNXRuntime reports CUDA provider availability, but InsightFace execution fell back to CPU because `cublasLt64_12.dll` is missing.
 - Full committed workflow notes are in `docs/gpu-generation-log.md`.
