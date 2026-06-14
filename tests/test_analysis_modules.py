@@ -193,6 +193,7 @@ class AnalysisModuleTests(unittest.TestCase):
             subjects = root / "subject_review"
             backend_comparison = root / "backend_compare"
             subject_backend_comparison = root / "subject_backend_compare"
+            model_audit = root / "model_audit"
             out = root / "precision"
             model.mkdir()
             generation.mkdir()
@@ -200,6 +201,7 @@ class AnalysisModuleTests(unittest.TestCase):
             subjects.mkdir()
             backend_comparison.mkdir()
             subject_backend_comparison.mkdir()
+            model_audit.mkdir()
             np.savez_compressed(
                 model / "centroids.npz",
                 mean_embedding=np.asarray([0.6, 0.8], dtype=np.float32),
@@ -326,6 +328,34 @@ class AnalysisModuleTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            (model_audit / "model_audit.json").write_text(
+                json.dumps(
+                    {
+                        "model_dir": str(model),
+                        "image_count": 3,
+                        "embedding_dim": 2,
+                        "appearance_shape": [2, 2, 1],
+                        "centroids": {
+                            "mean_median_embedding": {
+                                "available": True,
+                                "cosine": 0.6,
+                                "euclidean": 0.9,
+                                "mean_abs_delta": 0.2,
+                                "max_abs_delta": 0.4,
+                            },
+                            "mean_median_appearance": {
+                                "available": True,
+                                "cosine": 0.7,
+                                "euclidean": 1.1,
+                                "mean_abs_delta": 0.3,
+                                "max_abs_delta": 0.5,
+                            },
+                        },
+                        "descriptor_delta": {"brightness": 0.1},
+                    }
+                ),
+                encoding="utf-8",
+            )
 
             report = write_precision_report(
                 model_dir=model,
@@ -335,12 +365,17 @@ class AnalysisModuleTests(unittest.TestCase):
                 subject_review=subjects,
                 backend_comparison=backend_comparison,
                 subject_backend_comparison=subject_backend_comparison,
+                model_audit=model_audit,
             )
 
             self.assertEqual(report["model"]["image_count"], 3)
             self.assertEqual(report["model"]["centroid_vectors"]["mean_embedding"]["shape"], [2])
             self.assertEqual(report["model"]["centroid_vectors"]["mean_embedding"]["l2_norm"], 1.0)
             self.assertEqual(len(report["model"]["centroid_vectors"]["mean_embedding"]["sha256"]), 64)
+            self.assertTrue(report["model"]["model_audit"]["available"])
+            self.assertEqual(report["model"]["model_audit"]["mean_median_embedding"]["cosine"], 0.6)
+            self.assertEqual(report["model"]["model_audit"]["mean_median_appearance"]["euclidean"], 1.1)
+            self.assertEqual(report["model"]["model_audit"]["descriptor_delta"]["brightness"], 0.1)
             self.assertEqual(report["generation"]["best_centroid_score"], 0.45)
             self.assertEqual(report["generation"]["best_cosine_to_mean"], 0.41)
             self.assertEqual(report["generation"]["best_cosine_to_median"], 0.43)
@@ -374,6 +409,10 @@ class AnalysisModuleTests(unittest.TestCase):
             )
             self.assertIn(
                 "best_cosine_to_mean: 0.41",
+                (out / "precision_report.md").read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                "mean_median_embedding_cosine: 0.6",
                 (out / "precision_report.md").read_text(encoding="utf-8"),
             )
 
@@ -792,8 +831,10 @@ class AnalysisModuleTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             model = root / "model"
+            audit = root / "audit"
             out = root / "precision"
             model.mkdir()
+            audit.mkdir()
             (model / "profile.json").write_text(
                 json.dumps(
                     {
@@ -805,14 +846,39 @@ class AnalysisModuleTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            (audit / "model_audit.json").write_text(
+                json.dumps(
+                    {
+                        "centroids": {
+                            "mean_median_embedding": {
+                                "available": True,
+                                "cosine": 0.99,
+                                "euclidean": 0.01,
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
 
             self.assertEqual(
-                main(["precision-report", "--model", str(model), "--out", str(out)]),
+                main(
+                    [
+                        "precision-report",
+                        "--model",
+                        str(model),
+                        "--out",
+                        str(out),
+                        "--model-audit",
+                        str(audit),
+                    ]
+                ),
                 0,
             )
 
             report = json.loads((out / "precision_report.json").read_text(encoding="utf-8"))
             self.assertEqual(report["model"]["embedding_dim"], 4)
+            self.assertEqual(report["model"]["model_audit"]["mean_median_embedding"]["cosine"], 0.99)
 
     def test_image_quality_records_per_file_failures(self) -> None:
         with patch("seju_face_lab.quality._import_cv2", return_value=object()):

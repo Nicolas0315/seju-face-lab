@@ -19,6 +19,7 @@ def write_precision_report(
     quality: Path | None = None,
     backend_comparison: Path | None = None,
     subject_backend_comparison: Path | None = None,
+    model_audit: Path | None = None,
 ) -> dict[str, Any]:
     """Write a compact review bundle for centroid, generation, QA, and subject evidence."""
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -30,6 +31,7 @@ def write_precision_report(
         quality=quality,
         backend_comparison=backend_comparison,
         subject_backend_comparison=subject_backend_comparison,
+        model_audit=model_audit,
     )
     (out_dir / "precision_report.json").write_text(
         json.dumps(report, ensure_ascii=False, indent=2),
@@ -47,8 +49,10 @@ def build_precision_report(
     quality: Path | None = None,
     backend_comparison: Path | None = None,
     subject_backend_comparison: Path | None = None,
+    model_audit: Path | None = None,
 ) -> dict[str, Any]:
     profile = _load_optional_json(model_dir / "profile.json")
+    model_audit_summary = _load_optional_json(_resolve_model_audit_path(model_audit))
     generation = _load_optional_json(_resolve_generation_review_path(generation_review))
     subjects = _load_optional_json(_resolve_subject_review_path(subject_review))
     evaluation_summary = _load_optional_json(_resolve_evaluation_path(evaluation))
@@ -59,7 +63,7 @@ def build_precision_report(
         _resolve_subject_backend_comparison_path(subject_backend_comparison)
     )
     return {
-        "model": _model_summary(model_dir, profile),
+        "model": _model_summary(model_dir, profile, model_audit_summary),
         "generation": _generation_summary(
             generation,
             evaluation_summary,
@@ -79,6 +83,7 @@ def build_precision_report(
             "subject_backend_comparison": (
                 str(subject_backend_comparison) if subject_backend_comparison else None
             ),
+            "model_audit": str(model_audit) if model_audit else None,
         },
         "boundary": (
             "Approximate local precision review only. Scores are model-relative vector "
@@ -87,7 +92,7 @@ def build_precision_report(
     }
 
 
-def _model_summary(model_dir: Path, profile: dict[str, Any]) -> dict[str, Any]:
+def _model_summary(model_dir: Path, profile: dict[str, Any], model_audit: dict[str, Any]) -> dict[str, Any]:
     descriptors = profile.get("descriptors", {})
     centroid_path = model_dir / "centroids.npz"
     return {
@@ -97,6 +102,7 @@ def _model_summary(model_dir: Path, profile: dict[str, Any]) -> dict[str, Any]:
         "appearance_shape": profile.get("appearance_shape"),
         "has_centroid_vectors": centroid_path.exists(),
         "centroid_vectors": _centroid_vector_summary(centroid_path),
+        "model_audit": _model_audit_summary(model_audit),
         "mean_descriptor": descriptors.get("mean", {}),
         "median_descriptor": descriptors.get("median", {}),
         "reference_outputs": {
@@ -104,6 +110,36 @@ def _model_summary(model_dir: Path, profile: dict[str, Any]) -> dict[str, Any]:
             "median_face": str(model_dir / "median_face.png"),
             "centroid_vectors": str(centroid_path),
         },
+    }
+
+
+def _model_audit_summary(audit: dict[str, Any]) -> dict[str, Any]:
+    if not audit:
+        return {"available": False}
+    centroids = audit.get("centroids")
+    if not isinstance(centroids, dict):
+        centroids = {}
+    return {
+        "available": True,
+        "model_dir": audit.get("model_dir"),
+        "image_count": audit.get("image_count"),
+        "embedding_dim": audit.get("embedding_dim"),
+        "appearance_shape": audit.get("appearance_shape"),
+        "mean_median_embedding": _audit_pair_summary(centroids.get("mean_median_embedding")),
+        "mean_median_appearance": _audit_pair_summary(centroids.get("mean_median_appearance")),
+        "descriptor_delta": audit.get("descriptor_delta", {}),
+    }
+
+
+def _audit_pair_summary(pair: Any) -> dict[str, Any]:
+    if not isinstance(pair, dict):
+        return {"available": False}
+    return {
+        "available": bool(pair.get("available", True)),
+        "cosine": pair.get("cosine"),
+        "euclidean": pair.get("euclidean"),
+        "mean_abs_delta": pair.get("mean_abs_delta"),
+        "max_abs_delta": pair.get("max_abs_delta"),
     }
 
 
@@ -249,6 +285,11 @@ def _render_precision_report(report: dict[str, Any]) -> str:
         f"- median_embedding_norm: {_value(_vector_field(model, 'median_embedding', 'l2_norm'))}",
         f"- mean_embedding_sha256: {_value(_vector_field(model, 'mean_embedding', 'sha256'))}",
         f"- median_embedding_sha256: {_value(_vector_field(model, 'median_embedding', 'sha256'))}",
+        f"- model_audit_available: {model['model_audit']['available']}",
+        f"- mean_median_embedding_cosine: {_value(_audit_field(model, 'mean_median_embedding', 'cosine'))}",
+        f"- mean_median_embedding_euclidean: {_value(_audit_field(model, 'mean_median_embedding', 'euclidean'))}",
+        f"- mean_median_appearance_cosine: {_value(_audit_field(model, 'mean_median_appearance', 'cosine'))}",
+        f"- mean_median_appearance_euclidean: {_value(_audit_field(model, 'mean_median_appearance', 'euclidean'))}",
         "",
         "## Generated Image Review",
         "",
@@ -374,6 +415,14 @@ def _resolve_subject_backend_comparison_path(path: Path | None) -> Path | None:
     return path
 
 
+def _resolve_model_audit_path(path: Path | None) -> Path | None:
+    if path is None:
+        return None
+    if path.is_dir():
+        return path / "model_audit.json"
+    return path
+
+
 def _load_optional_json(path: Path | None) -> dict[str, Any]:
     if path is None or not path.exists():
         return {}
@@ -458,3 +507,13 @@ def _vector_field(model: dict[str, Any], vector_name: str, field: str) -> Any:
     if not isinstance(summary, dict):
         return None
     return summary.get(field)
+
+
+def _audit_field(model: dict[str, Any], pair_name: str, field: str) -> Any:
+    audit = model.get("model_audit")
+    if not isinstance(audit, dict):
+        return None
+    pair = audit.get(pair_name)
+    if not isinstance(pair, dict):
+        return None
+    return pair.get(field)

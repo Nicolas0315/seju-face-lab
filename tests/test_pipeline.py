@@ -429,6 +429,10 @@ class PipelineTests(unittest.TestCase):
             self.assertTrue((subject_backend_compare_dir / "subject_backend_comparison.json").exists())
             precision = json.loads((precision_dir / "precision_report.json").read_text(encoding="utf-8"))
             self.assertEqual(precision["model"]["image_count"], 2)
+            self.assertTrue(precision["model"]["model_audit"]["available"])
+            self.assertIsNotNone(
+                precision["model"]["model_audit"]["mean_median_embedding"]["cosine"]
+            )
             self.assertEqual(precision["subjects"]["top_subject"], "near_subject")
             self.assertEqual(precision["backend_comparison"]["completed_backends"], ["deterministic"])
             self.assertEqual(precision["subject_backend_comparison"]["completed_backends"], ["deterministic"])

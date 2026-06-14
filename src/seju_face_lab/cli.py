@@ -127,6 +127,7 @@ def main(argv: list[str] | None = None) -> int:
     precision_parser.add_argument("--quality", type=Path, default=None)
     precision_parser.add_argument("--backend-comparison", type=Path, default=None)
     precision_parser.add_argument("--subject-backend-comparison", type=Path, default=None)
+    precision_parser.add_argument("--model-audit", type=Path, default=None)
 
     run_pipeline_parser = subparsers.add_parser(
         "run-pipeline",
@@ -564,6 +565,7 @@ def _precision_report(args: argparse.Namespace) -> int:
         quality=args.quality,
         backend_comparison=args.backend_comparison,
         subject_backend_comparison=args.subject_backend_comparison,
+        model_audit=args.model_audit,
     )
     print(f"precision report: {args.out / 'precision_report.md'}")
     print(f"model images: {report['model']['image_count']}")
@@ -726,6 +728,7 @@ def _run_pipeline_precision_report(config: dict) -> int:
             quality=Path(config["quality_out"]) if config.get("quality_out") else None,
             backend_comparison=_pipeline_backend_comparison_out(config),
             subject_backend_comparison=_pipeline_subject_backend_comparison_out(config),
+            model_audit=_pipeline_model_audit_out_or_none(config),
         )
     )
 
@@ -764,6 +767,13 @@ def _pipeline_model_audit_out(config: dict) -> Path:
     if isinstance(audit, dict):
         return _pipeline_model(config) / "audit"
     raise SystemExit("Pipeline config requires model_audit.out or model_audit_out")
+
+
+def _pipeline_model_audit_out_or_none(config: dict) -> Path | None:
+    audit = config.get("model_audit")
+    if isinstance(audit, dict) or config.get("model_audit_out") or config.get("audit_out"):
+        return _pipeline_model_audit_out(config)
+    return None
 
 
 def _pipeline_style_evaluation_config(config: dict) -> dict:
