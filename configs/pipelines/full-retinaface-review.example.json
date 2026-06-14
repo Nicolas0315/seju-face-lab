@@ -1,0 +1,33 @@
+{
+  "name": "full_retinaface_review",
+  "reference_images": "data/raw/seju_official",
+  "model_out": "outputs/seju_model_official",
+  "generated_images": "outputs/generated_detector_v7",
+  "evaluation_out": "outputs/generated_detector_v7/evaluation",
+  "review_out": "outputs/generated_detector_v7/review",
+  "subjects": "data/subjects",
+  "subject_review_out": "outputs/subject_reviews",
+  "backend_comparison": {
+    "out": "outputs/backend_compare_retinaface",
+    "backends": [
+      "deterministic",
+      "opencv-face",
+      "insightface",
+      "deepface",
+      "deepface-retinaface"
+    ],
+    "crop": "center"
+  },
+  "precision_out": "outputs/precision_report_retinaface",
+  "vector_backend": "deterministic",
+  "evaluation_backend": "deterministic",
+  "review_backend": "deterministic",
+  "subject_backend": "deterministic",
+  "crop": "center",
+  "notes": [
+    "Use after local official reference images, generated candidates, and reviewed subject folders exist.",
+    "This config keeps model/evaluation deterministic for continuity and adds neural backend rank agreement through compare-backends.",
+    "deepface-retinaface uses DeepFace ArcFace embeddings with RetinaFace detection; expect slower runtime than OpenCV detector paths.",
+    "Raw, generated, and subject comparison images remain Git-ignored."
+  ]
+}

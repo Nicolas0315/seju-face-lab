@@ -13,10 +13,32 @@ from PIL import Image, ImageDraw
 import bootstrap  # noqa: F401
 from seju_face_lab.cli import _sources_download, main
 from seju_face_lab.model import load_model
+from seju_face_lab.pipeline import build_pipeline_plan, load_pipeline_config
 from seju_face_lab.sources import DownloadResult
 
 
 class PipelineTests(unittest.TestCase):
+    def test_full_retinaface_review_example_plans_complete_review_path(self) -> None:
+        config_path = Path("configs/pipelines/full-retinaface-review.example.json")
+        config = load_pipeline_config(config_path)
+
+        plan = build_pipeline_plan(config, config_path)
+
+        self.assertEqual(config["name"], "full_retinaface_review")
+        self.assertEqual(
+            [step.name for step in plan.steps],
+            [
+                "build",
+                "evaluate",
+                "review-generated",
+                "review-subjects",
+                "compare-backends",
+                "precision-report",
+            ],
+        )
+        self.assertIn("deepface-retinaface", config["backend_comparison"]["backends"])
+        self.assertEqual(config["backend_comparison"]["crop"], "center")
+
     def test_build_prompt_render_and_evaluate(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

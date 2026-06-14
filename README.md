@@ -138,6 +138,8 @@ python -m seju_face_lab run-pipeline --config configs/pipelines/full-local-revie
 
 The runner executes configured build/evaluate/review/backend-comparison/precision steps and writes
 `pipeline_run.json` plus `pipeline_run.md`.
+Use `configs/pipelines/full-retinaface-review.example.json` when the same run should include
+the audited `deepface-retinaface` rank-agreement backend in the final precision bundle.
 
 Review other public-figure or celebrity image sets by folder:
 
@@ -307,6 +309,7 @@ See `docs/gpu-generation-log.md` for RTX 4090 generation smoke results.
 - generated review `generation_run_reviews.csv`: one-command generated-image evaluation + QA + run review via `review-generated`, or directly after Diffusers generation with `generate --review`.
 - precision report `precision_report.json`: model centroid, generation review, QA, subject-review, and backend-comparison summary via `precision-report`.
 - pipeline run `pipeline_run.json`: configured build/evaluate/review/backend-comparison/precision orchestration via `run-pipeline`.
+- pipeline config `configs/pipelines/full-retinaface-review.example.json`: deterministic continuity plus `deepface-retinaface` neural rank agreement for the precision bundle.
 - backend diagnostics `backend_diagnostics.json`: optional dependency, CUDA, and provider visibility for neural backends.
 - backend comparison `backend_comparison.json`: per-backend model/evaluation outputs and same-image rank agreement.
 - style evaluation `style_scores.csv`: OpenCLIP image-style similarity to mean/median renderings.

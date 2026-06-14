@@ -25,6 +25,7 @@ Retrieval/design date: 2026-06-14.
 - `generate --review` now chains real Diffusers generation into the same generated-image review shortcut.
 - `precision-report` consolidates centroid, generated-image, QA, subject-review, and backend-comparison evidence into a review bundle.
 - `run-pipeline` executes JSON-configured build/evaluate/review/backend-comparison/precision steps and records a pipeline run manifest.
+- `configs/pipelines/full-retinaface-review.example.json` captures the current full review path with deterministic continuity plus `deepface-retinaface` backend rank agreement.
 
 ## GitHub Issue Plan
 
