@@ -18,6 +18,7 @@ from seju_face_lab.correlation import (
     compute_correlations,
     write_correlation_report,
 )
+from seju_face_lab.run_reviews import review_generation_runs, write_generation_run_reviews
 from seju_face_lab.sns_metrics import (
     SnsEngagement,
     SnsHandleRecord,
@@ -259,6 +260,367 @@ class AnalysisModuleTests(unittest.TestCase):
             self.assertEqual(len(rows), 3)
             self.assertTrue((out / "correlation_summary.json").exists())
             self.assertIn("face score", (out / "correlation_report.md").read_text(encoding="utf-8"))
+
+    def test_generation_run_reviews_treat_negative_scores_as_valid(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_a = root / "run_a"
+            run_b = root / "run_b"
+            out = root / "compare"
+            run_a.mkdir()
+            run_b.mkdir()
+            (run_a / "summary.json").write_text(
+                json.dumps(
+                    {
+                        "image_count": 1,
+                        "failed_count": 0,
+                        "best_image_id": "a",
+                        "best_centroid_score": -0.2,
+                        "mean_centroid_score": -0.2,
+                        "median_centroid_score": -0.2,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (run_b / "summary.json").write_text(
+                json.dumps(
+                    {
+                        "image_count": 1,
+                        "failed_count": 0,
+                        "best_image_id": "b",
+                        "best_centroid_score": -0.8,
+                        "mean_centroid_score": -0.8,
+                        "median_centroid_score": -0.8,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            reviews = review_generation_runs([run_b, run_a])
+            write_generation_run_reviews(reviews, out)
+            summary = json.loads((out / "generation_run_reviews.json").read_text(encoding="utf-8"))
+
+            self.assertEqual(summary["best_run_dir"], str(run_a))
+            self.assertEqual(summary["best_centroid_score"], -0.2)
+
+    def test_generation_run_reviews_compute_combined_score_per_image(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run = root / "run"
+            out = root / "compare"
+            run.mkdir()
+            (run / "summary.json").write_text(
+                json.dumps(
+                    {
+                        "image_count": 3,
+                        "failed_count": 0,
+                        "best_image_id": "face_only",
+                        "best_centroid_score": 1.0,
+                        "mean_centroid_score": 0.566667,
+                        "median_centroid_score": 0.7,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (run / "style_summary.json").write_text(
+                json.dumps(
+                    {
+                        "image_count": 3,
+                        "failed_count": 0,
+                        "best_image_id": "style_only",
+                        "best_style_score": 1.0,
+                        "mean_style_score": 0.566667,
+                        "median_style_score": 0.7,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (run / "scores.csv").write_text(
+                "\n".join(
+                    [
+                        "image_id,path,centroid_score",
+                        '"face_only","face.png",1.000000',
+                        '"style_only","style.png",0.000000',
+                        '"balanced","balanced.png",0.700000',
+                    ]
+                )
+                + "\n",
+                encoding="utf-8-sig",
+            )
+            (run / "style_scores.csv").write_text(
+                "\n".join(
+                    [
+                        "image_id,path,style_score",
+                        '"face_only","face.png",0.000000',
+                        '"style_only","style.png",1.000000',
+                        '"balanced","balanced.png",0.700000',
+                    ]
+                )
+                + "\n",
+                encoding="utf-8-sig",
+            )
+
+            reviews = review_generation_runs([run])
+            write_generation_run_reviews(reviews, out)
+            summary = json.loads((out / "generation_run_reviews.json").read_text(encoding="utf-8"))
+
+            self.assertEqual(summary["best_combined_image_id"], "balanced")
+            self.assertEqual(summary["best_combined_path"], "balanced.png")
+            self.assertEqual(summary["best_combined_score"], 0.7)
+            self.assertEqual(summary["runs"][0]["best_combined_image_id"], "balanced")
+            self.assertEqual(summary["runs"][0]["best_combined_path"], "balanced.png")
+
+    def test_generation_run_reviews_join_combined_scores_by_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run = root / "run"
+            out = root / "compare"
+            run.mkdir()
+            (run / "summary.json").write_text(
+                json.dumps(
+                    {
+                        "image_count": 2,
+                        "failed_count": 0,
+                        "best_image_id": "dup",
+                        "best_centroid_score": 1.0,
+                        "mean_centroid_score": 0.5,
+                        "median_centroid_score": 0.5,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (run / "style_summary.json").write_text(
+                json.dumps(
+                    {
+                        "image_count": 2,
+                        "failed_count": 0,
+                        "best_image_id": "dup",
+                        "best_style_score": 1.0,
+                        "mean_style_score": 0.5,
+                        "median_style_score": 0.5,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (run / "scores.csv").write_text(
+                "\n".join(
+                    [
+                        "image_id,path,centroid_score",
+                        '"dup","a/dup.png",1.000000',
+                        '"dup","b/dup.png",0.000000',
+                    ]
+                )
+                + "\n",
+                encoding="utf-8-sig",
+            )
+            (run / "style_scores.csv").write_text(
+                "\n".join(
+                    [
+                        "image_id,path,style_score",
+                        '"dup","b/dup.png",1.000000',
+                        '"dup","a/dup.png",0.000000',
+                    ]
+                )
+                + "\n",
+                encoding="utf-8-sig",
+            )
+
+            reviews = review_generation_runs([run])
+            write_generation_run_reviews(reviews, out)
+            summary = json.loads((out / "generation_run_reviews.json").read_text(encoding="utf-8"))
+
+            self.assertEqual(summary["best_combined_path"], "a/dup.png")
+            self.assertEqual(summary["best_combined_score"], 0.5)
+
+    def test_generation_run_reviews_normalize_paths_before_combining(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run = root / "run"
+            out = root / "compare"
+            run.mkdir()
+            relative_image = Path("outputs/generated/a.png")
+            absolute_image = relative_image.resolve(strict=False)
+            (run / "summary.json").write_text(
+                json.dumps(
+                    {
+                        "image_count": 1,
+                        "failed_count": 0,
+                        "best_image_id": "a",
+                        "best_centroid_score": 0.9,
+                        "mean_centroid_score": 0.9,
+                        "median_centroid_score": 0.9,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (run / "style_summary.json").write_text(
+                json.dumps(
+                    {
+                        "image_count": 1,
+                        "failed_count": 0,
+                        "best_image_id": "a",
+                        "best_style_score": 0.7,
+                        "mean_style_score": 0.7,
+                        "median_style_score": 0.7,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (run / "scores.csv").write_text(
+                "\n".join(
+                    [
+                        "image_id,path,centroid_score",
+                        f'"a","{relative_image}",0.900000',
+                    ]
+                )
+                + "\n",
+                encoding="utf-8-sig",
+            )
+            (run / "style_scores.csv").write_text(
+                "\n".join(
+                    [
+                        "image_id,path,style_score",
+                        f'"a","{absolute_image}",0.700000',
+                    ]
+                )
+                + "\n",
+                encoding="utf-8-sig",
+            )
+
+            reviews = review_generation_runs([run])
+            write_generation_run_reviews(reviews, out)
+            summary = json.loads((out / "generation_run_reviews.json").read_text(encoding="utf-8"))
+
+            self.assertEqual(summary["best_combined_path"], str(relative_image))
+            self.assertEqual(summary["best_combined_score"], 0.8)
+
+    def test_generation_run_reviews_resolve_relative_paths_from_run_context(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run = root / "generated"
+            out = root / "compare"
+            (run / "evaluation").mkdir(parents=True)
+            (run / "style_evaluation").mkdir()
+            image_path = run / "candidate.png"
+            (run / "evaluation" / "summary.json").write_text(
+                json.dumps(
+                    {
+                        "image_count": 1,
+                        "failed_count": 0,
+                        "best_image_id": "candidate",
+                        "best_centroid_score": 0.6,
+                        "mean_centroid_score": 0.6,
+                        "median_centroid_score": 0.6,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (run / "style_evaluation" / "style_summary.json").write_text(
+                json.dumps(
+                    {
+                        "image_count": 1,
+                        "failed_count": 0,
+                        "best_image_id": "candidate",
+                        "best_style_score": 1.0,
+                        "mean_style_score": 1.0,
+                        "median_style_score": 1.0,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (run / "evaluation" / "scores.csv").write_text(
+                "\n".join(
+                    [
+                        "image_id,path,centroid_score",
+                        '"candidate","candidate.png",0.600000',
+                    ]
+                )
+                + "\n",
+                encoding="utf-8-sig",
+            )
+            (run / "style_evaluation" / "style_scores.csv").write_text(
+                "\n".join(
+                    [
+                        "image_id,path,style_score",
+                        f'"candidate","{image_path.resolve(strict=False)}",1.000000',
+                    ]
+                )
+                + "\n",
+                encoding="utf-8-sig",
+            )
+
+            reviews = review_generation_runs([run])
+            write_generation_run_reviews(reviews, out)
+            summary = json.loads((out / "generation_run_reviews.json").read_text(encoding="utf-8"))
+
+            self.assertEqual(summary["best_combined_path"], "candidate.png")
+            self.assertEqual(summary["best_combined_score"], 0.8)
+
+    def test_generation_run_reviews_do_not_share_parent_style_between_runs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_a = root / "generated_a"
+            run_b = root / "generated_b"
+            out = root / "compare"
+            (run_a / "evaluation").mkdir(parents=True)
+            (run_b / "evaluation").mkdir(parents=True)
+            (root / "style_evaluation").mkdir()
+            for run, image_id, score in [(run_a, "a", 0.9), (run_b, "b", 0.8)]:
+                (run / "evaluation" / "summary.json").write_text(
+                    json.dumps(
+                        {
+                            "image_count": 1,
+                            "failed_count": 0,
+                            "best_image_id": image_id,
+                            "best_centroid_score": score,
+                            "mean_centroid_score": score,
+                            "median_centroid_score": score,
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                (run / "evaluation" / "scores.csv").write_text(
+                    "\n".join(
+                        [
+                            "image_id,path,centroid_score",
+                            f'"{image_id}","{run / (image_id + ".png")}",{score:.6f}',
+                        ]
+                    )
+                    + "\n",
+                    encoding="utf-8-sig",
+                )
+            (root / "style_evaluation" / "style_summary.json").write_text(
+                json.dumps(
+                    {
+                        "image_count": 1,
+                        "failed_count": 0,
+                        "best_image_id": "a",
+                        "best_style_score": 1.0,
+                        "mean_style_score": 1.0,
+                        "median_style_score": 1.0,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (root / "style_evaluation" / "style_scores.csv").write_text(
+                "\n".join(
+                    [
+                        "image_id,path,style_score",
+                        f'"a","{run_a / "a.png"}",1.000000',
+                    ]
+                )
+                + "\n",
+                encoding="utf-8-sig",
+            )
+
+            reviews = review_generation_runs([run_a, run_b])
+            write_generation_run_reviews(reviews, out)
+            summary = json.loads((out / "generation_run_reviews.json").read_text(encoding="utf-8"))
+
+            self.assertIsNone(summary["runs"][0]["best_style_score"])
+            self.assertIsNone(summary["runs"][1]["best_style_score"])
+            self.assertIsNone(summary["runs"][0]["best_combined_score"])
+            self.assertIsNone(summary["runs"][1]["best_combined_score"])
 
     def test_split_paths_chunks_by_worker_count(self) -> None:
         chunks = _split_paths([Path(f"{idx}.png") for idx in range(5)], 2)

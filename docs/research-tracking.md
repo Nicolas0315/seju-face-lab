@@ -13,6 +13,7 @@ Retrieval/design date: 2026-06-14.
 - Per-subject similarity review is implemented through `review-subjects`.
 - SNS handle/engagement manifests and face-score correlation reports are implemented.
 - OpenCLIP style-axis scoring is implemented through `style-evaluate`.
+- `compare-runs` reports style and same-image combined scores when style outputs are present.
 - Image-generation dry-run planning and local RTX 4090 Diffusers smoke runs are implemented.
 
 ## GitHub Issue Plan
@@ -44,7 +45,7 @@ Create and track these issues:
 5. Plan aggregate candidate faces with `generate --provider dry-run`.
 6. Generate with Diffusers/ComfyUI on a GPU worker and score with `evaluate`.
 7. Run `style-evaluate` so generated candidates have both face-geometry and style-axis scores.
-8. Rank evaluated generated batches with `compare-runs`.
+8. Rank evaluated generated batches with `compare-runs`, including combined face/style scores when available.
 9. Run SNS handle/engagement manifests and `analyze correlation` for reviewable metric joins.
 10. Compare deterministic scores against InsightFace/DeepFace on the same ignored image sets.
 

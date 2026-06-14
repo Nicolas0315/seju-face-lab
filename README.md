@@ -66,11 +66,15 @@ Compare evaluated generation runs:
 
 ```powershell
 python -m seju_face_lab evaluate --model outputs/seju_model --images outputs/generated_a --out outputs/generated_a/evaluation
+python -m seju_face_lab style-evaluate --model outputs/seju_model --images outputs/generated_a --out outputs/generated_a/style_evaluation
 python -m seju_face_lab evaluate --model outputs/seju_model --images outputs/generated_b --out outputs/generated_b/evaluation
+python -m seju_face_lab style-evaluate --model outputs/seju_model --images outputs/generated_b --out outputs/generated_b/style_evaluation
 python -m seju_face_lab compare-runs --runs outputs/generated_a outputs/generated_b --out outputs/run_reviews
 ```
 
-`compare-runs` also accepts evaluation output directories that contain `summary.json`.
+`compare-runs` also accepts evaluation output directories that contain `summary.json`. When a run has
+`style_evaluation/style_summary.json` and `style_evaluation/style_scores.csv`, the report includes
+face, style, and per-image combined scores with the matched image path.
 
 Plan a reproducible generation batch without downloading or running a model:
 
@@ -218,6 +222,7 @@ See `docs/gpu-generation-log.md` for RTX 4090 generation smoke results.
 - style evaluation `style_scores.csv`: OpenCLIP image-style similarity to mean/median renderings.
 - style evaluation `style_summary.json`: best/mean/median style-axis scores.
 - generation run reviews: rank evaluated candidate batches by local centroid scores.
+- generation run reviews include style and per-image combined scores with matched paths when style outputs exist.
 - subject review outputs: per-person approximate similarity rankings.
 
 ## Verification

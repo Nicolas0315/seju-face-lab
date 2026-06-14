@@ -27,10 +27,12 @@ Retrieval/design date: 2026-06-14.
 6. `style-evaluate`
    - generated candidates are scored against mean/median rendered appearances with OpenCLIP image embeddings
    - this is a style/photographic axis, not a face-geometry score
-7. `review-subjects`
+7. `compare-runs`
+   - generation batches are ranked by face score, or by best per-image combined face/style score when style outputs are present
+8. `review-subjects`
    - per-person image folders are ranked against the local seju centroid
    - output is CSV, Markdown, and JSON for review and tracking
-8. SNS and correlation analysis
+9. SNS and correlation analysis
    - `sources scrape-handles` writes reviewed SNS handle manifests
    - `sources fetch-engagement` writes best-effort public engagement manifests
    - `analyze correlation` joins `subject_reviews.json` to SNS metrics
@@ -88,6 +90,12 @@ Style-axis evaluation:
 
 ```powershell
 python -m seju_face_lab style-evaluate --model outputs/seju_model --images outputs/generated --out outputs/style_evaluation
+```
+
+Combined run review:
+
+```powershell
+python -m seju_face_lab compare-runs --runs outputs/generated_a outputs/generated_b --out outputs/run_reviews
 ```
 
 ## Folder Contract

@@ -27,7 +27,7 @@ class PipelineTests(unittest.TestCase):
             subjects = root / "subjects"
             model_dir = root / "model space"
             eval_dir = root / "eval"
-            style_eval_dir = root / "style_eval"
+            style_eval_dir = generated / "style_evaluation"
             generation_dir = root / "generated faces"
             run_compare_dir = root / "run_compare"
             empty_run_compare_dir = root / "empty_run_compare"
@@ -239,6 +239,9 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(run_compare["run_count"], 2)
             self.assertEqual(run_compare["best_run_dir"], str(generated))
             self.assertEqual(run_compare["runs"][0]["failed_count"], 1)
+            self.assertIsNotNone(run_compare["runs"][0]["best_style_score"])
+            self.assertIsNotNone(run_compare["runs"][0]["best_combined_score"])
+            self.assertIn("style", (run_compare_dir / "generation_run_reviews.csv").read_text(encoding="utf-8-sig"))
             self.assertTrue((run_compare_dir / "generation_run_reviews.csv").exists())
             self.assertEqual(
                 main(
