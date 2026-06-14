@@ -67,10 +67,14 @@ Backend diagnostics and comparison:
 ```powershell
 python -m seju_face_lab backend-diagnostics --out outputs/backend_diagnostics
 python -m seju_face_lab compare-backends --reference-images data/raw/seju_official --images outputs/generated_detector --out outputs/backend_compare --backends deterministic opencv-face insightface deepface
+python -m seju_face_lab compare-deepface-detectors --reference-images data/raw/seju_official --images outputs/generated_detector --out outputs/deepface_detector_compare --detectors opencv mtcnn retinaface skip
 ```
 
 `backend-diagnostics` records dependency/provider visibility. `compare-backends` builds a separate
 centroid per backend and compares same-image rankings, avoiding cross-backend embedding averaging.
+`compare-deepface-detectors` keeps the DeepFace model fixed and sweeps detector backends so
+reference acceptance counts and generated-image ranks can be audited before trusting a DeepFace run.
+Use `--reuse-existing` when a long detector sweep has completed some per-detector folders already.
 Pass the comparison output into `precision-report --backend-comparison` or set
 `backend_comparison.out` in a pipeline config so final precision bundles include backend agreement.
 

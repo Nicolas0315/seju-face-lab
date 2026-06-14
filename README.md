@@ -270,6 +270,17 @@ This writes one model/evaluation folder per backend plus `backend_comparison.jso
 `backend_comparison.md`. Score scales are backend-specific; use the rank-agreement section to
 review whether deterministic, face-crop, InsightFace, and DeepFace choose the same candidates.
 
+When DeepFace rejects many reference images, sweep its detector choices directly:
+
+```powershell
+python -m seju_face_lab compare-deepface-detectors --reference-images data/raw/seju_official --images outputs/generated_detector --out outputs/deepface_detector_compare --detectors opencv mtcnn retinaface skip
+```
+
+This writes `deepface_detector_comparison.json` and `.md`, plus per-detector model/evaluation
+folders. Use it to compare detector acceptance counts before interpreting DeepFace rank divergence.
+For long sweeps, rerun with `--reuse-existing` so completed detector folders are kept and only
+missing detector outputs are computed.
+
 Designed next:
 
 - `diffusion-generation`: Diffusers/ComfyUI candidate generation loop

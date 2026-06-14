@@ -12,6 +12,7 @@ Retrieval/design date: 2026-06-14.
 - DeepFace adapter code is dependency-gated and uses `DeepFace.represent` for neural cross-checking.
 - `backend-diagnostics` records optional dependency, CUDA, and ONNXRuntime provider visibility.
 - `compare-backends` builds/evaluates multiple vector backends on the same local image sets and reports rank agreement.
+- `compare-deepface-detectors` sweeps DeepFace detector choices on the same local image sets and reports detector acceptance/rank agreement.
 - Per-subject similarity review is implemented through `review-subjects`.
 - SNS handle/engagement manifests and face-score correlation reports are implemented.
 - OpenCLIP style-axis scoring is implemented through `style-evaluate`.
@@ -33,7 +34,7 @@ Create and track these issues:
 - `P1 Celebrity subject review workflow`: collect reviewed subject folders and run `review-subjects`.
 - `P1 Generation loop`: connect `generation_manifest.json` to Diffusers or ComfyUI batches.
 - `P1 SNS correlation workflow`: run handle extraction, engagement manifesting, and correlation reports.
-- `P2 DeepFace adapter`: compare detector choices after the default DeepFace/OpenCV detector accepted only `139/259` official references.
+- `P2 DeepFace adapter`: run the committed detector sweep after the default DeepFace/OpenCV detector accepted only `139/259` official references.
 - `P2 CLIP style axis`: verify optional OpenCLIP install and use `style-evaluate` alongside face geometry scores.
 - `P2 Remote worker playbook`: document RTX 4090 and RTX 5060 Ti split-run commands.
 
@@ -62,6 +63,7 @@ Create and track these issues:
 13. Run SNS handle/engagement manifests and `analyze correlation` for reviewable metric joins.
 14. Run `backend-diagnostics` on each RTX node and archive the ignored output path in the Issue comment.
 15. Compare deterministic scores against InsightFace/DeepFace on the same ignored image sets with `compare-backends`.
+16. When DeepFace diverges, run `compare-deepface-detectors` with `opencv mtcnn retinaface skip` and compare acceptance counts before reviewing ranks.
 
 ## GPU Generation Notes
 
@@ -79,4 +81,6 @@ Create and track these issues:
 - v7 all-backend comparison completed: deterministic refs `259/259`, OpenCV refs `173/259`, InsightFace refs `224/259`, DeepFace refs `139/259`; deterministic/OpenCV/InsightFace all picked `candidate_0003_seed_260702`, while DeepFace picked `candidate_0005_seed_260704`.
 - v7 pairwise rank agreement over 5 common generated images: deterministic-vs-OpenCV `0.900000`, deterministic-vs-InsightFace `0.300000`, InsightFace-vs-OpenCV `0.400000`, DeepFace-vs-deterministic `-0.700000`, DeepFace-vs-InsightFace `-0.200000`, DeepFace-vs-OpenCV `-0.400000`.
 - `compare-backends` is now the committed review path for checking whether deterministic/OpenCV and neural embeddings rank the same generated or subject images.
+- `compare-deepface-detectors` is now the committed audit path for checking whether DeepFace's detector choice, rather than ArcFace scoring alone, explains low reference acceptance or rank divergence.
+- v7 `compare-deepface-detectors` confirmed `deepface-opencv` acceptance/ranking in a reusable detector report: refs `139/259`, generated images `5/6`, best image `candidate_0005_seed_260704`, best score `0.567757`. The four-detector local sweep hit a 20-minute turn timeout after OpenCV, so resume the remaining detectors with `--reuse-existing`.
 - Full committed workflow notes are in `docs/gpu-generation-log.md`.

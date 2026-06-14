@@ -1259,6 +1259,203 @@ class AnalysisModuleTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "No face detected"):
                     backend.vectorize(image_path)
 
+    def test_compare_deepface_detectors_reports_detector_acceptance(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "raw"
+            generated = root / "generated"
+            out = root / "deepface_detectors"
+            raw.mkdir()
+            generated.mkdir()
+            _write_image(raw / "a.png", (235, 205, 190))
+            _write_image(raw / "b.png", (225, 198, 184))
+            _write_image(generated / "candidate_a.png", (232, 202, 188))
+            _write_image(generated / "candidate_b.png", (170, 145, 130))
+
+            with patch("seju_face_lab.backends._import_deepface", return_value=_DetectorAwareDeepFace()):
+                self.assertEqual(
+                    main(
+                        [
+                            "compare-deepface-detectors",
+                            "--reference-images",
+                            str(raw),
+                            "--images",
+                            str(generated),
+                            "--out",
+                            str(out),
+                            "--detectors",
+                            "opencv",
+                            "retinaface",
+                        ]
+                    ),
+                    0,
+                )
+
+            report = json.loads((out / "deepface_detector_comparison.json").read_text(encoding="utf-8"))
+            markdown = (out / "deepface_detector_comparison.md").read_text(encoding="utf-8")
+            self.assertEqual([run["backend"] for run in report["runs"]], ["deepface-opencv", "deepface-retinaface"])
+            self.assertEqual(report["runs"][0]["reference_count"], 1)
+            self.assertEqual(report["runs"][0]["reference_failed_count"], 1)
+            self.assertEqual(report["runs"][1]["reference_count"], 2)
+            self.assertEqual(report["rank_agreement"][0]["common_image_count"], 1)
+            self.assertIn("ref_failed", markdown)
+            self.assertIn("| deepface-opencv | completed | 1 | 1 |", markdown)
+            self.assertTrue((out / "deepface-opencv" / "model" / "vectors" / "reference_vector_failures.json").exists())
+
+    def test_compare_deepface_detectors_can_reuse_existing_detector_outputs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "raw"
+            generated = root / "generated"
+            out = root / "deepface_detectors"
+            raw.mkdir()
+            generated.mkdir()
+            _write_image(raw / "a.png", (235, 205, 190))
+            _write_image(generated / "candidate_a.png", (232, 202, 188))
+
+            with patch("seju_face_lab.backends._import_deepface", return_value=_DetectorAwareDeepFace()):
+                self.assertEqual(
+                    main(
+                        [
+                            "compare-deepface-detectors",
+                            "--reference-images",
+                            str(raw),
+                            "--images",
+                            str(generated),
+                            "--out",
+                            str(out),
+                            "--detectors",
+                            "opencv",
+                        ]
+                    ),
+                    0,
+                )
+
+            with patch("seju_face_lab.backends._import_deepface", side_effect=AssertionError("should not run")):
+                self.assertEqual(
+                    main(
+                        [
+                            "compare-deepface-detectors",
+                            "--reference-images",
+                            str(raw),
+                            "--images",
+                            str(generated),
+                            "--out",
+                            str(out),
+                            "--detectors",
+                            "opencv",
+                            "--reuse-existing",
+                        ]
+                    ),
+                    0,
+                )
+
+            report = json.loads((out / "deepface_detector_comparison.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["runs"][0]["reference_count"], 1)
+            self.assertEqual(report["runs"][0]["image_count"], 1)
+
+            with patch("seju_face_lab.backends._import_deepface", return_value=_DetectorAwareDeepFace()):
+                self.assertEqual(
+                    main(
+                        [
+                            "compare-deepface-detectors",
+                            "--reference-images",
+                            str(raw),
+                            "--images",
+                            str(generated),
+                            "--out",
+                            str(out),
+                            "--detectors",
+                            "opencv",
+                            "--crop",
+                            "none",
+                            "--reuse-existing",
+                        ]
+                    ),
+                    0,
+                )
+
+            run_config = json.loads((out / "deepface-opencv" / "detector_run.json").read_text(encoding="utf-8"))
+            self.assertEqual(run_config["crop"], "none")
+
+    def test_compare_deepface_detectors_clears_stale_reference_failures(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "raw"
+            generated = root / "generated"
+            out = root / "deepface_detectors"
+            raw.mkdir()
+            generated.mkdir()
+            _write_image(raw / "a.png", (235, 205, 190))
+            stale_failure = raw / "b.png"
+            _write_image(stale_failure, (225, 198, 184))
+            _write_image(generated / "candidate_a.png", (232, 202, 188))
+
+            with patch("seju_face_lab.backends._import_deepface", return_value=_DetectorAwareDeepFace()):
+                self.assertEqual(
+                    main(
+                        [
+                            "compare-deepface-detectors",
+                            "--reference-images",
+                            str(raw),
+                            "--images",
+                            str(generated),
+                            "--out",
+                            str(out),
+                            "--detectors",
+                            "opencv",
+                        ]
+                    ),
+                    0,
+                )
+
+            stale_failure.unlink()
+            with patch("seju_face_lab.backends._import_deepface", return_value=_DetectorAwareDeepFace()):
+                self.assertEqual(
+                    main(
+                        [
+                            "compare-deepface-detectors",
+                            "--reference-images",
+                            str(raw),
+                            "--images",
+                            str(generated),
+                            "--out",
+                            str(out),
+                            "--detectors",
+                            "opencv",
+                        ]
+                    ),
+                    0,
+                )
+
+            with patch("seju_face_lab.backends._import_deepface", side_effect=AssertionError("should not run")):
+                self.assertEqual(
+                    main(
+                        [
+                            "compare-deepface-detectors",
+                            "--reference-images",
+                            str(raw),
+                            "--images",
+                            str(generated),
+                            "--out",
+                            str(out),
+                            "--detectors",
+                            "opencv",
+                            "--reuse-existing",
+                        ]
+                    ),
+                    0,
+                )
+
+            report = json.loads((out / "deepface_detector_comparison.json").read_text(encoding="utf-8"))
+            failures = json.loads(
+                (out / "deepface-opencv" / "model" / "vectors" / "reference_vector_failures.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(report["runs"][0]["reference_failed_count"], 0)
+            self.assertEqual(failures["failed_count"], 0)
+
     def test_distribute_vectorize_scores_only_assigned_local_paths(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -1385,6 +1582,19 @@ class _FakeDeepFace:
 
     def represent(self, **_kwargs: object) -> list[dict]:
         return self.representations
+
+
+class _DetectorAwareDeepFace:
+    def represent(self, **kwargs: object) -> list[dict]:
+        detector = str(kwargs["detector_backend"])
+        stem = Path(str(kwargs["img_path"])).stem
+        if detector == "opencv" and stem.endswith("b"):
+            return []
+        if stem.endswith("a"):
+            embedding = [1.0, 0.0, 0.0]
+        else:
+            embedding = [0.0, 1.0, 0.0]
+        return [{"embedding": embedding, "facial_area": {"x": 4, "y": 4, "w": 16, "h": 16}}]
 
 
 if __name__ == "__main__":

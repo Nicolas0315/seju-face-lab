@@ -54,6 +54,8 @@ Observed local results:
 - `precision-report` bundled the v7 generated review and backend comparison: model images `259`, best generated score `0.408002`, QA pass `3/6`, completed backends `deterministic, insightface`, rank agreement common images `5`.
 - DeepFace runtime was verified after adding `tf-keras` to the optional extra and preparing UTF-8 console output on Windows. Sample DeepFace comparison completed with 2 reference images, 1 generated image, 512D embeddings, best score `0.017218`.
 - v7 all-backend comparison completed for `deterministic`, `opencv-face`, `insightface`, and `deepface`: deterministic/opencv/InsightFace all chose `candidate_0003_seed_260702`; DeepFace chose `candidate_0005_seed_260704`; pairwise Spearman over 5 common images was deterministic-vs-OpenCV `0.900000`, deterministic-vs-InsightFace `0.300000`, InsightFace-vs-OpenCV `0.400000`, DeepFace-vs-deterministic `-0.700000`, DeepFace-vs-InsightFace `-0.200000`, and DeepFace-vs-OpenCV `-0.400000`.
+- Added `compare-deepface-detectors` so the next DeepFace audit can hold ArcFace constant and sweep `opencv`, `mtcnn`, `retinaface`, and `skip` detector backends on the same reference/generated image sets.
+- First v7 detector audit confirmed `deepface-opencv` exactly reproduces the prior DeepFace acceptance/ranking: official refs `139/259`, generated images `5/6`, failed generated image `candidate_0001_seed_260700`, best image `candidate_0005_seed_260704`, best score `0.567757`. The full four-detector sweep exceeded a 20-minute local turn timeout after finishing OpenCV, so the committed `--reuse-existing` flag should be used to resume the remaining detector runs without recomputing OpenCV.
 
 Current best local generated candidate by deterministic QA-gated score is:
 
@@ -80,6 +82,6 @@ python -m seju_face_lab generate --model outputs/seju_model_official --out outpu
 
 - Run larger ignored GPU batches and keep only summarized findings in committed docs.
 - Run larger detector-friendly batches beyond 6 images to reduce the noise in backend rank agreement.
-- Investigate why default DeepFace/OpenCV detection accepts only `139/259` official reference images and diverges from deterministic/OpenCV/InsightFace rankings.
+- Resume `compare-deepface-detectors --reuse-existing` for `mtcnn retinaface skip` to investigate whether detector choice explains the DeepFace/OpenCV `139/259` acceptance and rank divergence.
 - Treat ONNXRuntime CUDA provider visibility as environment evidence only; record backend vectorization results separately for each image set.
 - Compare deterministic, neural face-embedding, and visual-review rankings before closing the generation-loop issue.

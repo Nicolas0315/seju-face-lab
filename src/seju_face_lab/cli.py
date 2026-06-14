@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 
 from .backends import backend_help, get_vector_backend
-from .backend_compare import compare_vector_backends
+from .backend_compare import compare_deepface_detectors, compare_vector_backends
 from .backend_diagnostics import write_backend_diagnostics
 from .embeddings import iter_image_paths, render_appearance
 from .generation import build_generation_config, run_diffusers_generation, write_generation_plan
@@ -169,6 +169,39 @@ def main(argv: list[str] | None = None) -> int:
     compare_backends_parser.add_argument("--backends", nargs="+", default=["deterministic", "opencv-face"])
     compare_backends_parser.add_argument("--crop", choices=["center", "none"], default="center")
 
+    compare_deepface_parser = subparsers.add_parser(
+        "compare-deepface-detectors",
+        help="compare DeepFace detector backends on the same local image sets",
+    )
+    compare_deepface_parser.add_argument("--reference-images", type=Path, required=True)
+    compare_deepface_parser.add_argument("--images", type=Path, required=True)
+    compare_deepface_parser.add_argument("--out", type=Path, required=True)
+    compare_deepface_parser.add_argument(
+        "--detectors",
+        nargs="+",
+        default=["opencv", "mtcnn", "retinaface", "skip"],
+        choices=[
+            "opencv",
+            "ssd",
+            "dlib",
+            "mtcnn",
+            "retinaface",
+            "mediapipe",
+            "yolov8",
+            "yunet",
+            "fastmtcnn",
+            "centerface",
+            "skip",
+        ],
+    )
+    compare_deepface_parser.add_argument("--model-name", default="ArcFace")
+    compare_deepface_parser.add_argument("--crop", choices=["center", "none"], default="center")
+    compare_deepface_parser.add_argument(
+        "--reuse-existing",
+        action="store_true",
+        help="reuse completed per-detector model/evaluation outputs already present under --out",
+    )
+
     source_parsers = subparsers.add_parser("sources", help="discover and audit web source candidates")
     source_subparsers = source_parsers.add_subparsers(dest="sources_command", required=True)
     discover_parser = source_subparsers.add_parser("discover", help="write seju profile image URL manifest")
@@ -288,6 +321,8 @@ def main(argv: list[str] | None = None) -> int:
         return _backend_diagnostics(args.out)
     if args.command == "compare-backends":
         return _compare_backends(args)
+    if args.command == "compare-deepface-detectors":
+        return _compare_deepface_detectors(args)
     if args.command == "sources" and args.sources_command == "discover":
         return _sources_discover(args)
     if args.command == "sources" and args.sources_command == "download":
@@ -696,6 +731,24 @@ def _compare_backends(args: argparse.Namespace) -> int:
     print(f"backend comparison: {args.out / 'backend_comparison.md'}")
     print(f"completed backends: {completed}")
     print(f"failed backends: {failed}")
+    return 1 if completed == 0 else 0
+
+
+def _compare_deepface_detectors(args: argparse.Namespace) -> int:
+    report = compare_deepface_detectors(
+        reference_images=args.reference_images,
+        images=args.images,
+        out_dir=args.out,
+        detector_backends=args.detectors,
+        model_name=args.model_name,
+        crop=args.crop,
+        reuse_existing=args.reuse_existing,
+    )
+    completed = sum(1 for run in report["runs"] if run["status"] == "completed")
+    failed = sum(1 for run in report["runs"] if run["status"] == "failed")
+    print(f"DeepFace detector comparison: {args.out / 'deepface_detector_comparison.md'}")
+    print(f"completed detectors: {completed}")
+    print(f"failed detectors: {failed}")
     return 1 if completed == 0 else 0
 
 
