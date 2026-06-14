@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from html import escape
 import json
 from pathlib import Path
 
@@ -34,6 +35,7 @@ class SubjectReview:
     median_centroid_score: float | None
     mean_cosine_to_mean: float | None
     mean_cosine_to_median: float | None
+    top_images: tuple[dict[str, object], ...]
 
 
 def score_generated_images(
@@ -100,6 +102,7 @@ def write_subject_reviews(reviews: list[SubjectReview], out_dir: Path) -> None:
         )
     (out_dir / "subject_reviews.csv").write_text("\n".join(csv_lines) + "\n", encoding="utf-8-sig")
     (out_dir / "subject_reviews.md").write_text(_render_subject_reviews(reviews), encoding="utf-8")
+    (out_dir / "subject_reviews.html").write_text(_render_subject_reviews_html(reviews), encoding="utf-8")
     (out_dir / "subject_reviews.json").write_text(
         json.dumps(_subject_review_summary(reviews), ensure_ascii=False, indent=2),
         encoding="utf-8",
@@ -183,6 +186,7 @@ def _review_subject(
             median_centroid_score=None,
             mean_cosine_to_mean=None,
             mean_cosine_to_median=None,
+            top_images=(),
         )
     centroid_scores = np.asarray([score.centroid_score for score in scores], dtype=np.float32)
     cosine_mean_scores = np.asarray([score.cosine_to_mean for score in scores], dtype=np.float32)
@@ -199,6 +203,7 @@ def _review_subject(
         median_centroid_score=float(np.median(centroid_scores)),
         mean_cosine_to_mean=float(np.mean(cosine_mean_scores)),
         mean_cosine_to_median=float(np.mean(cosine_median_scores)),
+        top_images=tuple(_score_dict(score) for score in scores[:5]),
     )
 
 
@@ -264,6 +269,79 @@ def _render_subject_reviews(reviews: list[SubjectReview]) -> str:
     return "\n".join(lines)
 
 
+def _render_subject_reviews_html(reviews: list[SubjectReview]) -> str:
+    cards = "\n".join(_render_subject_card(rank, review) for rank, review in enumerate(reviews, start=1))
+    return "\n".join(
+        [
+            "<!doctype html>",
+            '<html lang="en">',
+            "<head>",
+            '<meta charset="utf-8">',
+            '<meta name="viewport" content="width=device-width, initial-scale=1">',
+            "<title>subject seju-face similarity review</title>",
+            "<style>",
+            "body{font-family:Arial,sans-serif;margin:24px;background:#f7f7f4;color:#1f2933}",
+            "h1{font-size:24px;margin:0 0 16px}",
+            ".subjects{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}",
+            ".subject{border:1px solid #d7d7d0;border-radius:8px;background:#fff;padding:10px}",
+            ".subject img{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:6px;background:#e7e5dc}",
+            ".meta{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;color:#4b5563;font-size:12px}",
+            ".pill{background:#eef2f7;border-radius:999px;padding:3px 8px}",
+            ".scores{font-size:12px;line-height:1.45;margin-top:6px}",
+            ".path{overflow-wrap:anywhere;color:#59636e}",
+            ".boundary{font-size:12px;color:#667085;margin-top:18px}",
+            "</style>",
+            "</head>",
+            "<body>",
+            "<h1>subject seju-face similarity review</h1>",
+            f'<div class="subjects">{cards}</div>' if cards else "<p>No subject directories found.</p>",
+            '<p class="boundary">Scores are approximate local triage against this centroid model. '
+            "They are not identity, attractiveness, ethnicity, or objective face-type labels.</p>",
+            "</body>",
+            "</html>",
+            "",
+        ]
+    )
+
+
+def _render_subject_card(rank: int, review: SubjectReview) -> str:
+    best = review.top_images[0] if review.top_images else {}
+    image_path = str(best.get("path") or "")
+    image = f'<img src="{escape(_image_src(image_path))}" alt="{escape(review.subject)}">' if image_path else ""
+    return "\n".join(
+        [
+            '<article class="subject">',
+            f"<h2>#{rank} {escape(review.subject)}</h2>",
+            image,
+            '<div class="meta">',
+            f'<span class="pill">images {review.image_count}</span>',
+            f'<span class="pill">failed {review.failed_count}</span>',
+            f'<span class="pill">mean {_optional_float(review.mean_centroid_score)}</span>',
+            f'<span class="pill">best {_optional_float(review.best_centroid_score)}</span>',
+            "</div>",
+            '<div class="scores">',
+            f"<div>median_score: {_optional_float(review.median_centroid_score)}</div>",
+            f"<div>mean_cosine_to_mean: {_optional_float(review.mean_cosine_to_mean)}</div>",
+            f"<div>mean_cosine_to_median: {_optional_float(review.mean_cosine_to_median)}</div>",
+            f'<div class="path">{escape(image_path)}</div>' if image_path else "",
+            "</div>",
+            "</article>",
+        ]
+    )
+
+
+def _image_src(value: str) -> str:
+    if not value:
+        return ""
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        path = (Path.cwd() / path).resolve(strict=False)
+    try:
+        return path.as_uri()
+    except ValueError:
+        return value
+
+
 def _score_summary(scores: list[Score], failed_paths: list[str]) -> dict:
     if not scores:
         return {
@@ -317,10 +395,23 @@ def _subject_review_summary(reviews: list[SubjectReview]) -> dict:
                 "median_centroid_score": _round_optional(review.median_centroid_score),
                 "mean_cosine_to_mean": _round_optional(review.mean_cosine_to_mean),
                 "mean_cosine_to_median": _round_optional(review.mean_cosine_to_median),
+                "top_images": list(review.top_images),
             }
             for review in reviews
         ],
         "boundary": "Approximate vector similarity for this local centroid model only.",
+    }
+
+
+def _score_dict(score: Score) -> dict[str, object]:
+    return {
+        "image_id": score.image_id,
+        "path": score.path,
+        "centroid_score": round(float(score.centroid_score), 6),
+        "cosine_to_mean": round(float(score.cosine_to_mean), 6),
+        "cosine_to_median": round(float(score.cosine_to_median), 6),
+        "euclidean_to_mean": round(float(score.euclidean_to_mean), 6),
+        "euclidean_to_median": round(float(score.euclidean_to_median), 6),
     }
 
 

@@ -337,8 +337,15 @@ class PipelineTests(unittest.TestCase):
             self.assertIn("failed_count", reviews)
             self.assertIn("mean_centroid_score", reviews)
             review_json = json.loads((review_dir / "subject_reviews.json").read_text(encoding="utf-8"))
+            review_html = (review_dir / "subject_reviews.html").read_text(encoding="utf-8")
+            self.assertTrue((review_dir / "subject_reviews.html").exists())
             far_subject = next(item for item in review_json["subjects"] if item["subject"] == "far_subject")
             self.assertEqual(far_subject["failed_count"], 1)
+            near_subject = next(item for item in review_json["subjects"] if item["subject"] == "near_subject")
+            self.assertEqual(near_subject["top_images"][0]["image_id"], "near")
+            self.assertIn("near_subject", review_html)
+            self.assertIn("<img", review_html)
+            self.assertIn((subjects / "near_subject" / "near.png").resolve(strict=False).as_uri(), review_html)
 
     def test_run_pipeline_config_builds_reviews_and_precision_report(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -425,6 +432,7 @@ class PipelineTests(unittest.TestCase):
             self.assertTrue((review_dir / "generation_run_reviews.json").exists())
             self.assertTrue((review_dir / "generation_run_reviews.html").exists())
             self.assertTrue((subject_review_dir / "subject_reviews.json").exists())
+            self.assertTrue((subject_review_dir / "subject_reviews.html").exists())
             self.assertTrue((backend_compare_dir / "backend_comparison.json").exists())
             self.assertTrue((subject_backend_compare_dir / "subject_backend_comparison.json").exists())
             precision = json.loads((precision_dir / "precision_report.json").read_text(encoding="utf-8"))

@@ -164,7 +164,8 @@ data/subjects/
 python -m seju_face_lab review-subjects --model outputs/seju_model --subjects data/subjects --out outputs/subject_reviews
 ```
 
-This writes `subject_reviews.csv`, `subject_reviews.md`, and `subject_reviews.json`.
+This writes `subject_reviews.csv`, `subject_reviews.md`, `subject_reviews.json`, and
+`subject_reviews.html` with local thumbnail cards for reviewing each subject's nearest image.
 
 ## Recommended Data
 
@@ -335,6 +336,7 @@ See `docs/gpu-generation-log.md` for RTX 4090 generation smoke results.
 - worker diagnostics `worker_diagnostics.json`: local/SSH Python, CUDA, torch, and package readiness for GPU split-run planning.
 - backend comparison `backend_comparison.json`: per-backend model/evaluation outputs and same-image rank agreement.
 - subject backend comparison `subject_backend_comparison.json`: per-backend celebrity/public-figure subject rankings and rank agreement.
+- subject review `subject_reviews.html`: local thumbnail cards for per-person approximate similarity review.
 - style evaluation `style_scores.csv`: OpenCLIP image-style similarity to mean/median renderings.
 - style evaluation `style_summary.json`: best/mean/median style-axis scores.
 - image quality `image_quality.csv`: OpenCV single-face QA for generated candidates.

@@ -14,6 +14,7 @@ Retrieval/design date: 2026-06-14.
 - `compare-backends` builds/evaluates multiple vector backends on the same local image sets and reports rank agreement.
 - `compare-deepface-detectors` sweeps DeepFace detector choices on the same local image sets and reports detector acceptance/rank agreement.
 - Per-subject similarity review is implemented through `review-subjects`.
+- `review-subjects` writes a local HTML thumbnail review so celebrity/public-figure nearest-image evidence can be checked per subject.
 - Per-subject backend rank agreement is implemented through `compare-subject-backends`.
 - SNS handle/engagement manifests and face-score correlation reports are implemented.
 - OpenCLIP style-axis scoring is implemented through `style-evaluate`.
