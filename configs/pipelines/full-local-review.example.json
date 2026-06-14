@@ -2,6 +2,7 @@
   "name": "full_local_review",
   "reference_images": "data/raw/seju_official",
   "model_out": "outputs/seju_model_official",
+  "model_audit_out": "outputs/seju_model_official/audit",
   "generated_images": "outputs/generated_detector",
   "evaluation_out": "outputs/generated_detector/evaluation",
   "review_out": "outputs/generated_detector/review",

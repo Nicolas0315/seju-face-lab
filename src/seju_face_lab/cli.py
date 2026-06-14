@@ -575,6 +575,7 @@ def _precision_report(args: argparse.Namespace) -> int:
 def _run_pipeline(args: argparse.Namespace) -> int:
     handlers = {
         "build": _run_pipeline_build,
+        "audit-model": _run_pipeline_audit_model,
         "generate": _run_pipeline_generate,
         "evaluate": _run_pipeline_evaluate,
         "style-evaluate": _run_pipeline_style_evaluate,
@@ -599,6 +600,10 @@ def _run_pipeline_build(config: dict) -> int:
         str(config.get("crop", "center")),
         str(config.get("vector_backend", config.get("backend", "deterministic"))),
     )
+
+
+def _run_pipeline_audit_model(config: dict) -> int:
+    return _audit_model(_pipeline_model(config), _pipeline_model_audit_out(config))
 
 
 def _run_pipeline_generate(config: dict) -> int:
@@ -746,6 +751,19 @@ def _pipeline_generation_review_out(config: dict) -> Path | None:
     if generation.get("review"):
         return _pipeline_generated_images(config) / "run_review"
     return None
+
+
+def _pipeline_model_audit_out(config: dict) -> Path:
+    audit = config.get("model_audit")
+    if isinstance(audit, dict) and audit.get("out"):
+        return Path(audit["out"])
+    if config.get("model_audit_out"):
+        return Path(config["model_audit_out"])
+    if config.get("audit_out"):
+        return Path(config["audit_out"])
+    if isinstance(audit, dict):
+        return _pipeline_model(config) / "audit"
+    raise SystemExit("Pipeline config requires model_audit.out or model_audit_out")
 
 
 def _pipeline_style_evaluation_config(config: dict) -> dict:

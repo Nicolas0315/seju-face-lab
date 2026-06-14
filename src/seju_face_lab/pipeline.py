@@ -52,6 +52,10 @@ def build_pipeline_plan(config: dict[str, Any], config_path: Path) -> PipelinePl
     if reference_images and build_model_out:
         steps.append(PipelineStep("build", "planned", str(build_model_out)))
 
+    model_audit = _model_audit_config(config, model_out)
+    if model_out and model_audit:
+        steps.append(PipelineStep("audit-model", "planned", str(model_audit["out"])))
+
     generation = _generation_config(config)
     generation_out = _path_value(generation, "out") or _path_value(config, "generated_images")
     if generation and model_out and generation_out:
@@ -163,6 +167,19 @@ def _style_evaluation_config(
     out = out or _path_value(config, "style_evaluation_out")
     if out is None and isinstance(style, dict) and generated_images:
         out = generated_images / "style_evaluation"
+    if not out:
+        return None
+    return {"out": out}
+
+
+def _model_audit_config(config: dict[str, Any], model_out: Path | None) -> dict[str, Path] | None:
+    audit = config.get("model_audit")
+    out = None
+    if isinstance(audit, dict):
+        out = _path_value(audit, "out")
+    out = out or _path_value(config, "model_audit_out") or _path_value(config, "audit_out")
+    if out is None and isinstance(audit, dict) and model_out:
+        out = model_out / "audit"
     if not out:
         return None
     return {"out": out}
