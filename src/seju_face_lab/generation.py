@@ -6,11 +6,14 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from .prompting import PROMPT_PROFILES, negative_prompt_for_profile, prompt_from_descriptors
+
 
 @dataclass(frozen=True)
 class GenerationConfig:
     provider: str
     model_id: str
+    prompt_profile: str
     prompt: str
     negative_prompt: str
     count: int
@@ -48,19 +51,21 @@ def build_generation_config(
     device: str,
     dtype: str,
     variant: str | None,
+    prompt_profile: str = "balanced",
     prompt_override: str | None = None,
     negative_prompt_override: str | None = None,
 ) -> GenerationConfig:
     manifest = json.loads((model_dir / "generation_manifest.json").read_text(encoding="utf-8"))
+    if prompt_profile not in PROMPT_PROFILES:
+        raise ValueError(f"Unsupported prompt profile: {prompt_profile}")
+    prompt = _prompt_for_profile(model_dir, manifest, prompt_profile, prompt_override)
+    negative_prompt = _negative_prompt_for_profile(manifest, prompt_profile, negative_prompt_override)
     return GenerationConfig(
         provider=provider,
         model_id=model_id,
-        prompt=prompt_override if prompt_override is not None else manifest["prompt"],
-        negative_prompt=(
-            negative_prompt_override
-            if negative_prompt_override is not None
-            else manifest.get("negative_prompt", "")
-        ),
+        prompt_profile=prompt_profile,
+        prompt=prompt,
+        negative_prompt=negative_prompt,
         count=count,
         seed=seed,
         steps=steps,
@@ -71,6 +76,41 @@ def build_generation_config(
         dtype=dtype,
         variant=variant,
     )
+
+
+def _prompt_for_profile(
+    model_dir: Path,
+    manifest: dict[str, Any],
+    prompt_profile: str,
+    prompt_override: str | None,
+) -> str:
+    if prompt_override is not None:
+        return prompt_override
+    if prompt_profile == "balanced":
+        return str(manifest["prompt"])
+    prompt_profiles = manifest.get("prompt_profiles", {})
+    if isinstance(prompt_profiles, dict) and prompt_profile in prompt_profiles:
+        return str(prompt_profiles[prompt_profile])
+    profile = json.loads((model_dir / "profile.json").read_text(encoding="utf-8"))
+    return prompt_from_descriptors(profile["descriptors"]["median"], profile=prompt_profile)
+
+
+def _negative_prompt_for_profile(
+    manifest: dict[str, Any],
+    prompt_profile: str,
+    negative_prompt_override: str | None,
+) -> str:
+    if negative_prompt_override is not None:
+        return negative_prompt_override
+    parts = [str(manifest.get("negative_prompt", "")).strip()]
+    profile_negatives = manifest.get("negative_prompt_profiles", {})
+    profile_negative = ""
+    if isinstance(profile_negatives, dict):
+        profile_negative = str(profile_negatives.get(prompt_profile, "")).strip()
+    if not profile_negative:
+        profile_negative = negative_prompt_for_profile(prompt_profile)
+    parts.append(profile_negative)
+    return ", ".join(part for part in parts if part)
 
 
 def write_generation_plan(config: GenerationConfig, model_dir: Path, out_dir: Path) -> GenerationResult:
@@ -161,6 +201,7 @@ def _render_generation_run(config: GenerationConfig, result: GenerationResult) -
         f"- status: {result.status}",
         f"- provider: {config.provider}",
         f"- model_id: {config.model_id}",
+        f"- prompt_profile: {config.prompt_profile}",
         f"- count: {config.count}",
         f"- seed: {config.seed}",
         f"- steps: {config.steps}",

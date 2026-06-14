@@ -86,6 +86,9 @@ class PipelineTests(unittest.TestCase):
             )
             self.assertIn("hair covering face", generation_manifest["negative_prompt"])
             self.assertIn("illustration", generation_manifest["negative_prompt"])
+            self.assertIn("detector-friendly", generation_manifest["prompt_profiles"])
+            self.assertIn("both eyes fully visible", generation_manifest["prompt_profiles"]["detector-friendly"])
+            self.assertIn("profile view", generation_manifest["negative_prompt_profiles"]["detector-friendly"])
             vector_failures = json.loads(
                 (model_dir / "vectors" / "image_vector_failures.json").read_text(encoding="utf-8")
             )
@@ -214,12 +217,38 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(generation_run["result"]["status"], "planned")
             self.assertEqual(generation_run["config"]["provider"], "dry-run")
             self.assertEqual(generation_run["config"]["count"], 2)
+            self.assertEqual(generation_run["config"]["prompt_profile"], "balanced")
             self.assertEqual(generation_run["config"]["prompt"], "")
             self.assertEqual(generation_run["config"]["variant"], "fp16")
             self.assertEqual(generation_run["config"]["negative_prompt"], "copied identity")
             self.assertIn("evaluate", generation_run["result"]["evaluation_command"])
             self.assertIn('"', generation_run["result"]["evaluation_command"])
             self.assertEqual(generation_run["result"]["evaluation_argv"][5], str(model_dir))
+            detector_generation_dir = root / "generated detector"
+            self.assertEqual(
+                main(
+                    [
+                        "generate",
+                        "--model",
+                        str(model_dir),
+                        "--out",
+                        str(detector_generation_dir),
+                        "--provider",
+                        "dry-run",
+                        "--count",
+                        "1",
+                        "--prompt-profile",
+                        "detector-friendly",
+                    ]
+                ),
+                0,
+            )
+            detector_run = json.loads(
+                (detector_generation_dir / "generation_run.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(detector_run["config"]["prompt_profile"], "detector-friendly")
+            self.assertIn("both eyes fully visible", detector_run["config"]["prompt"])
+            self.assertIn("profile view", detector_run["config"]["negative_prompt"])
             self.assertEqual(
                 main(
                     [

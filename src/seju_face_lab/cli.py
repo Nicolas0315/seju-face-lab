@@ -56,6 +56,12 @@ def main(argv: list[str] | None = None) -> int:
         default="auto",
         help="Diffusers model variant; auto uses fp16 with float16, none disables it",
     )
+    generate_parser.add_argument(
+        "--prompt-profile",
+        choices=["balanced", "detector-friendly"],
+        default="balanced",
+        help="generation prompt profile; detector-friendly favors frontal visible faces",
+    )
     generate_parser.add_argument("--prompt", default=None)
     generate_parser.add_argument("--negative-prompt", default=None)
     generate_parser.add_argument("--dry-run", action="store_true")
@@ -303,6 +309,7 @@ def _generate(args: argparse.Namespace) -> int:
         device=args.device,
         dtype=args.dtype,
         variant=variant,
+        prompt_profile=args.prompt_profile,
         prompt_override=args.prompt,
         negative_prompt_override=args.negative_prompt,
     )

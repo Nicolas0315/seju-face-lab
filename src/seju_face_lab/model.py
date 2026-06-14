@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 
 from .embeddings import descriptors_from_appearance, render_appearance
-from .prompting import prompt_from_descriptors
+from .prompting import PROMPT_PROFILES, negative_prompt_for_profile, prompt_from_descriptors
 
 
 @dataclass(frozen=True)
@@ -79,14 +79,25 @@ def save_model(model: CentroidModel, out_dir: Path) -> None:
     }
     (out_dir / "profile.json").write_text(json.dumps(profile, ensure_ascii=False, indent=2), encoding="utf-8")
     prompt = prompt_from_descriptors(model.descriptors["median"])
+    prompt_profiles = {
+        profile: prompt_from_descriptors(model.descriptors["median"], profile=profile)
+        for profile in PROMPT_PROFILES
+    }
+    negative_prompt_profiles = {}
+    for profile_name in PROMPT_PROFILES:
+        profile_negative = negative_prompt_for_profile(profile_name)
+        if profile_negative:
+            negative_prompt_profiles[profile_name] = profile_negative
     (out_dir / "prompt.txt").write_text(prompt + "\n", encoding="utf-8")
     manifest = {
         "prompt": prompt,
+        "prompt_profiles": prompt_profiles,
         "negative_prompt": (
             "specific celebrity likeness, copied identity, distorted face, extra eyes, "
             "asymmetry artifact, hair covering face, obscured eyes, harsh shadows, "
             "illustration, doll, mannequin, painted skin, low detail, watermark, text"
         ),
+        "negative_prompt_profiles": negative_prompt_profiles,
         "reference_outputs": {
             "mean_face": "mean_face.png",
             "median_face": "median_face.png",

@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 
-def prompt_from_descriptors(descriptors: dict[str, float]) -> str:
+PROMPT_PROFILES = ("balanced", "detector-friendly")
+
+
+def prompt_from_descriptors(descriptors: dict[str, float], profile: str = "balanced") -> str:
+    if profile not in PROMPT_PROFILES:
+        raise ValueError(f"Unsupported prompt profile: {profile}")
     tone = _tone(descriptors)
     contrast = _contrast(descriptors)
     warmth = _warmth(descriptors)
     structure = _structure(descriptors)
     texture = _texture(descriptors)
-    return (
+    prompt = (
         "Aggregate traits seju-face photoreal close-up portrait, "
         "new fictional person, "
         "no celebrity likeness, "
@@ -15,6 +20,23 @@ def prompt_from_descriptors(descriptors: dict[str, float]) -> str:
         "frontal unobscured face, clear eyes, natural expression, "
         "soft editorial light, realistic skin."
     )
+    if profile == "detector-friendly":
+        prompt += (
+            " Centered head and shoulders, both eyes fully visible, looking into camera, "
+            "face fills frame, plain background, no hair covering eyes, no hands near face."
+        )
+    return prompt
+
+
+def negative_prompt_for_profile(profile: str) -> str:
+    if profile == "balanced":
+        return ""
+    if profile == "detector-friendly":
+        return (
+            "profile view, side face, turned head, closed eyes, sunglasses, mask, "
+            "hand over face, hair over eyes, cropped face, multiple people"
+        )
+    raise ValueError(f"Unsupported prompt profile: {profile}")
 
 
 def _tone(d: dict[str, float]) -> str:
