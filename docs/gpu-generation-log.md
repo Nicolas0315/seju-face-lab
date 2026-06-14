@@ -49,11 +49,14 @@ Observed local results:
 - `compare-backends` on the v5 sample completed both `deterministic` and `insightface`: 2 reference images, 1 generated image, InsightFace embedding dimension `512`, best generated image `candidate_0001_seed_260623`, best InsightFace centroid score `0.052322`.
 - After adding automatic torch CUDA DLL path preparation on Windows, full-set `compare-backends` completed with ONNXRuntime `CUDAExecutionProvider`: deterministic refs `259/259`, InsightFace refs `224/259`, generated images `1/1`, InsightFace embedding dimension `512`, best generated image `candidate_0001_seed_260623`, best InsightFace centroid score `0.038486`.
 - `precision-report` bundled the full-set CUDA backend comparison with the v5 generated review: model images `259`, best generated deterministic score `0.168881`, completed backends `deterministic, insightface`.
+- v7 rank batch generated 6 detector-friendly candidates on RTX 4090; deterministic review evaluated `6/6`, QA pass `3/6`, best QA image `candidate_0003_seed_260702`, best deterministic score `0.408002`.
+- v7 full-set backend comparison completed with ONNXRuntime `CUDAExecutionProvider`: deterministic refs `259/259`, InsightFace refs `224/259`, InsightFace generated images `5/6`, failed image `candidate_0001_seed_260700`, best image matched deterministic at `candidate_0003_seed_260702`, best InsightFace score `0.105692`, deterministic-vs-InsightFace Spearman rank `0.300000` over 5 common images.
+- `precision-report` bundled the v7 generated review and backend comparison: model images `259`, best generated score `0.408002`, QA pass `3/6`, completed backends `deterministic, insightface`, rank agreement common images `5`.
 
-Current best local candidate for review remains:
+Current best local generated candidate by deterministic QA-gated score is:
 
 ```text
-outputs/generated_detector_v2/candidate_0002_seed_260618.png
+outputs/generated_detector_v7_rank/candidate_0003_seed_260702.png
 ```
 
 Boundary: these are approximate local scores against ignored local centroid models, not identity, attractiveness, ethnicity, or objective face-type labels.
@@ -74,8 +77,8 @@ python -m seju_face_lab generate --model outputs/seju_model_official --out outpu
 ## Next Steps
 
 - Run larger ignored GPU batches and keep only summarized findings in committed docs.
-- Run larger detector-friendly batches, then score with `review-generated` plus OpenCV/InsightFace or DeepFace where available.
-- Run larger generated batches so backend rank agreement has more than one common generated image.
+- Run larger detector-friendly batches beyond 6 images to reduce the noise in backend rank agreement.
+- Add OpenCV and DeepFace into the v7-style multi-candidate comparison once DeepFace runtime is verified.
 - Verify DeepFace installation/runtime and compare its rankings with deterministic/OpenCV/InsightFace.
 - Treat ONNXRuntime CUDA provider visibility as environment evidence only; record backend vectorization results separately for each image set.
 - Compare deterministic, neural face-embedding, and visual-review rankings before closing the generation-loop issue.

@@ -29,7 +29,7 @@ Retrieval/design date: 2026-06-14.
 
 Create and track these issues:
 
-- `P1 GPU face embeddings`: run larger generated batches through full-set InsightFace/ONNXRuntime-GPU comparisons, then record rank agreement across multiple candidates.
+- `P1 GPU face embeddings`: expand multi-candidate InsightFace/ONNXRuntime-GPU comparisons beyond the current 6-image batch and add DeepFace once runtime is verified.
 - `P1 Celebrity subject review workflow`: collect reviewed subject folders and run `review-subjects`.
 - `P1 Generation loop`: connect `generation_manifest.json` to Diffusers or ComfyUI batches.
 - `P1 SNS correlation workflow`: run handle extraction, engagement manifesting, and correlation reports.
@@ -73,5 +73,7 @@ Create and track these issues:
 - InsightFace sample `compare-backends` succeeded on `data/raw/seju_official_sample` against `outputs/generated_detector_v5`: 2 usable reference images, 1 generated image, 512D embeddings, best generated image `candidate_0001_seed_260623`, best InsightFace centroid score `0.052322`.
 - Full-set InsightFace `compare-backends` succeeded against `outputs/generated_detector_v5` after Windows torch CUDA DLL path preparation: deterministic refs `259/259`, InsightFace refs `224/259`, generated images `1/1`, InsightFace embedding dimension `512`, best generated image `candidate_0001_seed_260623`, best InsightFace centroid score `0.038486`.
 - Current ONNXRuntime reports `TensorrtExecutionProvider`, `CUDAExecutionProvider`, and `CPUExecutionProvider`; the full-set comparison log confirms applied providers `CUDAExecutionProvider, CPUExecutionProvider`.
+- v7 RTX 4090 detector-friendly batch generated 6 candidates and reviewed them in one pass: deterministic evaluated `6/6`, QA pass `3/6`, best QA image `candidate_0003_seed_260702`, best deterministic score `0.408002`.
+- v7 full-set InsightFace comparison used ONNXRuntime `CUDAExecutionProvider`: deterministic refs `259/259`, InsightFace refs `224/259`, InsightFace generated images `5/6`, failed generated image `candidate_0001_seed_260700`, best image matched deterministic at `candidate_0003_seed_260702`, best InsightFace score `0.105692`, deterministic-vs-InsightFace Spearman rank `0.300000` over 5 common images.
 - `compare-backends` is now the committed review path for checking whether deterministic/OpenCV and neural embeddings rank the same generated or subject images.
 - Full committed workflow notes are in `docs/gpu-generation-log.md`.
