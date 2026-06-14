@@ -11,6 +11,10 @@
     "out": "outputs/backend_compare",
     "backends": ["deterministic", "opencv-face", "insightface", "deepface"]
   },
+  "subject_backend_comparison": {
+    "out": "outputs/subject_backend_compare",
+    "backends": ["deterministic", "opencv-face", "insightface", "deepface-retinaface"]
+  },
   "precision_out": "outputs/precision_report",
   "vector_backend": "deterministic",
   "crop": "center",
