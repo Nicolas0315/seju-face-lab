@@ -14,6 +14,7 @@ Retrieval/design date: 2026-06-14.
 - `compare-backends` builds/evaluates multiple vector backends on the same local image sets and reports rank agreement.
 - `compare-deepface-detectors` sweeps DeepFace detector choices on the same local image sets and reports detector acceptance/rank agreement.
 - Per-subject similarity review is implemented through `review-subjects`.
+- Per-subject backend rank agreement is implemented through `compare-subject-backends`.
 - SNS handle/engagement manifests and face-score correlation reports are implemented.
 - OpenCLIP style-axis scoring is implemented through `style-evaluate`.
 - `compare-runs` reports style and same-image combined scores when style outputs are present.
@@ -33,7 +34,7 @@ Retrieval/design date: 2026-06-14.
 Create and track these issues:
 
 - `P1 GPU face embeddings`: expand multi-candidate InsightFace/ONNXRuntime-GPU comparisons beyond the current 6-image batch and investigate DeepFace ranking divergence.
-- `P1 Celebrity subject review workflow`: collect reviewed subject folders and run `review-subjects`.
+- `P1 Celebrity subject review workflow`: collect reviewed subject folders and run `review-subjects` plus `compare-subject-backends`.
 - `P1 Generation loop`: connect `generation_manifest.json` to Diffusers or ComfyUI batches.
 - `P1 SNS correlation workflow`: run handle extraction, engagement manifesting, and correlation reports.
 - `P2 DeepFace adapter`: run the committed detector sweep after the default DeepFace/OpenCV detector accepted only `139/259` official references.
@@ -52,7 +53,7 @@ Create and track these issues:
 
 1. Build the official seju centroid from reviewed local images.
 2. Place comparison celebrity/public-figure image folders under `data/subjects/`.
-3. Run `review-subjects` with the deterministic and `opencv-face` backends.
+3. Run `review-subjects` and `compare-subject-backends` with deterministic, `opencv-face`, and neural backends.
 4. Run the same review with InsightFace or DeepFace once optional dependencies are installed.
 5. Plan aggregate candidate faces with `generate --provider dry-run`.
 6. For detector-visible scoring batches, use `generate --prompt-profile detector-friendly`.

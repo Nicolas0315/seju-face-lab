@@ -269,11 +269,15 @@ Compare multiple backend rankings on the same local reference and target image s
 
 ```powershell
 python -m seju_face_lab compare-backends --reference-images data/raw/seju_official --images outputs/generated_detector --out outputs/backend_compare --backends deterministic opencv-face insightface deepface deepface-retinaface
+python -m seju_face_lab compare-subject-backends --reference-images data/raw/seju_official --subjects data/subjects --out outputs/subject_backend_compare --backends deterministic opencv-face insightface deepface-retinaface
 ```
 
 This writes one model/evaluation folder per backend plus `backend_comparison.json` and
 `backend_comparison.md`. Score scales are backend-specific; use the rank-agreement section to
 review whether deterministic, face-crop, InsightFace, and DeepFace detector variants choose the same candidates.
+For celebrity/public-figure folders under `data/subjects`, `compare-subject-backends` writes one
+subject review per backend plus `subject_backend_comparison.json` and `.md` so per-subject
+near-face rankings can be reviewed across deterministic and neural embeddings.
 
 When DeepFace rejects many reference images, sweep its detector choices directly:
 
@@ -320,6 +324,7 @@ See `docs/gpu-generation-log.md` for RTX 4090 generation smoke results.
 - backend diagnostics `backend_diagnostics.json`: optional dependency, CUDA, and provider visibility for neural backends.
 - worker diagnostics `worker_diagnostics.json`: local/SSH Python, CUDA, torch, and package readiness for GPU split-run planning.
 - backend comparison `backend_comparison.json`: per-backend model/evaluation outputs and same-image rank agreement.
+- subject backend comparison `subject_backend_comparison.json`: per-backend celebrity/public-figure subject rankings and rank agreement.
 - style evaluation `style_scores.csv`: OpenCLIP image-style similarity to mean/median renderings.
 - style evaluation `style_summary.json`: best/mean/median style-axis scores.
 - image quality `image_quality.csv`: OpenCV single-face QA for generated candidates.

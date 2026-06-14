@@ -46,7 +46,10 @@ Retrieval/design date: 2026-06-14.
 12. `review-subjects`
    - per-person image folders are ranked against the local seju centroid
    - output is CSV, Markdown, and JSON for review and tracking
-13. SNS and correlation analysis
+13. `compare-subject-backends`
+   - reviews the same per-person folders across deterministic, face-crop, and neural backends
+   - writes `subject_backend_comparison.json` / `.md` plus per-backend `subject_reviews.json`
+14. SNS and correlation analysis
    - `sources scrape-handles` writes reviewed SNS handle manifests
    - `sources fetch-engagement` writes best-effort public engagement manifests
    - `analyze correlation` joins `subject_reviews.json` to SNS metrics
@@ -93,6 +96,7 @@ Then run:
 
 ```powershell
 python -m seju_face_lab review-subjects --model outputs/seju_model --subjects data/subjects --out outputs/subject_reviews
+python -m seju_face_lab compare-subject-backends --reference-images data/raw/seju_official --subjects data/subjects --out outputs/subject_backend_compare --backends deterministic opencv-face insightface deepface-retinaface
 ```
 
 The score is an approximate similarity to this local centroid only. It must not be treated as

@@ -668,6 +668,50 @@ class PipelineTests(unittest.TestCase):
             report = json.loads((out / "backend_comparison.json").read_text(encoding="utf-8"))
             self.assertEqual(report["rank_agreement"][0]["common_image_count"], 2)
 
+    def test_compare_subject_backends_writes_subject_rank_agreement(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "raw"
+            subjects = root / "subjects"
+            out = root / "subject_backend_compare"
+            raw.mkdir()
+            (subjects / "near_subject").mkdir(parents=True)
+            (subjects / "far_subject").mkdir(parents=True)
+            _write_face_like_image(raw / "a.png", (235, 205, 190), eye_offset=0)
+            _write_face_like_image(raw / "b.png", (225, 198, 184), eye_offset=2)
+            _write_face_like_image(subjects / "near_subject" / "near.png", (232, 202, 188), eye_offset=1)
+            _write_face_like_image(subjects / "far_subject" / "far.png", (170, 145, 130), eye_offset=7)
+
+            with patch("seju_face_lab.backends._import_cv2", return_value=_FakeCV2()):
+                self.assertEqual(
+                    main(
+                        [
+                            "compare-subject-backends",
+                            "--reference-images",
+                            str(raw),
+                            "--subjects",
+                            str(subjects),
+                            "--out",
+                            str(out),
+                            "--backends",
+                            "deterministic",
+                            "opencv-face",
+                        ]
+                    ),
+                    0,
+                )
+
+            report = json.loads((out / "subject_backend_comparison.json").read_text(encoding="utf-8"))
+            self.assertEqual([run["status"] for run in report["runs"]], ["completed", "completed"])
+            self.assertEqual(report["runs"][0]["top_subject"], "near_subject")
+            self.assertEqual(len(report["rank_agreement"]), 1)
+            self.assertEqual(report["rank_agreement"][0]["common_subject_count"], 2)
+            self.assertTrue((out / "deterministic" / "subject_review" / "subject_reviews.json").exists())
+            self.assertIn(
+                "subject backend comparison",
+                (out / "subject_backend_comparison.md").read_text(encoding="utf-8"),
+            )
+
     def test_compare_backends_rejects_unknown_backend_name(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

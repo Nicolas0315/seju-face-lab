@@ -10,7 +10,15 @@ import numpy as np
 
 from . import backends
 from .embeddings import iter_image_paths
-from .metrics import Score, _score_vector, score_generated_images, write_scores
+from .metrics import (
+    Score,
+    SubjectReview,
+    _score_vector,
+    review_subject_directories,
+    score_generated_images,
+    write_scores,
+    write_subject_reviews,
+)
 from .model import build_centroid_model, save_model
 
 
@@ -28,6 +36,21 @@ class BackendRun:
     best_image_id: str | None
     best_centroid_score: float | None
     mean_centroid_score: float | None
+    error: str | None = None
+
+
+@dataclass(frozen=True)
+class SubjectBackendRun:
+    backend: str
+    status: str
+    model_dir: str | None
+    subject_review_dir: str | None
+    reference_count: int
+    reference_failed_count: int
+    subject_count: int
+    embedding_dim: int | None
+    top_subject: str | None
+    top_subject_mean_score: float | None
     error: str | None = None
 
 
@@ -59,6 +82,40 @@ def compare_vector_backends(
     }
     (out_dir / "backend_comparison.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     (out_dir / "backend_comparison.md").write_text(_render(report), encoding="utf-8")
+    return report
+
+
+def compare_subject_backends(
+    reference_images: Path,
+    subjects: Path,
+    out_dir: Path,
+    backend_names: list[str],
+    crop: str = "center",
+) -> dict[str, Any]:
+    _validate_backend_names(backend_names)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    runs = [_run_subject_backend(reference_images, subjects, out_dir, name, crop) for name in backend_names]
+    tables = {
+        run.backend: _read_subject_scores(Path(run.subject_review_dir) / "subject_reviews.json")
+        for run in runs
+        if run.status == "completed" and run.subject_review_dir
+    }
+    report = {
+        "reference_images": str(reference_images),
+        "subjects": str(subjects),
+        "crop": crop,
+        "runs": [asdict(run) for run in runs],
+        "rank_agreement": _subject_rank_agreement(tables),
+        "boundary": (
+            "Subject backends are compared by same-subject ranking only. Scores are local "
+            "centroid similarities, not identity, attractiveness, ethnicity, or objective labels."
+        ),
+    }
+    (out_dir / "subject_backend_comparison.json").write_text(
+        json.dumps(report, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    (out_dir / "subject_backend_comparison.md").write_text(_render_subject_backend_report(report), encoding="utf-8")
     return report
 
 
@@ -186,6 +243,54 @@ def _run_backend(reference_images: Path, images: Path, out_dir: Path, backend_na
             encoding="utf-8",
         )
         return BackendRun(backend_name, "failed", None, None, 0, 0, 0, 0, None, None, None, None, str(exc))
+
+
+def _run_subject_backend(
+    reference_images: Path,
+    subjects: Path,
+    out_dir: Path,
+    backend_name: str,
+    crop: str,
+) -> SubjectBackendRun:
+    model_dir = out_dir / backend_name / "model"
+    subject_review_dir = out_dir / backend_name / "subject_review"
+    try:
+        backend = backends.get_vector_backend(backend_name)
+        vectors, failures = [], []
+        for path in iter_image_paths(reference_images):
+            try:
+                vectors.append(backend.vectorize(path, crop=crop))
+            except Exception as exc:  # noqa: BLE001 - optional backend comparison should report noisy references.
+                failures.append({"path": str(path), "reason": str(exc)})
+        if not vectors:
+            raise RuntimeError(f"No usable reference images for backend '{backend_name}'")
+        model = build_centroid_model(
+            image_ids=[vector.image_id for vector in vectors],
+            source_paths=[str(vector.path) for vector in vectors],
+            embeddings=np.stack([vector.embedding for vector in vectors]),
+            appearances=np.stack([vector.appearance for vector in vectors]),
+        )
+        save_model(model, model_dir)
+        _write_reference_failures(model_dir, failures)
+        reviews = review_subject_directories(model, subjects, crop=crop, backend=backend)
+        write_subject_reviews(reviews, subject_review_dir)
+        return _completed_subject_run(
+            backend_name,
+            model_dir,
+            subject_review_dir,
+            len(vectors),
+            len(failures),
+            model.embedding_dim,
+            reviews,
+        )
+    except Exception as exc:  # noqa: BLE001 - optional backend failures are report data.
+        failure_dir = out_dir / backend_name
+        failure_dir.mkdir(parents=True, exist_ok=True)
+        (failure_dir / "subject_backend_failure.json").write_text(
+            json.dumps({"backend": backend_name, "status": "failed", "error": str(exc)}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        return SubjectBackendRun(backend_name, "failed", None, None, 0, 0, 0, None, None, None, str(exc))
 
 
 def _run_deepface_detector(
@@ -430,6 +535,30 @@ def _completed_run(
     )
 
 
+def _completed_subject_run(
+    backend_name: str,
+    model_dir: Path,
+    subject_review_dir: Path,
+    reference_count: int,
+    reference_failed_count: int,
+    embedding_dim: int,
+    reviews: list[SubjectReview],
+) -> SubjectBackendRun:
+    top = reviews[0] if reviews else None
+    return SubjectBackendRun(
+        backend=backend_name,
+        status="completed",
+        model_dir=str(model_dir),
+        subject_review_dir=str(subject_review_dir),
+        reference_count=reference_count,
+        reference_failed_count=reference_failed_count,
+        subject_count=len(reviews),
+        embedding_dim=embedding_dim,
+        top_subject=top.subject if top else None,
+        top_subject_mean_score=_round_optional(top.mean_centroid_score) if top else None,
+    )
+
+
 def _write_reference_failures(model_dir: Path, failures: list[dict[str, str]]) -> None:
     vector_dir = model_dir / "vectors"
     vector_dir.mkdir(parents=True, exist_ok=True)
@@ -450,6 +579,23 @@ def _read_scores(path: Path) -> dict[str, float]:
         }
 
 
+def _read_subject_scores(path: Path) -> dict[str, float]:
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    subjects = payload.get("subjects")
+    if not isinstance(subjects, list):
+        return {}
+    return {
+        str(row["subject"]): float(row["mean_centroid_score"])
+        for row in subjects
+        if isinstance(row, dict) and row.get("subject") and row.get("mean_centroid_score") is not None
+    }
+
+
 def _rank_agreement(tables: dict[str, dict[str, float]]) -> list[dict[str, Any]]:
     names = sorted(tables)
     rows = []
@@ -468,6 +614,18 @@ def _rank_agreement(tables: dict[str, dict[str, float]]) -> list[dict[str, Any]]
                 }
             )
     return rows
+
+
+def _subject_rank_agreement(tables: dict[str, dict[str, float]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "backend_a": row["backend_a"],
+            "backend_b": row["backend_b"],
+            "common_subject_count": row["common_image_count"],
+            "spearman_rank": row["spearman_rank"],
+        }
+        for row in _rank_agreement(tables)
+    ]
 
 
 def _spearman(left: list[float], right: list[float]) -> float | None:
@@ -533,5 +691,33 @@ def _render_detector_report(report: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _render_subject_backend_report(report: dict[str, Any]) -> str:
+    lines = [
+        "# subject backend comparison",
+        "",
+        "| backend | status | refs | ref_failed | subjects | dim | top_subject | top_mean_score |",
+    ]
+    lines.append("| --- | --- | ---: | ---: | ---: | ---: | --- | ---: |")
+    for run in report["runs"]:
+        lines.append(
+            f"| {run['backend']} | {run['status']} | {run['reference_count']} | "
+            f"{run['reference_failed_count']} | {run['subject_count']} | {run['embedding_dim'] or ''} | "
+            f"{run['top_subject'] or ''} | {_optional_float(run['top_subject_mean_score'])} |"
+        )
+    lines.extend(["", "## Rank Agreement", "", "| backend_a | backend_b | common_subjects | spearman_rank |"])
+    lines.append("| --- | --- | ---: | ---: |")
+    for item in report["rank_agreement"]:
+        lines.append(
+            f"| {item['backend_a']} | {item['backend_b']} | {item['common_subject_count']} | "
+            f"{_optional_float(item['spearman_rank'])} |"
+        )
+    lines.extend(["", report["boundary"], ""])
+    return "\n".join(lines)
+
+
 def _optional_float(value: float | None) -> str:
     return "" if value is None else f"{float(value):.6f}"
+
+
+def _round_optional(value: float | None) -> float | None:
+    return None if value is None else round(float(value), 6)
