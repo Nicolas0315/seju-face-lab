@@ -83,4 +83,5 @@ Create and track these issues:
 - `compare-backends` is now the committed review path for checking whether deterministic/OpenCV and neural embeddings rank the same generated or subject images.
 - `compare-deepface-detectors` is now the committed audit path for checking whether DeepFace's detector choice, rather than ArcFace scoring alone, explains low reference acceptance or rank divergence.
 - v7 `compare-deepface-detectors` confirmed `deepface-opencv` acceptance/ranking in a reusable detector report: refs `139/259`, generated images `5/6`, best image `candidate_0005_seed_260704`, best score `0.567757`. The four-detector local sweep hit a 20-minute turn timeout after OpenCV, so resume the remaining detectors with `--reuse-existing`.
+- v7 `deepface-skip` accepted refs `259/259` and generated images `6/6`, best image `candidate_0006_seed_260705`, best score `0.986008`, and Spearman rank vs `deepface-opencv` was `0.600000` over 5 common images. Treat `skip` as a detector-rejection pressure check only, not as a replacement for face-validated scoring.
 - Full committed workflow notes are in `docs/gpu-generation-log.md`.

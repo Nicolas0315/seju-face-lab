@@ -56,6 +56,7 @@ Observed local results:
 - v7 all-backend comparison completed for `deterministic`, `opencv-face`, `insightface`, and `deepface`: deterministic/opencv/InsightFace all chose `candidate_0003_seed_260702`; DeepFace chose `candidate_0005_seed_260704`; pairwise Spearman over 5 common images was deterministic-vs-OpenCV `0.900000`, deterministic-vs-InsightFace `0.300000`, InsightFace-vs-OpenCV `0.400000`, DeepFace-vs-deterministic `-0.700000`, DeepFace-vs-InsightFace `-0.200000`, and DeepFace-vs-OpenCV `-0.400000`.
 - Added `compare-deepface-detectors` so the next DeepFace audit can hold ArcFace constant and sweep `opencv`, `mtcnn`, `retinaface`, and `skip` detector backends on the same reference/generated image sets.
 - First v7 detector audit confirmed `deepface-opencv` exactly reproduces the prior DeepFace acceptance/ranking: official refs `139/259`, generated images `5/6`, failed generated image `candidate_0001_seed_260700`, best image `candidate_0005_seed_260704`, best score `0.567757`. The full four-detector sweep exceeded a 20-minute local turn timeout after finishing OpenCV, so the committed `--reuse-existing` flag should be used to resume the remaining detector runs without recomputing OpenCV.
+- Resumed the v7 detector audit with `skip`: `deepface-skip` accepted official refs `259/259` and generated images `6/6`, best image `candidate_0006_seed_260705`, best score `0.986008`, and Spearman rank vs `deepface-opencv` was `0.600000` over 5 common generated images. Boundary: `skip` bypasses face detection, so it is useful for testing detector rejection pressure but should not replace detector-validated face scoring.
 
 Current best local generated candidate by deterministic QA-gated score is:
 
@@ -82,6 +83,6 @@ python -m seju_face_lab generate --model outputs/seju_model_official --out outpu
 
 - Run larger ignored GPU batches and keep only summarized findings in committed docs.
 - Run larger detector-friendly batches beyond 6 images to reduce the noise in backend rank agreement.
-- Resume `compare-deepface-detectors --reuse-existing` for `mtcnn retinaface skip` to investigate whether detector choice explains the DeepFace/OpenCV `139/259` acceptance and rank divergence.
+- Resume `compare-deepface-detectors --reuse-existing` for `mtcnn retinaface` to investigate whether alternative face detectors preserve face-validated scoring while improving on DeepFace/OpenCV `139/259` acceptance.
 - Treat ONNXRuntime CUDA provider visibility as environment evidence only; record backend vectorization results separately for each image set.
 - Compare deterministic, neural face-embedding, and visual-review rankings before closing the generation-loop issue.
