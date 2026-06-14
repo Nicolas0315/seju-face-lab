@@ -43,6 +43,7 @@ Observed local results:
 - v3 shorter ID-headshot prompt: deterministic `image_count=2`, OpenCV `image_count=2`, QA pass `0/2`; failures were extreme crop and off-center/small face.
 - v4 v2-style prompt plus stronger collage negatives: deterministic `image_count=2`, OpenCV `image_count=1`, QA pass `0/2`; failures were 4-face collage and no detected frontal face.
 - v5 compact detector-friendly negative prompt: no CLIP token-length warning, deterministic best `0.168881`, OpenCV best `0.487359`, QA pass `1/1`.
+- v6 `generate --review` smoke run completed generation, evaluation, QA, and one-run review in one command; deterministic best `0.044308`, QA pass `0/1` because OpenCV detected no face.
 - QA-gated `compare-runs` over v2-v5 still ranks v2 first: deterministic QA best `0.363268`; OpenCV QA best `0.641401`.
 - `review-generated` on v5 reproduced the standard generated-image review in one command: deterministic `image_count=1`, QA pass `1/1`, one-run review best QA score `0.168881`.
 
@@ -64,7 +65,7 @@ Boundary: these are approximate local scores against ignored local centroid mode
 - Use `generate --prompt-profile detector-friendly` for the next face-detector-visible scoring batch.
 
 ```powershell
-python -m seju_face_lab generate --model outputs/seju_model_official --out outputs/generated_detector --provider diffusers --prompt-profile detector-friendly --count 8 --device cuda
+python -m seju_face_lab generate --model outputs/seju_model_official --out outputs/generated_detector --provider diffusers --prompt-profile detector-friendly --count 8 --device cuda --review
 ```
 
 ## Next Steps

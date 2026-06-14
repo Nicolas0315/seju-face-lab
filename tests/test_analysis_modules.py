@@ -5,6 +5,7 @@ import tempfile
 import unittest
 import urllib.error
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import bootstrap  # noqa: F401
@@ -96,6 +97,80 @@ class AnalysisModuleTests(unittest.TestCase):
             evaluate.assert_called_once_with(model, images, images / "evaluation", "center", "deterministic")
             qa_images.assert_called_once_with(images, images / "quality")
             compare_runs.assert_called_once_with([images], out)
+
+    def test_cli_generate_review_runs_after_real_generation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            model = root / "model"
+            out = root / "generated"
+            review_out = root / "review"
+            config = SimpleNamespace(provider="diffusers")
+            result = SimpleNamespace(
+                status="generated",
+                evaluation_command="python -m seju_face_lab evaluate",
+                generated_images=[str(out / "candidate.png")],
+            )
+
+            with patch("seju_face_lab.cli.build_generation_config", return_value=config):
+                with patch("seju_face_lab.cli.run_diffusers_generation", return_value=result):
+                    with patch("seju_face_lab.cli._review_generated") as review_generated:
+                        self.assertEqual(
+                            main(
+                                [
+                                    "generate",
+                                    "--model",
+                                    str(model),
+                                    "--out",
+                                    str(out),
+                                    "--provider",
+                                    "diffusers",
+                                    "--review",
+                                    "--review-out",
+                                    str(review_out),
+                                ]
+                            ),
+                            0,
+                        )
+
+            review_generated.assert_called_once()
+            review_args = review_generated.call_args.args[0]
+            self.assertEqual(review_args.model, model)
+            self.assertEqual(review_args.images, out)
+            self.assertEqual(review_args.out, review_out)
+            self.assertEqual(review_args.backend, "deterministic")
+
+    def test_cli_generate_review_does_not_run_for_dry_run_plan(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            model = root / "model"
+            out = root / "generated"
+            config = SimpleNamespace(provider="dry-run")
+            result = SimpleNamespace(
+                status="planned",
+                evaluation_command="python -m seju_face_lab evaluate",
+                generated_images=[],
+            )
+
+            with patch("seju_face_lab.cli.build_generation_config", return_value=config):
+                with patch("seju_face_lab.cli.write_generation_plan", return_value=result):
+                    with patch("seju_face_lab.cli._review_generated") as review_generated:
+                        self.assertEqual(
+                            main(
+                                [
+                                    "generate",
+                                    "--model",
+                                    str(model),
+                                    "--out",
+                                    str(out),
+                                    "--provider",
+                                    "dry-run",
+                                    "--review",
+                                ]
+                            ),
+                            0,
+                        )
+
+            review_generated.assert_not_called()
 
     def test_image_quality_records_per_file_failures(self) -> None:
         with patch("seju_face_lab.quality._import_cv2", return_value=object()):

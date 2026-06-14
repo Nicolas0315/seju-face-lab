@@ -66,6 +66,10 @@ def main(argv: list[str] | None = None) -> int:
     generate_parser.add_argument("--prompt", default=None)
     generate_parser.add_argument("--negative-prompt", default=None)
     generate_parser.add_argument("--dry-run", action="store_true")
+    generate_parser.add_argument("--review", action="store_true", help="review generated images after a real generation run")
+    generate_parser.add_argument("--review-out", type=Path, default=None)
+    generate_parser.add_argument("--review-crop", choices=["center", "none"], default="center")
+    generate_parser.add_argument("--review-backend", default="deterministic")
 
     render_parser = subparsers.add_parser("render", help="render mean or median face image again")
     render_parser.add_argument("--model", type=Path, required=True)
@@ -342,6 +346,16 @@ def _generate(args: argparse.Namespace) -> int:
     print(f"generation status: {result.status}")
     print(f"run manifest: {args.out / 'generation_run.json'}")
     print(f"evaluate: {result.evaluation_command}")
+    if args.review and result.generated_images:
+        _review_generated(
+            argparse.Namespace(
+                model=args.model,
+                images=args.out,
+                out=args.review_out,
+                crop=args.review_crop,
+                backend=args.review_backend,
+            )
+        )
     return 0
 
 

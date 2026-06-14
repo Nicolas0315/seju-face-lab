@@ -23,6 +23,7 @@ Retrieval/design date: 2026-06-14.
    - `--dry-run` always records `provider: dry-run`, even if the requested provider was diffusers
    - `--variant auto` maps `--dtype float16` to the Diffusers `fp16` variant
    - `--prompt-profile detector-friendly` steers aggregate prompts toward frontal, unobscured faces for detector/evaluation passes
+   - `--review` runs the standard generated-image review after a real generation run produces files
 5. `evaluate`
    - generated candidates are scored against mean and median vectors
 6. `style-evaluate`
@@ -36,6 +37,7 @@ Retrieval/design date: 2026-06-14.
    - otherwise batches are ranked by face score, or by best per-image combined face/style score when style outputs are present
 9. `review-generated`
    - convenience command that runs `evaluate`, `qa-images`, and one-run `compare-runs` for a generated directory
+   - also used by `generate --review` so generated batches can be scored immediately
 10. `review-subjects`
    - per-person image folders are ranked against the local seju centroid
    - output is CSV, Markdown, and JSON for review and tracking

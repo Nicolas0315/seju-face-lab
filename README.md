@@ -97,6 +97,13 @@ For batches meant to pass face detectors before scoring, use the detector-friend
 python -m seju_face_lab generate --model outputs/seju_model --out outputs/generated_detector --provider diffusers --prompt-profile detector-friendly --count 8
 ```
 
+To generate and immediately run the standard review after a real Diffusers batch, add `--review`.
+Dry-run plans still only write the plan:
+
+```powershell
+python -m seju_face_lab generate --model outputs/seju_model --out outputs/generated_detector --provider diffusers --prompt-profile detector-friendly --count 8 --review --review-out outputs/generated_detector/review
+```
+
 Run the OpenCV generated-image QA gate before trusting a high score from a generated batch:
 
 ```powershell
@@ -245,7 +252,7 @@ See `docs/gpu-generation-log.md` for RTX 4090 generation smoke results.
 - generation `prompt_profile`: `balanced` by default, or `detector-friendly` for frontal, unobscured candidate batches.
 - evaluation `scores.csv`: similarity of candidate generated images to the centroid vectors.
 - evaluation `summary.json`: best/mean/median generated-image similarity for quick comparisons.
-- generated review `generation_run_reviews.csv`: one-command generated-image evaluation + QA + run review via `review-generated`.
+- generated review `generation_run_reviews.csv`: one-command generated-image evaluation + QA + run review via `review-generated`, or directly after Diffusers generation with `generate --review`.
 - style evaluation `style_scores.csv`: OpenCLIP image-style similarity to mean/median renderings.
 - style evaluation `style_summary.json`: best/mean/median style-axis scores.
 - image quality `image_quality.csv`: OpenCV single-face QA for generated candidates.

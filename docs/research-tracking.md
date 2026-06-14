@@ -19,6 +19,7 @@ Retrieval/design date: 2026-06-14.
 - `qa-images` flags generated candidates that are collages, extreme crops, off-center faces, or missing a frontal OpenCV face.
 - `compare-runs` now reads `quality/` outputs and reports QA-gated best centroid scores.
 - `review-generated` runs generated-image evaluation, QA, and one-run comparison as the standard precision-review shortcut.
+- `generate --review` now chains real Diffusers generation into the same generated-image review shortcut.
 
 ## GitHub Issue Plan
 
@@ -48,7 +49,7 @@ Create and track these issues:
 4. Run the same review with InsightFace or DeepFace once optional dependencies are installed.
 5. Plan aggregate candidate faces with `generate --provider dry-run`.
 6. For detector-visible scoring batches, use `generate --prompt-profile detector-friendly`.
-7. Generate with Diffusers/ComfyUI on a GPU worker and score with `review-generated`.
+7. Generate with Diffusers/ComfyUI on a GPU worker and score with `generate --review` or `review-generated`.
 8. Run `style-evaluate` so generated candidates have both face-geometry and style-axis scores.
 9. Run `qa-images` or `review-generated` before visual review so collages/extreme crops do not win on score alone.
 10. Rank evaluated generated batches with `compare-runs`, including QA-gated and combined face/style scores when available.
