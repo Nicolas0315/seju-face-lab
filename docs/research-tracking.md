@@ -21,6 +21,7 @@ Retrieval/design date: 2026-06-14.
 - `review-generated` runs generated-image evaluation, QA, and one-run comparison as the standard precision-review shortcut.
 - `generate --review` now chains real Diffusers generation into the same generated-image review shortcut.
 - `precision-report` consolidates centroid, generated-image, QA, and subject-review evidence into a review bundle.
+- `run-pipeline` executes JSON-configured build/evaluate/review/precision steps and records a pipeline run manifest.
 
 ## GitHub Issue Plan
 
@@ -55,8 +56,9 @@ Create and track these issues:
 9. Run `qa-images` or `review-generated` before visual review so collages/extreme crops do not win on score alone.
 10. Rank evaluated generated batches with `compare-runs`, including QA-gated and combined face/style scores when available.
 11. Write a `precision-report` for the model, best generation review, QA, and subject-review outputs.
-12. Run SNS handle/engagement manifests and `analyze correlation` for reviewable metric joins.
-13. Compare deterministic scores against InsightFace/DeepFace on the same ignored image sets.
+12. Use `run-pipeline` for repeatable local build/evaluate/review/precision runs from config.
+13. Run SNS handle/engagement manifests and `analyze correlation` for reviewable metric joins.
+14. Compare deterministic scores against InsightFace/DeepFace on the same ignored image sets.
 
 ## GPU Generation Notes
 

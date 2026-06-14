@@ -11,6 +11,7 @@ from .embeddings import iter_image_paths, render_appearance
 from .generation import build_generation_config, run_diffusers_generation, write_generation_plan
 from .metrics import review_subject_directories, score_generated_images, write_scores, write_subject_reviews
 from .model import build_centroid_model, load_model, save_model
+from .pipeline import run_pipeline_config
 from .prompting import prompt_from_descriptors
 from .precision import write_precision_report
 from .quality import review_image_quality, write_image_quality
@@ -112,6 +113,13 @@ def main(argv: list[str] | None = None) -> int:
     precision_parser.add_argument("--subject-review", type=Path, default=None)
     precision_parser.add_argument("--evaluation", type=Path, default=None)
     precision_parser.add_argument("--quality", type=Path, default=None)
+
+    run_pipeline_parser = subparsers.add_parser(
+        "run-pipeline",
+        help="run a reproducible build/generation/review pipeline from a JSON config",
+    )
+    run_pipeline_parser.add_argument("--config", type=Path, required=True)
+    run_pipeline_parser.add_argument("--out", type=Path, default=None)
 
     qa_parser = subparsers.add_parser(
         "qa-images",
@@ -246,6 +254,8 @@ def main(argv: list[str] | None = None) -> int:
         return _compare_runs(args.runs, args.out)
     if args.command == "precision-report":
         return _precision_report(args)
+    if args.command == "run-pipeline":
+        return _run_pipeline(args)
     if args.command == "qa-images":
         return _qa_images(args.images, args.out)
     if args.command == "review-generated":
@@ -439,6 +449,140 @@ def _precision_report(args: argparse.Namespace) -> int:
     print(f"best generated score: {report['generation']['best_centroid_score']}")
     print(f"top subject: {report['subjects']['top_subject']}")
     return 0
+
+
+def _run_pipeline(args: argparse.Namespace) -> int:
+    handlers = {
+        "build": _run_pipeline_build,
+        "generate": _run_pipeline_generate,
+        "evaluate": _run_pipeline_evaluate,
+        "review-generated": _run_pipeline_review_generated,
+        "review-subjects": _run_pipeline_review_subjects,
+        "precision-report": _run_pipeline_precision_report,
+    }
+    plan = run_pipeline_config(args.config, args.out, handlers)
+    failed = [step for step in plan.steps if step.status == "failed"]
+    print(f"pipeline: {plan.name}")
+    print(f"steps: {len(plan.steps)}")
+    print(f"failed: {len(failed)}")
+    return 1 if failed else 0
+
+
+def _run_pipeline_build(config: dict) -> int:
+    return _build(
+        Path(config["reference_images"]),
+        _pipeline_model(config),
+        str(config.get("crop", "center")),
+        str(config.get("vector_backend", config.get("backend", "deterministic"))),
+    )
+
+
+def _run_pipeline_generate(config: dict) -> int:
+    generation = _pipeline_generation_config(config)
+    return _generate(
+        argparse.Namespace(
+            model=_pipeline_model(config),
+            out=_pipeline_generated_images(config),
+            provider=str(generation.get("provider", "dry-run")),
+            hf_model=str(generation.get("hf_model", "runwayml/stable-diffusion-v1-5")),
+            count=int(generation.get("count", 4)),
+            seed=int(generation.get("seed", 150315)),
+            steps=int(generation.get("steps", 30)),
+            guidance_scale=float(generation.get("guidance_scale", 7.0)),
+            width=int(generation.get("width", 512)),
+            height=int(generation.get("height", 512)),
+            device=str(generation.get("device", "cuda")),
+            dtype=str(generation.get("dtype", "float16")),
+            variant=str(generation.get("variant", "auto")),
+            prompt_profile=str(generation.get("prompt_profile", "balanced")),
+            prompt=generation.get("prompt"),
+            negative_prompt=generation.get("negative_prompt"),
+            dry_run=bool(generation.get("dry_run", False)),
+            review=bool(generation.get("review", False)),
+            review_out=Path(generation["review_out"]) if generation.get("review_out") else None,
+            review_crop=str(generation.get("review_crop", "center")),
+            review_backend=str(generation.get("review_backend", "deterministic")),
+        )
+    )
+
+
+def _run_pipeline_evaluate(config: dict) -> int:
+    return _evaluate(
+        _pipeline_model(config),
+        _pipeline_generated_images(config),
+        Path(config["evaluation_out"]),
+        str(config.get("crop", "center")),
+        str(config.get("evaluation_backend", config.get("vector_backend", "deterministic"))),
+    )
+
+
+def _run_pipeline_review_generated(config: dict) -> int:
+    return _review_generated(
+        argparse.Namespace(
+            model=_pipeline_model(config),
+            images=_pipeline_generated_images(config),
+            out=Path(config["review_out"]),
+            crop=str(config.get("crop", "center")),
+            backend=str(config.get("review_backend", config.get("vector_backend", "deterministic"))),
+        )
+    )
+
+
+def _run_pipeline_review_subjects(config: dict) -> int:
+    return _review_subjects(
+        _pipeline_model(config),
+        Path(config["subjects"]),
+        Path(config.get("subject_review_out") or config["subject_out"]),
+        str(config.get("crop", "center")),
+        str(config.get("subject_backend", config.get("vector_backend", "deterministic"))),
+    )
+
+
+def _run_pipeline_precision_report(config: dict) -> int:
+    return _precision_report(
+        argparse.Namespace(
+            model=_pipeline_model(config),
+            out=Path(config["precision_out"]),
+            generation_review=_pipeline_generation_review_out(config),
+            subject_review=(
+                Path(config.get("subject_review_out") or config["subject_out"])
+                if config.get("subject_review_out") or config.get("subject_out")
+                else None
+            ),
+            evaluation=Path(config["evaluation_out"]) if config.get("evaluation_out") else None,
+            quality=Path(config["quality_out"]) if config.get("quality_out") else None,
+        )
+    )
+
+
+def _pipeline_generation_config(config: dict) -> dict:
+    return config["generation"] if isinstance(config.get("generation"), dict) else config
+
+
+def _pipeline_generated_images(config: dict) -> Path:
+    generation = _pipeline_generation_config(config)
+    value = generation.get("out") or config.get("generated_images")
+    if not value:
+        raise SystemExit("Pipeline config requires generated_images or generation.out")
+    return Path(value)
+
+
+def _pipeline_generation_review_out(config: dict) -> Path | None:
+    if config.get("review_out"):
+        return Path(config["review_out"])
+    generation = _pipeline_generation_config(config)
+    if generation.get("review_out"):
+        return Path(generation["review_out"])
+    if generation.get("review"):
+        return _pipeline_generated_images(config) / "run_review"
+    return None
+
+
+def _pipeline_model(config: dict) -> Path:
+    value = config.get("model_out") or config.get("model")
+    if not value:
+        raise SystemExit("Pipeline config requires model_out or model")
+    return Path(value)
 
 
 def _qa_images(images: Path, out: Path) -> int:

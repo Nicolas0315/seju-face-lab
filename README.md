@@ -130,6 +130,15 @@ python -m seju_face_lab precision-report --model outputs/seju_model --generation
 
 This writes `precision_report.json` and `precision_report.md`.
 
+Run a reproducible local pipeline from a JSON config:
+
+```powershell
+python -m seju_face_lab run-pipeline --config configs/pipelines/full-local-review.example.json --out outputs/local_pipeline_run
+```
+
+The runner executes configured build/evaluate/review/precision steps and writes
+`pipeline_run.json` plus `pipeline_run.md`.
+
 Review other public-figure or celebrity image sets by folder:
 
 ```text
@@ -263,6 +272,7 @@ See `docs/gpu-generation-log.md` for RTX 4090 generation smoke results.
 - evaluation `summary.json`: best/mean/median generated-image similarity for quick comparisons.
 - generated review `generation_run_reviews.csv`: one-command generated-image evaluation + QA + run review via `review-generated`, or directly after Diffusers generation with `generate --review`.
 - precision report `precision_report.json`: model centroid, generation review, QA, and subject-review summary via `precision-report`.
+- pipeline run `pipeline_run.json`: configured build/evaluate/review/precision orchestration via `run-pipeline`.
 - style evaluation `style_scores.csv`: OpenCLIP image-style similarity to mean/median renderings.
 - style evaluation `style_summary.json`: best/mean/median style-axis scores.
 - image quality `image_quality.csv`: OpenCV single-face QA for generated candidates.

@@ -315,6 +315,191 @@ class PipelineTests(unittest.TestCase):
             far_subject = next(item for item in review_json["subjects"] if item["subject"] == "far_subject")
             self.assertEqual(far_subject["failed_count"], 1)
 
+    def test_run_pipeline_config_builds_reviews_and_precision_report(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "raw"
+            generated = root / "generated"
+            subjects = root / "subjects"
+            model_dir = root / "model"
+            eval_dir = root / "evaluation"
+            subject_review_dir = root / "subject_review"
+            precision_dir = root / "precision"
+            pipeline_dir = root / "pipeline_run"
+            config_path = root / "pipeline.json"
+            raw.mkdir()
+            generated.mkdir()
+            (subjects / "near_subject").mkdir(parents=True)
+            _write_face_like_image(raw / "a.png", (235, 205, 190), eye_offset=0)
+            _write_face_like_image(raw / "b.png", (225, 198, 184), eye_offset=2)
+            _write_face_like_image(generated / "candidate.png", (232, 202, 188), eye_offset=1)
+            _write_face_like_image(subjects / "near_subject" / "near.png", (232, 202, 188), eye_offset=1)
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "name": "test_pipeline",
+                        "reference_images": str(raw),
+                        "model_out": str(model_dir),
+                        "generated_images": str(generated),
+                        "evaluation_out": str(eval_dir),
+                        "subjects": str(subjects),
+                        "subject_review_out": str(subject_review_dir),
+                        "precision_out": str(precision_dir),
+                        "vector_backend": "deterministic",
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                main(["run-pipeline", "--config", str(config_path), "--out", str(pipeline_dir)]),
+                0,
+            )
+
+            pipeline_run = json.loads((pipeline_dir / "pipeline_run.json").read_text(encoding="utf-8"))
+            self.assertEqual([step["status"] for step in pipeline_run["steps"]], ["completed"] * 4)
+            self.assertTrue((model_dir / "centroids.npz").exists())
+            self.assertTrue((eval_dir / "summary.json").exists())
+            self.assertTrue((subject_review_dir / "subject_reviews.json").exists())
+            precision = json.loads((precision_dir / "precision_report.json").read_text(encoding="utf-8"))
+            self.assertEqual(precision["model"]["image_count"], 2)
+            self.assertEqual(precision["subjects"]["top_subject"], "near_subject")
+
+    def test_run_pipeline_uses_nested_generation_output_for_evaluation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "raw"
+            model_dir = root / "model"
+            generated = root / "generated nested"
+            eval_dir = root / "evaluation"
+            precision_dir = root / "precision"
+            pipeline_dir = root / "pipeline_run"
+            config_path = root / "pipeline.json"
+            raw.mkdir()
+            _write_face_like_image(raw / "a.png", (235, 205, 190), eye_offset=0)
+            _write_face_like_image(raw / "b.png", (225, 198, 184), eye_offset=2)
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "name": "nested_generation_pipeline",
+                        "reference_images": str(raw),
+                        "model_out": str(model_dir),
+                        "generation": {
+                            "out": str(generated),
+                            "provider": "dry-run",
+                            "count": 1,
+                        },
+                        "evaluation_out": str(eval_dir),
+                        "precision_out": str(precision_dir),
+                        "vector_backend": "deterministic",
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                main(["run-pipeline", "--config", str(config_path), "--out", str(pipeline_dir)]),
+                0,
+            )
+
+            self.assertTrue((generated / "generation_run.json").exists())
+            self.assertTrue((eval_dir / "summary.json").exists())
+            pipeline_run = json.loads((pipeline_dir / "pipeline_run.json").read_text(encoding="utf-8"))
+            self.assertEqual(
+                [step["name"] for step in pipeline_run["steps"]],
+                ["build", "generate", "evaluate", "precision-report"],
+            )
+            self.assertEqual([step["status"] for step in pipeline_run["steps"]], ["completed"] * 4)
+
+    def test_run_pipeline_writes_manifest_when_step_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "empty_raw"
+            model_dir = root / "model"
+            pipeline_dir = root / "pipeline_run"
+            config_path = root / "pipeline.json"
+            raw.mkdir()
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "name": "failing_pipeline",
+                        "reference_images": str(raw),
+                        "model_out": str(model_dir),
+                        "vector_backend": "deterministic",
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                main(["run-pipeline", "--config", str(config_path), "--out", str(pipeline_dir)]),
+                1,
+            )
+
+            pipeline_run = json.loads((pipeline_dir / "pipeline_run.json").read_text(encoding="utf-8"))
+            self.assertEqual(pipeline_run["steps"][0]["name"], "build")
+            self.assertEqual(pipeline_run["steps"][0]["status"], "failed")
+            self.assertIn("No supported images", pipeline_run["steps"][0]["message"])
+
+    def test_run_pipeline_precision_uses_nested_generation_review_out(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "raw"
+            generated = root / "generated"
+            review = root / "nested_review"
+            model_dir = root / "model"
+            precision_dir = root / "precision"
+            pipeline_dir = root / "pipeline_run"
+            config_path = root / "pipeline.json"
+            raw.mkdir()
+            generated.mkdir()
+            review.mkdir()
+            _write_face_like_image(raw / "a.png", (235, 205, 190), eye_offset=0)
+            _write_face_like_image(raw / "b.png", (225, 198, 184), eye_offset=2)
+            (review / "generation_run_reviews.json").write_text(
+                json.dumps(
+                    {
+                        "run_count": 1,
+                        "best_run_dir": str(generated),
+                        "best_centroid_score": 0.25,
+                        "runs": [
+                            {
+                                "image_count": 0,
+                                "failed_count": 0,
+                                "best_image_id": "planned_candidate",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "name": "nested_review_pipeline",
+                        "reference_images": str(raw),
+                        "model_out": str(model_dir),
+                        "generation": {
+                            "out": str(generated),
+                            "provider": "dry-run",
+                            "review": True,
+                            "review_out": str(review),
+                        },
+                        "precision_out": str(precision_dir),
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                main(["run-pipeline", "--config", str(config_path), "--out", str(pipeline_dir)]),
+                0,
+            )
+
+            precision = json.loads((precision_dir / "precision_report.json").read_text(encoding="utf-8"))
+            self.assertEqual(precision["generation"]["best_centroid_score"], 0.25)
+            self.assertEqual(precision["generation"]["best_image_id"], "planned_candidate")
+
     def test_backends_command_lists_planned_backends(self) -> None:
         self.assertEqual(main(["backends"]), 0)
 

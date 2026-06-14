@@ -1,0 +1,18 @@
+{
+  "name": "full_local_review",
+  "reference_images": "data/raw/seju_official",
+  "model_out": "outputs/seju_model_official",
+  "generated_images": "outputs/generated_detector",
+  "evaluation_out": "outputs/generated_detector/evaluation",
+  "review_out": "outputs/generated_detector/review",
+  "subjects": "data/subjects",
+  "subject_review_out": "outputs/subject_reviews",
+  "precision_out": "outputs/precision_report",
+  "vector_backend": "deterministic",
+  "crop": "center",
+  "notes": [
+    "Run only after reviewed local image folders exist.",
+    "Generated images and raw subject images remain Git-ignored.",
+    "Use optional neural backends in separate configs for cross-checking."
+  ]
+}

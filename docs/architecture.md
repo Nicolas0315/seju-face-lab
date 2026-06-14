@@ -40,10 +40,13 @@ Retrieval/design date: 2026-06-14.
    - also used by `generate --review` so generated batches can be scored immediately
 10. `precision-report`
    - consolidates centroid metadata, generated-image review, QA, and subject-review summaries for tracking
-11. `review-subjects`
+11. `run-pipeline`
+   - executes configured build, generation, evaluation, review, and precision-report steps from JSON
+   - writes `pipeline_run.json` and `pipeline_run.md` as the orchestration trace
+12. `review-subjects`
    - per-person image folders are ranked against the local seju centroid
    - output is CSV, Markdown, and JSON for review and tracking
-12. SNS and correlation analysis
+13. SNS and correlation analysis
    - `sources scrape-handles` writes reviewed SNS handle manifests
    - `sources fetch-engagement` writes best-effort public engagement manifests
    - `analyze correlation` joins `subject_reviews.json` to SNS metrics
