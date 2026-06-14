@@ -194,7 +194,6 @@ def download_source_images(
         selected = selected[:max_count]
 
     fetcher = _ThrottledFetcher(user_agent=user_agent, delay_seconds=delay_seconds)
-    fetch = fetch_bytes or fetcher.fetch_bytes
     results: list[DownloadResult] = []
     for index, candidate in enumerate(selected, start=1):
         target = out_dir / _download_filename(candidate, index)
@@ -227,7 +226,10 @@ def download_source_images(
             )
             continue
         try:
-            payload, content_type = fetch(candidate.image_url)
+            if fetch_bytes is None:
+                payload, content_type = fetcher.fetch_bytes(candidate.image_url, max_bytes=max_bytes)
+            else:
+                payload, content_type = fetch_bytes(candidate.image_url)
             if len(payload) > max_bytes:
                 raise ValueError(f"image exceeds max bytes: {len(payload)} > {max_bytes}")
             if not _is_supported_content_type(content_type, candidate.image_url):
@@ -404,7 +406,7 @@ class _ThrottledFetcher:
             charset = response.headers.get_content_charset() or "utf-8"
             return response.read().decode(charset, errors="replace")
 
-    def fetch_bytes(self, url: str) -> tuple[bytes, str | None]:
+    def fetch_bytes(self, url: str, max_bytes: int) -> tuple[bytes, str | None]:
         with self._lock:
             now = time.monotonic()
             if now < self._next_at:
@@ -413,7 +415,17 @@ class _ThrottledFetcher:
 
         request = urllib.request.Request(_quote_url(url), headers={"User-Agent": self.user_agent})
         with urllib.request.urlopen(request, timeout=30) as response:
-            return response.read(), response.headers.get_content_type()
+            chunks: list[bytes] = []
+            total = 0
+            while True:
+                chunk = response.read(1024 * 1024)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > max_bytes:
+                    raise ValueError(f"image exceeds max bytes: {total} > {max_bytes}")
+                chunks.append(chunk)
+            return b"".join(chunks), response.headers.get("Content-Type")
 
 
 def _select_download_candidates(
@@ -448,7 +460,7 @@ def _extension_from_url(url: str) -> str:
 
 
 def _is_supported_content_type(content_type: str | None, url: str) -> bool:
-    if content_type and content_type.lower().startswith("image/"):
+    if content_type and content_type.split(";", 1)[0].strip().lower().startswith("image/"):
         return True
     return IMAGE_RE.search(url) is not None
 

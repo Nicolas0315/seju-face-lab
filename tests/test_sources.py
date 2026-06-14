@@ -8,12 +8,13 @@ from pathlib import Path
 import bootstrap  # noqa: F401
 from seju_face_lab.sources import (
     SourceCandidate,
+    _is_supported_content_type,
+    _quote_url,
     download_source_images,
     parse_profile,
     parse_talent_links,
     read_source_manifest,
     write_source_manifest,
-    _quote_url,
 )
 
 
@@ -107,10 +108,31 @@ class SourceParsingTests(unittest.TestCase):
             self.assertTrue(Path(downloaded[0].path or "").exists())
             self.assertTrue((root / "raw" / "download_manifest.jsonl").exists())
 
+            extension_fallback = download_source_images(
+                [candidate],
+                root / "fallback",
+                fetch_bytes=lambda _url: (b"fake-jpeg-bytes", None),
+            )
+            self.assertEqual(extension_fallback[0].status, "downloaded")
+
+            too_large = download_source_images(
+                [candidate],
+                root / "too-large",
+                max_bytes=4,
+                fetch_bytes=lambda _url: (b"fake-jpeg-bytes", "image/jpeg"),
+            )
+            self.assertEqual(too_large[0].status, "failed")
+            self.assertIn("image exceeds max bytes", too_large[0].reason or "")
+
     def test_quote_url_preserves_ascii_and_encodes_japanese_path(self) -> None:
         quoted = _quote_url("https://seju.tokyo/wp-content/uploads/2023/07/秋葉聡さん撮影.jpg")
         self.assertIn("%E7%A7%8B", quoted)
         self.assertTrue(quoted.endswith(".jpg"))
+
+    def test_supported_content_type_handles_charset_and_absent_header(self) -> None:
+        self.assertTrue(_is_supported_content_type("image/jpeg; charset=binary", "https://example.com/a"))
+        self.assertTrue(_is_supported_content_type(None, "https://example.com/a.webp"))
+        self.assertFalse(_is_supported_content_type(None, "https://example.com/a"))
 
 
 if __name__ == "__main__":
