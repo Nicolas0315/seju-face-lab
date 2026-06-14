@@ -181,11 +181,13 @@ class AnalysisModuleTests(unittest.TestCase):
             root = Path(tmp)
             model = root / "model"
             generation = root / "generation_review"
+            evaluation = root / "evaluation"
             subjects = root / "subject_review"
             backend_comparison = root / "backend_compare"
             out = root / "precision"
             model.mkdir()
             generation.mkdir()
+            evaluation.mkdir()
             subjects.mkdir()
             backend_comparison.mkdir()
             np.savez_compressed(
@@ -225,6 +227,35 @@ class AnalysisModuleTests(unittest.TestCase):
                                 "qa_pass_count": 1,
                                 "qa_fail_count": 1,
                                 "qa_pass_rate": 0.5,
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (evaluation / "summary.json").write_text(
+                json.dumps(
+                    {
+                        "best_centroid_score": 0.42,
+                        "best_image_id": "candidate",
+                        "top_images": [
+                            {
+                                "image_id": "distractor",
+                                "path": "distractor.png",
+                                "centroid_score": 0.5,
+                                "cosine_to_mean": 0.99,
+                                "cosine_to_median": 0.98,
+                                "euclidean_to_mean": 0.1,
+                                "euclidean_to_median": 0.2,
+                            },
+                            {
+                                "image_id": "candidate",
+                                "path": "candidate.png",
+                                "centroid_score": 0.42,
+                                "cosine_to_mean": 0.41,
+                                "cosine_to_median": 0.43,
+                                "euclidean_to_mean": 0.9,
+                                "euclidean_to_median": 0.8,
                             }
                         ],
                     }
@@ -271,6 +302,7 @@ class AnalysisModuleTests(unittest.TestCase):
                 model_dir=model,
                 out_dir=out,
                 generation_review=generation,
+                evaluation=evaluation,
                 subject_review=subjects,
                 backend_comparison=backend_comparison,
             )
@@ -280,6 +312,10 @@ class AnalysisModuleTests(unittest.TestCase):
             self.assertEqual(report["model"]["centroid_vectors"]["mean_embedding"]["l2_norm"], 1.0)
             self.assertEqual(len(report["model"]["centroid_vectors"]["mean_embedding"]["sha256"]), 64)
             self.assertEqual(report["generation"]["best_centroid_score"], 0.45)
+            self.assertEqual(report["generation"]["best_cosine_to_mean"], 0.41)
+            self.assertEqual(report["generation"]["best_cosine_to_median"], 0.43)
+            self.assertEqual(report["generation"]["best_euclidean_to_mean"], 0.9)
+            self.assertEqual(report["generation"]["best_euclidean_to_median"], 0.8)
             self.assertEqual(report["generation"]["qa_pass_count"], 1)
             self.assertEqual(report["subjects"]["top_subject"], "near_subject")
             self.assertEqual(report["backend_comparison"]["completed_backends"], ["deterministic"])
@@ -292,6 +328,10 @@ class AnalysisModuleTests(unittest.TestCase):
             )
             self.assertIn(
                 "mean_embedding_sha256",
+                (out / "precision_report.md").read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                "best_cosine_to_mean: 0.41",
                 (out / "precision_report.md").read_text(encoding="utf-8"),
             )
 
@@ -365,6 +405,196 @@ class AnalysisModuleTests(unittest.TestCase):
         self.assertTrue(report["model"]["has_centroid_vectors"])
         self.assertFalse(report["model"]["centroid_vectors"]["available"])
         self.assertEqual(report["model"]["centroid_vectors"]["error"], "unreadable centroids.npz")
+
+    def test_precision_report_does_not_mix_components_from_nonmatching_best_image(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            model = root / "model"
+            generation = root / "generation_review"
+            evaluation = root / "evaluation"
+            out = root / "precision"
+            model.mkdir()
+            generation.mkdir()
+            evaluation.mkdir()
+            (model / "profile.json").write_text(
+                json.dumps(
+                    {
+                        "image_count": 1,
+                        "embedding_dim": 2,
+                        "appearance_shape": [1, 1, 1],
+                        "descriptors": {"mean": {}, "median": {}},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (generation / "generation_run_reviews.json").write_text(
+                json.dumps(
+                    {
+                        "run_count": 1,
+                        "best_qa_image_id": "qa_winner_not_in_top_images",
+                        "best_qa_centroid_score": 0.4,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (evaluation / "summary.json").write_text(
+                json.dumps(
+                    {
+                        "top_images": [
+                            {
+                                "image_id": "raw_top",
+                                "cosine_to_mean": 0.99,
+                                "cosine_to_median": 0.98,
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            report = write_precision_report(
+                model_dir=model,
+                out_dir=out,
+                generation_review=generation,
+                evaluation=evaluation,
+            )
+
+        self.assertEqual(report["generation"]["best_image_id"], "qa_winner_not_in_top_images")
+        self.assertIsNone(report["generation"]["best_cosine_to_mean"])
+        self.assertIsNone(report["generation"]["best_cosine_to_median"])
+
+    def test_precision_report_reads_components_from_scores_csv_for_qa_winner(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            model = root / "model"
+            generation = root / "generation_review"
+            evaluation = root / "evaluation"
+            out = root / "precision"
+            model.mkdir()
+            generation.mkdir()
+            evaluation.mkdir()
+            (model / "profile.json").write_text(
+                json.dumps(
+                    {
+                        "image_count": 1,
+                        "embedding_dim": 2,
+                        "appearance_shape": [1, 1, 1],
+                        "descriptors": {"mean": {}, "median": {}},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (generation / "generation_run_reviews.json").write_text(
+                json.dumps(
+                    {
+                        "run_count": 1,
+                        "best_qa_image_id": "qa_winner_below_top_five",
+                        "best_qa_centroid_score": 0.44,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (evaluation / "summary.json").write_text(
+                json.dumps(
+                    {
+                        "top_images": [
+                            {
+                                "image_id": "raw_top",
+                                "cosine_to_mean": 0.99,
+                                "cosine_to_median": 0.98,
+                                "euclidean_to_mean": 0.1,
+                                "euclidean_to_median": 0.2,
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (evaluation / "scores.csv").write_text(
+                "\n".join(
+                    [
+                        "image_id,path,cosine_to_mean,cosine_to_median,euclidean_to_mean,"
+                        "euclidean_to_median,centroid_score",
+                        "raw_top,raw.png,0.990000,0.980000,0.100000,0.200000,0.985000",
+                        "qa_winner_below_top_five,qa.png,0.410000,0.430000,0.900000,0.800000,0.420000",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8-sig",
+            )
+
+            report = write_precision_report(
+                model_dir=model,
+                out_dir=out,
+                generation_review=generation,
+                evaluation=evaluation,
+            )
+
+        self.assertEqual(report["generation"]["best_image_id"], "qa_winner_below_top_five")
+        self.assertEqual(report["generation"]["best_image_path"], "qa.png")
+        self.assertEqual(report["generation"]["best_cosine_to_mean"], 0.41)
+        self.assertEqual(report["generation"]["best_cosine_to_median"], 0.43)
+        self.assertEqual(report["generation"]["best_euclidean_to_mean"], 0.9)
+        self.assertEqual(report["generation"]["best_euclidean_to_median"], 0.8)
+
+    def test_precision_report_accepts_direct_scores_csv_evaluation_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            model = root / "model"
+            generation = root / "generation_review"
+            evaluation = root / "evaluation"
+            out = root / "precision"
+            model.mkdir()
+            generation.mkdir()
+            evaluation.mkdir()
+            (model / "profile.json").write_text(
+                json.dumps(
+                    {
+                        "image_count": 1,
+                        "embedding_dim": 2,
+                        "appearance_shape": [1, 1, 1],
+                        "descriptors": {"mean": {}, "median": {}},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (generation / "generation_run_reviews.json").write_text(
+                json.dumps(
+                    {
+                        "run_count": 1,
+                        "best_qa_image_id": "candidate",
+                        "best_qa_centroid_score": 0.44,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (evaluation / "summary.json").write_text(
+                json.dumps({"image_count": 1, "failed_count": 0, "top_images": []}),
+                encoding="utf-8",
+            )
+            (evaluation / "scores.csv").write_text(
+                "\n".join(
+                    [
+                        "image_id,path,cosine_to_mean,cosine_to_median,euclidean_to_mean,"
+                        "euclidean_to_median,centroid_score",
+                        "candidate,candidate.png,0.410000,0.430000,0.900000,0.800000,0.420000",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8-sig",
+            )
+
+            report = write_precision_report(
+                model_dir=model,
+                out_dir=out,
+                generation_review=generation,
+                evaluation=evaluation / "scores.csv",
+            )
+
+        self.assertEqual(report["generation"]["evaluated_image_count"], 1)
+        self.assertEqual(report["generation"]["failed_image_count"], 0)
+        self.assertEqual(report["generation"]["best_image_path"], "candidate.png")
+        self.assertEqual(report["generation"]["best_cosine_to_mean"], 0.41)
 
     def test_precision_report_keeps_combined_winner_separate_from_centroid_winner(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

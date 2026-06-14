@@ -159,6 +159,8 @@ class PipelineTests(unittest.TestCase):
             eval_summary = json.loads((eval_dir / "summary.json").read_text(encoding="utf-8"))
             self.assertEqual(eval_summary["image_count"], 1)
             self.assertEqual(eval_summary["failed_count"], 1)
+            self.assertIn("euclidean_to_mean", eval_summary["top_images"][0])
+            self.assertIn("euclidean_to_median", eval_summary["top_images"][0])
 
             with patch("seju_face_lab.cli.OpenClipStyleBackend", return_value=_FakeStyleBackend()):
                 self.assertEqual(

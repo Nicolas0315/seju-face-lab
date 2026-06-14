@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import hashlib
 import json
 from pathlib import Path
@@ -48,11 +49,17 @@ def build_precision_report(
     generation = _load_optional_json(_resolve_generation_review_path(generation_review))
     subjects = _load_optional_json(_resolve_subject_review_path(subject_review))
     evaluation_summary = _load_optional_json(_resolve_evaluation_path(evaluation))
+    evaluation_scores = _load_score_rows(_resolve_evaluation_scores_path(evaluation))
     quality_summary = _load_optional_json(_resolve_quality_path(quality))
     backend_comparison_summary = _load_optional_json(_resolve_backend_comparison_path(backend_comparison))
     return {
         "model": _model_summary(model_dir, profile),
-        "generation": _generation_summary(generation, evaluation_summary, quality_summary),
+        "generation": _generation_summary(
+            generation,
+            evaluation_summary,
+            quality_summary,
+            evaluation_scores,
+        ),
         "subjects": _subject_summary(subjects),
         "backend_comparison": _backend_comparison_summary(backend_comparison_summary),
         "inputs": {
@@ -129,6 +136,7 @@ def _generation_summary(
     generation: dict[str, Any],
     evaluation: dict[str, Any],
     quality: dict[str, Any],
+    evaluation_scores: list[dict[str, Any]],
 ) -> dict[str, Any]:
     top_run = {}
     runs = generation.get("runs")
@@ -140,6 +148,12 @@ def _generation_summary(
     if isinstance(qa_pass_count, int) and isinstance(qa_fail_count, int):
         qa_total = qa_pass_count + qa_fail_count
     qa_reviewed_count = _first_present(quality.get("image_count"), qa_total)
+    best_image_id = _first_present(
+        generation.get("best_qa_image_id"),
+        top_run.get("best_image_id"),
+        evaluation.get("best_image_id"),
+    )
+    best_image = _matching_image(evaluation, best_image_id, evaluation_scores)
     return {
         "reviewed_run_count": generation.get("run_count"),
         "best_run_dir": generation.get("best_run_dir"),
@@ -148,15 +162,15 @@ def _generation_summary(
             generation.get("best_centroid_score"),
             evaluation.get("best_centroid_score"),
         ),
-        "best_image_id": _first_present(
-            generation.get("best_qa_image_id"),
-            top_run.get("best_image_id"),
-            evaluation.get("best_image_id"),
-        ),
+        "best_image_id": best_image_id,
         "best_image_path": _first_present(
             generation.get("best_qa_path"),
-            _top_image_path(evaluation),
+            _top_image_path(best_image),
         ),
+        "best_cosine_to_mean": best_image.get("cosine_to_mean"),
+        "best_cosine_to_median": best_image.get("cosine_to_median"),
+        "best_euclidean_to_mean": best_image.get("euclidean_to_mean"),
+        "best_euclidean_to_median": best_image.get("euclidean_to_median"),
         "best_style_score": generation.get("best_style_score"),
         "best_combined_image_id": generation.get("best_combined_image_id"),
         "best_combined_image_path": generation.get("best_combined_path"),
@@ -231,6 +245,10 @@ def _render_precision_report(report: dict[str, Any]) -> str:
         f"- best_run_dir: {_value(generation['best_run_dir'])}",
         f"- best_image_id: {_value(generation['best_image_id'])}",
         f"- best_centroid_score: {_value(generation['best_centroid_score'])}",
+        f"- best_cosine_to_mean: {_value(generation['best_cosine_to_mean'])}",
+        f"- best_cosine_to_median: {_value(generation['best_cosine_to_median'])}",
+        f"- best_euclidean_to_mean: {_value(generation['best_euclidean_to_mean'])}",
+        f"- best_euclidean_to_median: {_value(generation['best_euclidean_to_median'])}",
         f"- best_style_score: {_value(generation['best_style_score'])}",
         f"- best_combined_image_id: {_value(generation['best_combined_image_id'])}",
         f"- best_combined_score: {_value(generation['best_combined_score'])}",
@@ -291,7 +309,19 @@ def _resolve_evaluation_path(path: Path | None) -> Path | None:
         return None
     if path.is_dir():
         return path / "summary.json"
+    if path.name == "scores.csv":
+        return path.with_name("summary.json")
     return path
+
+
+def _resolve_evaluation_scores_path(path: Path | None) -> Path | None:
+    if path is None:
+        return None
+    if path.is_dir():
+        return path / "scores.csv"
+    if path.name == "scores.csv":
+        return path
+    return path.with_name("scores.csv")
 
 
 def _resolve_quality_path(path: Path | None) -> Path | None:
@@ -316,6 +346,31 @@ def _load_optional_json(path: Path | None) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _load_score_rows(path: Path | None) -> list[dict[str, Any]]:
+    if path is None or not path.exists():
+        return []
+    with path.open("r", encoding="utf-8-sig", newline="") as handle:
+        return [_score_row_to_image(row) for row in csv.DictReader(handle)]
+
+
+def _score_row_to_image(row: dict[str, str]) -> dict[str, Any]:
+    return {
+        "image_id": row.get("image_id"),
+        "path": row.get("path"),
+        "centroid_score": _optional_csv_float(row.get("centroid_score")),
+        "cosine_to_mean": _optional_csv_float(row.get("cosine_to_mean")),
+        "cosine_to_median": _optional_csv_float(row.get("cosine_to_median")),
+        "euclidean_to_mean": _optional_csv_float(row.get("euclidean_to_mean")),
+        "euclidean_to_median": _optional_csv_float(row.get("euclidean_to_median")),
+    }
+
+
+def _optional_csv_float(value: str | None) -> float | None:
+    if value in (None, ""):
+        return None
+    return float(value)
+
+
 def _first_present(*values: Any) -> Any:
     for value in values:
         if value is not None:
@@ -329,14 +384,29 @@ def _pass_rate(pass_count: Any, total: Any) -> float | None:
     return round(pass_count / total, 6)
 
 
-def _top_image_path(evaluation: dict[str, Any]) -> str | None:
+def _matching_image(
+    evaluation: dict[str, Any],
+    image_id: Any,
+    score_rows: list[dict[str, Any]],
+) -> dict[str, Any]:
     top_images = evaluation.get("top_images")
-    if not isinstance(top_images, list) or not top_images:
-        return None
-    first = top_images[0]
-    if not isinstance(first, dict):
-        return None
-    path = first.get("path")
+    if not isinstance(top_images, list):
+        top_images = []
+    if image_id is not None:
+        for image in top_images:
+            if isinstance(image, dict) and image.get("image_id") == image_id:
+                return image
+        for image in score_rows:
+            if image.get("image_id") == image_id:
+                return image
+        return {}
+    if top_images and isinstance(top_images[0], dict):
+        return top_images[0]
+    return score_rows[0] if score_rows else {}
+
+
+def _top_image_path(top_image: dict[str, Any]) -> str | None:
+    path = top_image.get("path")
     return str(path) if path is not None else None
 
 

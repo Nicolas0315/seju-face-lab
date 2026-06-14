@@ -293,6 +293,8 @@ def _score_summary(scores: list[Score], failed_paths: list[str]) -> dict:
                 "centroid_score": round(float(score.centroid_score), 6),
                 "cosine_to_mean": round(float(score.cosine_to_mean), 6),
                 "cosine_to_median": round(float(score.cosine_to_median), 6),
+                "euclidean_to_mean": round(float(score.euclidean_to_mean), 6),
+                "euclidean_to_median": round(float(score.euclidean_to_median), 6),
             }
             for score in scores[:5]
         ],
