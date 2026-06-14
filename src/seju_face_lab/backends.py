@@ -217,6 +217,14 @@ class PlannedBackend:
         )
 
 
+@dataclass(frozen=True)
+class GenerationProvider:
+    name: str
+    state: str
+    extra: str | None
+    description: str
+
+
 def _make_insightface_backend() -> InsightFaceBackend | PlannedBackend:
     """Return InsightFaceBackend if onnxruntime-gpu is installed, else PlannedBackend."""
     try:
@@ -261,11 +269,23 @@ BACKENDS: dict[str, VectorBackend] = {
     "insightface": _make_insightface_backend(),
     "deepface": _make_deepface_backend(),
     "deepface-retinaface": _make_deepface_backend("retinaface", name="deepface-retinaface"),
-    "diffusion-generation": PlannedBackend(
-        name="diffusion-generation",
+}
+
+GENERATION_PROVIDERS: dict[str, GenerationProvider] = {
+    "dry-run": GenerationProvider(
+        name="dry-run",
+        state="ready",
+        extra=None,
+        description="Writes prompt, seed, and evaluation plan without running an image model.",
+    ),
+    "diffusers": GenerationProvider(
+        name="diffusers",
+        state="implemented",
         extra="generation",
-        description="Diffusers/ComfyUI prompt and candidate-generation loop.",
-        notes="Use RTX machines for batches, then score outputs with evaluate/review commands.",
+        description=(
+            "Runs local Diffusers image generation via generate --provider diffusers; "
+            "install seju-face-lab[generation] and a CUDA-enabled PyTorch build for GPU runs."
+        ),
     ),
 }
 
@@ -330,8 +350,15 @@ def backend_help() -> str:
             "- clip-style: implemented extra=clip",
             "  OpenCLIP image embeddings for style/photographic similarity scoring.",
             "  Use via: python -m seju_face_lab style-evaluate --model MODEL --images IMAGES --out OUT",
+            "",
+            "Available generation providers:",
+            "",
         ]
     )
+    for provider in GENERATION_PROVIDERS.values():
+        extra = f" extra={provider.extra}" if provider.extra else ""
+        lines.append(f"- {provider.name}: {provider.state}{extra}")
+        lines.append(f"  {provider.description}")
     return "\n".join(lines)
 
 

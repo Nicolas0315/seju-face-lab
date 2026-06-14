@@ -309,9 +309,10 @@ python -m seju_face_lab worker-diagnostics --out outputs/worker_diagnostics
 python -m seju_face_lab worker-diagnostics --out outputs/worker_diagnostics_fleet --include-remote
 ```
 
-Designed next:
+Implemented generation providers:
 
-- `diffusion-generation`: Diffusers/ComfyUI candidate generation loop
+- `dry-run`: writes prompt, seed, and evaluation plan without running an image model.
+- `diffusers`: runs local image generation through `generate --provider diffusers` with `.[generation]`.
 
 See `docs/architecture.md` for the folder contract and backend plan.
 See `docs/research-tracking.md` for the current GitHub Issue / ToDo breakdown.
@@ -332,7 +333,7 @@ See `docs/gpu-generation-log.md` for RTX 4090 generation smoke results.
 - precision report `precision_report.json`: model centroid, optional `model_audit.json` mean/median vector distance summary, generated-image mean/median score components, QA, subject-review, backend-comparison, and subject-backend-comparison summary via `precision-report`.
 - pipeline run `pipeline_run.json`: configured build/audit-model/evaluate/style-evaluate/review/backend-comparison/subject-backend-comparison/precision orchestration via `run-pipeline`.
 - pipeline config `configs/pipelines/full-retinaface-review.example.json`: deterministic continuity plus `deepface-retinaface` neural rank agreement for the precision bundle.
-- backend diagnostics `backend_diagnostics.json`: optional dependency, CUDA, and provider visibility for neural backends.
+- backend diagnostics `backend_diagnostics.json`: optional dependency, CUDA, vector backend, and generation-provider visibility.
 - worker diagnostics `worker_diagnostics.json`: local/SSH Python, CUDA, torch, and package readiness for GPU split-run planning.
 - backend comparison `backend_comparison.json`: per-backend model/evaluation outputs and same-image rank agreement.
 - subject backend comparison `subject_backend_comparison.json`: per-backend celebrity/public-figure subject rankings and rank agreement.

@@ -5,7 +5,14 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .backends import BACKENDS, DeepFaceBackend, InsightFaceBackend, OpenCVFaceBackend, PlannedBackend
+from .backends import (
+    BACKENDS,
+    GENERATION_PROVIDERS,
+    DeepFaceBackend,
+    InsightFaceBackend,
+    OpenCVFaceBackend,
+    PlannedBackend,
+)
 
 
 def collect_backend_diagnostics() -> dict[str, Any]:
@@ -15,9 +22,11 @@ def collect_backend_diagnostics() -> dict[str, Any]:
             "onnxruntime_providers": _onnxruntime_providers(),
         },
         "backends": [_backend_status(name) for name in sorted(BACKENDS)],
+        "generation_providers": [_generation_provider_status(name) for name in sorted(GENERATION_PROVIDERS)],
         "boundary": (
             "Dependency/provider visibility only. A backend is validated after it vectorizes "
-            "the target local image set."
+            "the target local image set. A generation provider is validated after it writes "
+            "a generation_run.json and its generated images can be reviewed."
         ),
     }
     return report
@@ -68,6 +77,21 @@ def _backend_status(name: str) -> dict[str, Any]:
             "dependencies": _dependencies("cv2"),
         }
     return status | {"implemented": True, "state": "ready", "extra": None, "dependencies": {}}
+
+
+def _generation_provider_status(name: str) -> dict[str, Any]:
+    provider = GENERATION_PROVIDERS[name]
+    dependencies = _dependencies("diffusers", "transformers", "accelerate", "safetensors", "torch")
+    if provider.name == "dry-run":
+        dependencies = {}
+    return {
+        "name": provider.name,
+        "state": provider.state,
+        "implemented": True,
+        "extra": provider.extra,
+        "description": provider.description,
+        "dependencies": dependencies,
+    }
 
 
 def _dependencies(*names: str) -> dict[str, bool]:
@@ -123,6 +147,11 @@ def _render(report: dict[str, Any]) -> str:
     for backend in report["backends"]:
         runtime = _runtime_summary(backend)
         lines.append(f"| {backend['name']} | {backend['state']} | {backend.get('extra') or ''} | {runtime} |")
+    lines.extend(["", "## Generation Providers", "", "| provider | state | extra | runtime |"])
+    lines.append("| --- | --- | --- | --- |")
+    for provider in report["generation_providers"]:
+        runtime = _runtime_summary(provider)
+        lines.append(f"| {provider['name']} | {provider['state']} | {provider.get('extra') or ''} | {runtime} |")
     lines.extend(["", report["boundary"], ""])
     return "\n".join(lines)
 

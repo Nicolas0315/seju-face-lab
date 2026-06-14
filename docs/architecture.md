@@ -62,7 +62,7 @@ Retrieval/design date: 2026-06-14.
 - `deepface`: implemented dependency-gated adapter with `DeepFace.represent`; defaults to ArcFace and reports no-face images as vectorization failures.
 - `deepface-retinaface`: implemented dependency-gated adapter using DeepFace ArcFace embeddings with RetinaFace detection.
 - `clip-style`: implemented as `style-evaluate`. Uses optional `open-clip-torch` image embeddings as a secondary style axis.
-- `diffusion-generation`: planned. Diffusers/ComfyUI generation loop for prompt batches.
+- `generate --provider diffusers`: implemented optional `generation` extra for local Diffusers prompt batches.
 
 Keep geometry and style axes separate. A generated image can match the style prompt while missing face geometry, so evaluation should report neural face-embedding scores and style scores separately.
 

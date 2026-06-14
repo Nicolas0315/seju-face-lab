@@ -11,6 +11,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 import bootstrap  # noqa: F401
+from seju_face_lab import backends
 from seju_face_lab.cli import _sources_download, main
 from seju_face_lab.model import load_model
 from seju_face_lab.pipeline import build_pipeline_plan, load_pipeline_config
@@ -710,8 +711,10 @@ class PipelineTests(unittest.TestCase):
             )
             self.assertTrue((subject_backend_compare_dir / "subject_backend_comparison.json").exists())
 
-    def test_backends_command_lists_planned_backends(self) -> None:
+    def test_backends_command_lists_generation_providers(self) -> None:
         self.assertEqual(main(["backends"]), 0)
+        self.assertNotIn("diffusion-generation", backends.BACKENDS)
+        self.assertIn("diffusers", backends.GENERATION_PROVIDERS)
 
     def test_backend_diagnostics_writes_report(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -721,9 +724,11 @@ class PipelineTests(unittest.TestCase):
 
             report = json.loads((out / "backend_diagnostics.json").read_text(encoding="utf-8"))
             self.assertIn("backends", report)
+            self.assertIn("generation_providers", report)
             self.assertIn("runtime", report)
             self.assertTrue((out / "backend_diagnostics.md").exists())
             self.assertIn("insightface", {item["name"] for item in report["backends"]})
+            self.assertIn("diffusers", {item["name"] for item in report["generation_providers"]})
 
     def test_compare_backends_writes_rank_agreement(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
