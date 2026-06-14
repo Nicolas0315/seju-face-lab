@@ -324,6 +324,7 @@ class PipelineTests(unittest.TestCase):
             model_dir = root / "model"
             eval_dir = root / "evaluation"
             subject_review_dir = root / "subject_review"
+            backend_compare_dir = root / "backend_compare"
             precision_dir = root / "precision"
             pipeline_dir = root / "pipeline_run"
             config_path = root / "pipeline.json"
@@ -344,6 +345,10 @@ class PipelineTests(unittest.TestCase):
                         "evaluation_out": str(eval_dir),
                         "subjects": str(subjects),
                         "subject_review_out": str(subject_review_dir),
+                        "backend_comparison": {
+                            "out": str(backend_compare_dir),
+                            "backends": ["deterministic"],
+                        },
                         "precision_out": str(precision_dir),
                         "vector_backend": "deterministic",
                     }
@@ -357,13 +362,19 @@ class PipelineTests(unittest.TestCase):
             )
 
             pipeline_run = json.loads((pipeline_dir / "pipeline_run.json").read_text(encoding="utf-8"))
-            self.assertEqual([step["status"] for step in pipeline_run["steps"]], ["completed"] * 4)
+            self.assertEqual([step["status"] for step in pipeline_run["steps"]], ["completed"] * 5)
+            self.assertEqual(
+                [step["name"] for step in pipeline_run["steps"]],
+                ["build", "evaluate", "review-subjects", "compare-backends", "precision-report"],
+            )
             self.assertTrue((model_dir / "centroids.npz").exists())
             self.assertTrue((eval_dir / "summary.json").exists())
             self.assertTrue((subject_review_dir / "subject_reviews.json").exists())
+            self.assertTrue((backend_compare_dir / "backend_comparison.json").exists())
             precision = json.loads((precision_dir / "precision_report.json").read_text(encoding="utf-8"))
             self.assertEqual(precision["model"]["image_count"], 2)
             self.assertEqual(precision["subjects"]["top_subject"], "near_subject")
+            self.assertEqual(precision["backend_comparison"]["completed_backends"], ["deterministic"])
 
     def test_run_pipeline_uses_nested_generation_output_for_evaluation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -410,6 +421,50 @@ class PipelineTests(unittest.TestCase):
                 ["build", "generate", "evaluate", "precision-report"],
             )
             self.assertEqual([step["status"] for step in pipeline_run["steps"]], ["completed"] * 4)
+
+    def test_run_pipeline_compares_existing_model_without_rebuild(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "raw"
+            generated = root / "generated"
+            model_dir = root / "model"
+            backend_compare_dir = root / "backend_compare"
+            precision_dir = root / "precision"
+            pipeline_dir = root / "pipeline_run"
+            config_path = root / "pipeline.json"
+            raw.mkdir()
+            generated.mkdir()
+            _write_face_like_image(raw / "a.png", (235, 205, 190), eye_offset=0)
+            _write_face_like_image(raw / "b.png", (225, 198, 184), eye_offset=2)
+            _write_face_like_image(generated / "candidate.png", (232, 202, 188), eye_offset=1)
+
+            self.assertEqual(main(["build", "--images", str(raw), "--out", str(model_dir)]), 0)
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "name": "existing_model_backend_compare",
+                        "reference_images": str(raw),
+                        "model": str(model_dir),
+                        "generated_images": str(generated),
+                        "backend_comparison": {
+                            "out": str(backend_compare_dir),
+                            "backends": ["deterministic"],
+                        },
+                        "precision_out": str(precision_dir),
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                main(["run-pipeline", "--config", str(config_path), "--out", str(pipeline_dir)]),
+                0,
+            )
+
+            pipeline_run = json.loads((pipeline_dir / "pipeline_run.json").read_text(encoding="utf-8"))
+            self.assertEqual([step["name"] for step in pipeline_run["steps"]], ["compare-backends", "precision-report"])
+            precision = json.loads((precision_dir / "precision_report.json").read_text(encoding="utf-8"))
+            self.assertEqual(precision["backend_comparison"]["completed_backends"], ["deterministic"])
 
     def test_run_pipeline_writes_manifest_when_step_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

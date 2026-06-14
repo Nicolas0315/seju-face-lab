@@ -46,10 +46,11 @@ def write_pipeline_run(plan: PipelinePlan, out_dir: Path) -> None:
 def build_pipeline_plan(config: dict[str, Any], config_path: Path) -> PipelinePlan:
     name = str(config.get("name") or config_path.stem)
     steps: list[PipelineStep] = []
-    model_out = _path_value(config, "model_out") or _path_value(config, "model")
+    build_model_out = _path_value(config, "model_out")
+    model_out = build_model_out or _path_value(config, "model")
     reference_images = _path_value(config, "reference_images")
-    if reference_images and model_out:
-        steps.append(PipelineStep("build", "planned", str(model_out)))
+    if reference_images and build_model_out:
+        steps.append(PipelineStep("build", "planned", str(build_model_out)))
 
     generation = _generation_config(config)
     generation_out = _path_value(generation, "out") or _path_value(config, "generated_images")
@@ -68,6 +69,10 @@ def build_pipeline_plan(config: dict[str, Any], config_path: Path) -> PipelinePl
     subject_review = _subject_review_config(config)
     if subject_review:
         steps.append(PipelineStep("review-subjects", "planned", str(subject_review["out"])))
+
+    backend_comparison = _backend_comparison_config(config)
+    if backend_comparison and reference_images and generated_images:
+        steps.append(PipelineStep("compare-backends", "planned", str(backend_comparison["out"])))
 
     precision_out = _path_value(config, "precision_out")
     if model_out and precision_out:
@@ -137,6 +142,17 @@ def _subject_review_config(config: dict[str, Any]) -> dict[str, Path] | None:
     if not subjects or not out or not model:
         return None
     return {"subjects": subjects, "out": out, "model": model}
+
+
+def _backend_comparison_config(config: dict[str, Any]) -> dict[str, Path] | None:
+    comparison = config.get("backend_comparison")
+    out = None
+    if isinstance(comparison, dict):
+        out = _path_value(comparison, "out")
+    out = out or _path_value(config, "backend_comparison_out")
+    if not out:
+        return None
+    return {"out": out}
 
 
 def _default_out_dir(config: dict[str, Any], config_path: Path) -> Path:

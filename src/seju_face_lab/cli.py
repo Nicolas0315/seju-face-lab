@@ -115,6 +115,7 @@ def main(argv: list[str] | None = None) -> int:
     precision_parser.add_argument("--subject-review", type=Path, default=None)
     precision_parser.add_argument("--evaluation", type=Path, default=None)
     precision_parser.add_argument("--quality", type=Path, default=None)
+    precision_parser.add_argument("--backend-comparison", type=Path, default=None)
 
     run_pipeline_parser = subparsers.add_parser(
         "run-pipeline",
@@ -465,6 +466,7 @@ def _precision_report(args: argparse.Namespace) -> int:
         subject_review=args.subject_review,
         evaluation=args.evaluation,
         quality=args.quality,
+        backend_comparison=args.backend_comparison,
     )
     print(f"precision report: {args.out / 'precision_report.md'}")
     print(f"model images: {report['model']['image_count']}")
@@ -480,6 +482,7 @@ def _run_pipeline(args: argparse.Namespace) -> int:
         "evaluate": _run_pipeline_evaluate,
         "review-generated": _run_pipeline_review_generated,
         "review-subjects": _run_pipeline_review_subjects,
+        "compare-backends": _run_pipeline_compare_backends,
         "precision-report": _run_pipeline_precision_report,
     }
     plan = run_pipeline_config(args.config, args.out, handlers)
@@ -560,6 +563,19 @@ def _run_pipeline_review_subjects(config: dict) -> int:
     )
 
 
+def _run_pipeline_compare_backends(config: dict) -> int:
+    comparison = _pipeline_backend_comparison_config(config)
+    return _compare_backends(
+        argparse.Namespace(
+            reference_images=Path(comparison.get("reference_images") or config["reference_images"]),
+            images=_pipeline_generated_images(config),
+            out=Path(comparison["out"]),
+            backends=[str(name) for name in comparison.get("backends", ["deterministic", "opencv-face"])],
+            crop=str(comparison.get("crop", config.get("crop", "center"))),
+        )
+    )
+
+
 def _run_pipeline_precision_report(config: dict) -> int:
     return _precision_report(
         argparse.Namespace(
@@ -573,6 +589,7 @@ def _run_pipeline_precision_report(config: dict) -> int:
             ),
             evaluation=Path(config["evaluation_out"]) if config.get("evaluation_out") else None,
             quality=Path(config["quality_out"]) if config.get("quality_out") else None,
+            backend_comparison=_pipeline_backend_comparison_out(config),
         )
     )
 
@@ -605,6 +622,22 @@ def _pipeline_model(config: dict) -> Path:
     if not value:
         raise SystemExit("Pipeline config requires model_out or model")
     return Path(value)
+
+
+def _pipeline_backend_comparison_config(config: dict) -> dict:
+    comparison = config.get("backend_comparison")
+    if isinstance(comparison, dict):
+        return comparison
+    if config.get("backend_comparison_out"):
+        return {"out": config["backend_comparison_out"]}
+    return {}
+
+
+def _pipeline_backend_comparison_out(config: dict) -> Path | None:
+    comparison = _pipeline_backend_comparison_config(config)
+    if comparison.get("out"):
+        return Path(comparison["out"])
+    return None
 
 
 def _qa_images(images: Path, out: Path) -> int:

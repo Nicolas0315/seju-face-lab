@@ -179,10 +179,12 @@ class AnalysisModuleTests(unittest.TestCase):
             model = root / "model"
             generation = root / "generation_review"
             subjects = root / "subject_review"
+            backend_comparison = root / "backend_compare"
             out = root / "precision"
             model.mkdir()
             generation.mkdir()
             subjects.mkdir()
+            backend_comparison.mkdir()
             (model / "centroids.npz").write_bytes(b"placeholder")
             (model / "profile.json").write_text(
                 json.dumps(
@@ -236,21 +238,44 @@ class AnalysisModuleTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            (backend_comparison / "backend_comparison.json").write_text(
+                json.dumps(
+                    {
+                        "runs": [
+                            {"backend": "deterministic", "status": "completed"},
+                            {"backend": "deepface", "status": "failed"},
+                        ],
+                        "rank_agreement": [
+                            {
+                                "backend_a": "deterministic",
+                                "backend_b": "deepface",
+                                "common_image_count": 2,
+                                "spearman_rank": 0.5,
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
 
             report = write_precision_report(
                 model_dir=model,
                 out_dir=out,
                 generation_review=generation,
                 subject_review=subjects,
+                backend_comparison=backend_comparison,
             )
 
             self.assertEqual(report["model"]["image_count"], 3)
             self.assertEqual(report["generation"]["best_centroid_score"], 0.45)
             self.assertEqual(report["generation"]["qa_pass_count"], 1)
             self.assertEqual(report["subjects"]["top_subject"], "near_subject")
+            self.assertEqual(report["backend_comparison"]["completed_backends"], ["deterministic"])
+            self.assertEqual(report["backend_comparison"]["failed_backends"], ["deepface"])
+            self.assertEqual(report["backend_comparison"]["rank_agreement"][0]["spearman_rank"], 0.5)
             self.assertTrue((out / "precision_report.json").exists())
             self.assertIn(
-                "best_centroid_score",
+                "Backend Comparison",
                 (out / "precision_report.md").read_text(encoding="utf-8"),
             )
 
