@@ -1,0 +1,10 @@
+{
+  "name": "seju_official",
+  "index_url": "https://seju.tokyo/talents/",
+  "as_of": "2026-06-14",
+  "min_age": 18,
+  "default_workers": 4,
+  "delay_seconds": 0.5,
+  "policy": "manifest_only_review_before_download",
+  "exclude_social_platform_scraping": true
+}

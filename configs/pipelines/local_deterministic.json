@@ -1,0 +1,15 @@
+{
+  "name": "local_deterministic",
+  "vector_backend": "deterministic",
+  "crop": "center",
+  "source_manifest": "data/processed/seju_sources_official_2026-06-14.jsonl",
+  "reference_images": "data/raw",
+  "model_out": "outputs/seju_model",
+  "generated_images": "outputs/generated",
+  "evaluation_out": "outputs/evaluation",
+  "notes": [
+    "Default pipeline uses no neural dependencies.",
+    "Review source manifest and permissions before downloading or analyzing images.",
+    "Replace vector_backend with insightface after the adapter is implemented."
+  ]
+}
