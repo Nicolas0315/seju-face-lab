@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+import json
 from argparse import Namespace
 from pathlib import Path
 from unittest.mock import patch
@@ -35,6 +36,7 @@ class PipelineTests(unittest.TestCase):
             _write_face_like_image(generated / "candidate.png", (232, 202, 188), eye_offset=1)
             _write_face_like_image(subjects / "near_subject" / "near.png", (232, 202, 188), eye_offset=1)
             _write_face_like_image(subjects / "far_subject" / "far.png", (170, 145, 130), eye_offset=7)
+            (subjects / "far_subject" / "broken.jpg").write_text("not an image", encoding="utf-8")
 
             self.assertEqual(main(["build", "--images", str(raw), "--out", str(model_dir)]), 0)
             self.assertEqual(
@@ -92,8 +94,11 @@ class PipelineTests(unittest.TestCase):
             )
             reviews = (review_dir / "subject_reviews.csv").read_text(encoding="utf-8-sig")
             self.assertIn("near_subject", reviews)
+            self.assertIn("failed_count", reviews)
             self.assertIn("mean_centroid_score", reviews)
-            self.assertTrue((review_dir / "subject_reviews.json").exists())
+            review_json = json.loads((review_dir / "subject_reviews.json").read_text(encoding="utf-8"))
+            far_subject = next(item for item in review_json["subjects"] if item["subject"] == "far_subject")
+            self.assertEqual(far_subject["failed_count"], 1)
 
     def test_backends_command_lists_planned_backends(self) -> None:
         self.assertEqual(main(["backends"]), 0)

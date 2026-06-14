@@ -181,17 +181,18 @@ class SourceParsingTests(unittest.TestCase):
             self.assertEqual(fetched.count(second.image_url), 1)
 
     def test_download_source_images_caches_robots_per_origin(self) -> None:
-        class FakeRobotParser:
+        class FakeRobotsResponse:
             reads = 0
 
-            def set_url(self, _url: str) -> None:
+            def __enter__(self) -> "FakeRobotsResponse":
+                type(self).reads += 1
+                return self
+
+            def __exit__(self, *_args: object) -> None:
                 pass
 
-            def read(self) -> None:
-                type(self).reads += 1
-
-            def can_fetch(self, _agent: str, _url: str) -> bool:
-                return True
+            def read(self) -> bytes:
+                return b"User-agent: *\nAllow: /\n"
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -210,17 +211,14 @@ class SourceParsingTests(unittest.TestCase):
                 source_policy="manifest_only_review_before_download",
             )
             second = replace(first, image_url="https://seju.tokyo/wp-content/uploads/example_02.jpg")
-            with patch(
-                "seju_face_lab.sources.urllib.robotparser.RobotFileParser",
-                side_effect=FakeRobotParser,
-            ):
+            with patch("seju_face_lab.sources.urllib.request.urlopen", return_value=FakeRobotsResponse()):
                 results = download_source_images(
                     [first, second],
                     root / "robots-cache",
                     fetch_bytes=lambda _url: (b"fake-jpeg-bytes", "image/jpeg"),
                 )
             self.assertEqual([result.status for result in results], ["downloaded", "downloaded"])
-            self.assertEqual(FakeRobotParser.reads, 1)
+            self.assertEqual(FakeRobotsResponse.reads, 1)
 
     def test_quote_url_preserves_ascii_and_encodes_japanese_path(self) -> None:
         quoted = _quote_url("https://seju.tokyo/wp-content/uploads/2023/07/秋葉聡さん撮影.jpg")
@@ -230,6 +228,7 @@ class SourceParsingTests(unittest.TestCase):
     def test_supported_content_type_handles_charset_and_absent_header(self) -> None:
         self.assertTrue(_is_supported_content_type("image/jpeg; charset=binary", "https://example.com/a"))
         self.assertTrue(_is_supported_content_type(None, "https://example.com/a.webp"))
+        self.assertTrue(_is_supported_content_type(None, "https://example.com/a.bmp"))
         self.assertFalse(_is_supported_content_type("text/html", "https://example.com/a.jpg"))
         self.assertFalse(_is_supported_content_type(None, "https://example.com/a"))
 

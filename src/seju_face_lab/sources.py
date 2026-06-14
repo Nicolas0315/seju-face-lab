@@ -4,6 +4,7 @@ import json
 import hashlib
 import re
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import urllib.robotparser
@@ -15,7 +16,7 @@ from pathlib import Path
 from threading import Lock
 from typing import Callable, Iterable
 
-IMAGE_RE = re.compile(r"\.(?:jpg|jpeg|png|webp)(?:\?|$)", re.IGNORECASE)
+IMAGE_RE = re.compile(r"\.(?:jpg|jpeg|png|webp|bmp)(?:\?|$)", re.IGNORECASE)
 BIRTHDATE_RE = re.compile(r"(\d{4})年\s*(\d{1,2})月\s*(\d{1,2})日")
 
 
@@ -328,17 +329,32 @@ class _RobotsPolicyCache:
         key = (parsed.scheme, parsed.netloc)
         parser = self._parsers.get(key)
         if parser is None:
-            parser = self._read_parser(parsed)
+            parser = self._read_parser(parsed, user_agent)
             self._parsers[key] = parser
         if not parser.can_fetch(user_agent, url):
             raise PermissionError(f"robots.txt disallows fetch: {url}")
 
     @staticmethod
-    def _read_parser(parsed: urllib.parse.ParseResult) -> urllib.robotparser.RobotFileParser:
+    def _read_parser(
+        parsed: urllib.parse.ParseResult,
+        user_agent: str,
+    ) -> urllib.robotparser.RobotFileParser:
         robots_url = urllib.parse.urlunparse((parsed.scheme, parsed.netloc, "/robots.txt", "", "", ""))
         parser = urllib.robotparser.RobotFileParser()
         parser.set_url(robots_url)
-        parser.read()
+        request = urllib.request.Request(robots_url, headers={"User-Agent": user_agent})
+        try:
+            with urllib.request.urlopen(request, timeout=20) as response:
+                raw = response.read()
+        except urllib.error.HTTPError as exc:
+            if exc.code in (401, 403):
+                parser.disallow_all = True
+            elif 400 <= exc.code < 500:
+                parser.allow_all = True
+            else:
+                raise
+        else:
+            parser.parse(raw.decode("utf-8", "surrogateescape").splitlines())
         return parser
 
 def _age_on_date(birthdate: date, as_of_date: date) -> int:

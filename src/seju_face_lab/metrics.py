@@ -26,6 +26,7 @@ class Score:
 class SubjectReview:
     subject: str
     image_count: int
+    failed_count: int
     best_image_id: str | None
     best_image_path: str | None
     best_centroid_score: float | None
@@ -69,7 +70,7 @@ def review_subject_directories(
 def write_subject_reviews(reviews: list[SubjectReview], out_dir: Path) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     csv_lines = [
-        "subject,image_count,best_image_id,best_image_path,best_centroid_score,"
+        "subject,image_count,failed_count,best_image_id,best_image_path,best_centroid_score,"
         "mean_centroid_score,median_centroid_score,mean_cosine_to_mean,mean_cosine_to_median"
     ]
     for review in reviews:
@@ -78,6 +79,7 @@ def write_subject_reviews(reviews: list[SubjectReview], out_dir: Path) -> None:
                 [
                     _csv(review.subject),
                     str(review.image_count),
+                    str(review.failed_count),
                     _csv(review.best_image_id or ""),
                     _csv(review.best_image_path or ""),
                     _optional_float(review.best_centroid_score),
@@ -146,12 +148,23 @@ def _review_subject(
     crop: str,
     backend: VectorBackend,
 ) -> SubjectReview:
-    vectors = [backend.vectorize(path, crop=crop) for path in iter_image_paths(subject_dir)]
-    scores = sorted((_score_vector(model, vector) for vector in vectors), key=lambda item: item.centroid_score, reverse=True)
+    vectors: list[ImageVector] = []
+    failed_count = 0
+    for path in iter_image_paths(subject_dir):
+        try:
+            vectors.append(backend.vectorize(path, crop=crop))
+        except Exception:  # noqa: BLE001 - keep a subject review running and report failures.
+            failed_count += 1
+    scores = sorted(
+        (_score_vector(model, vector) for vector in vectors),
+        key=lambda item: item.centroid_score,
+        reverse=True,
+    )
     if not scores:
         return SubjectReview(
             subject=subject_dir.name,
             image_count=0,
+            failed_count=failed_count,
             best_image_id=None,
             best_image_path=None,
             best_centroid_score=None,
@@ -167,6 +180,7 @@ def _review_subject(
     return SubjectReview(
         subject=subject_dir.name,
         image_count=len(scores),
+        failed_count=failed_count,
         best_image_id=best.image_id,
         best_image_path=best.path,
         best_centroid_score=float(best.centroid_score),
@@ -211,11 +225,13 @@ def _render_subject_reviews(reviews: list[SubjectReview]) -> str:
     if not reviews:
         lines.extend(["No subject directories found.", ""])
         return "\n".join(lines)
-    lines.append("| rank | subject | images | mean_score | median_score | best_score | best_image |")
-    lines.append("| --- | --- | ---: | ---: | ---: | ---: | --- |")
+    lines.append(
+        "| rank | subject | images | failed | mean_score | median_score | best_score | best_image |"
+    )
+    lines.append("| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |")
     for rank, review in enumerate(reviews, start=1):
         lines.append(
-            f"| {rank} | {review.subject} | {review.image_count} | "
+            f"| {rank} | {review.subject} | {review.image_count} | {review.failed_count} | "
             f"{_optional_float(review.mean_centroid_score)} | "
             f"{_optional_float(review.median_centroid_score)} | "
             f"{_optional_float(review.best_centroid_score)} | "
@@ -271,6 +287,7 @@ def _subject_review_summary(reviews: list[SubjectReview]) -> dict:
             {
                 "subject": review.subject,
                 "image_count": review.image_count,
+                "failed_count": review.failed_count,
                 "best_image_id": review.best_image_id,
                 "best_image_path": review.best_image_path,
                 "best_centroid_score": _round_optional(review.best_centroid_score),
