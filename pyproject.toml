@@ -16,8 +16,17 @@ face = [
   "insightface>=0.7",
   "onnxruntime-gpu>=1.18",
 ]
+deepface = [
+  "deepface>=0.0.92",
+]
 clip = [
   "open-clip-torch>=2.24",
+]
+generation = [
+  "diffusers>=0.30",
+  "transformers>=4.44",
+  "accelerate>=0.33",
+  "safetensors>=0.4",
 ]
 analysis = [
   "pandas>=2.2",
@@ -28,7 +37,12 @@ all = [
   "opencv-python>=4.10",
   "insightface>=0.7",
   "onnxruntime-gpu>=1.18",
+  "deepface>=0.0.92",
   "open-clip-torch>=2.24",
+  "diffusers>=0.30",
+  "transformers>=4.44",
+  "accelerate>=0.33",
+  "safetensors>=0.4",
   "pandas>=2.2",
   "scikit-learn>=1.5",
   "matplotlib>=3.9",

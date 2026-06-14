@@ -20,15 +20,45 @@ Retrieval/design date: 2026-06-14.
    - `prompt.txt` and `generation_manifest.json` feed ComfyUI or another generator
 5. `evaluate`
    - generated candidates are scored against mean and median vectors
+6. `review-subjects`
+   - per-person image folders are ranked against the local seju centroid
+   - output is CSV, Markdown, and JSON for review and tracking
 
 ## Backends
 
 - `deterministic`: implemented. Uses local image statistics and needs only `numpy` + `Pillow`.
 - `opencv-face`: planned. Face-box normalization and QA using `opencv-python`.
 - `insightface`: planned. Face embedding adapter with `insightface` + `onnxruntime-gpu`.
+- `deepface`: planned. OSS face-model adapter for cross-checking and dataset QA.
 - `clip-style`: planned. Secondary style similarity with `open-clip-torch`.
+- `diffusion-generation`: planned. Diffusers/ComfyUI generation loop for prompt batches.
 
 Keep geometry and style axes separate. A generated image can match the style prompt while missing face geometry, so evaluation should report both once neural backends are implemented.
+
+## Subject Review Contract
+
+Store reviewed comparison images under:
+
+```text
+data/subjects/<subject-name>/*.jpg
+```
+
+Then run:
+
+```powershell
+python -m seju_face_lab review-subjects --model outputs/seju_model --subjects data/subjects --out outputs/subject_reviews
+```
+
+The score is an approximate similarity to this local centroid only. It must not be treated as
+identity recognition, attractiveness scoring, ethnicity classification, or an objective face-type label.
+
+## GPU / Generation Plan
+
+- RTX 4090 / RTX 5060 Ti nodes should run optional neural backends and generation batches only.
+- Keep raw image sets and generated candidates Git-ignored.
+- Use `insightface` or `deepface` for face-embedding cross-checks after deterministic results are stable.
+- Use Diffusers or ComfyUI to generate candidates from `generation_manifest.json`, then score them with `evaluate`.
+- Keep generated-image prompts aggregate-only; avoid copying a specific real person.
 
 ## Folder Contract
 

@@ -1,0 +1,12 @@
+{
+  "model": "outputs/seju_model_official",
+  "subjects": "data/subjects",
+  "out": "outputs/subject_reviews",
+  "backend": "deterministic",
+  "crop": "center",
+  "notes": [
+    "Store one reviewed subject per folder.",
+    "Keep comparison images local and Git-ignored.",
+    "Scores are approximate local centroid similarity only."
+  ]
+}

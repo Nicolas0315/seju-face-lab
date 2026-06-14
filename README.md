@@ -10,6 +10,7 @@ It can:
 - discover official seju profile image candidates into a source manifest
 - write generation prompts from centroid descriptors
 - score generated images against the mean/median vectors
+- review per-person image folders against the seju centroid
 
 The current implementation is intentionally local and dependency-light: Python + `numpy` + `Pillow`. It does not identify people, infer identity, or claim that the result is a universal definition of "seju face"; it only summarizes the images you provide.
 
@@ -50,6 +51,22 @@ After generating candidate images with any image generator, place them in `outpu
 ```powershell
 python -m seju_face_lab evaluate --model outputs/seju_model --images outputs/generated --out outputs/evaluation
 ```
+
+Review other public-figure or celebrity image sets by folder:
+
+```text
+data/subjects/
+  subject_a/
+    image1.jpg
+  subject_b/
+    image1.jpg
+```
+
+```powershell
+python -m seju_face_lab review-subjects --model outputs/seju_model --subjects data/subjects --out outputs/subject_reviews
+```
+
+This writes `subject_reviews.csv`, `subject_reviews.md`, and `subject_reviews.json`.
 
 ## Recommended Data
 
@@ -100,9 +117,12 @@ Designed next:
 
 - `opencv-face`: face crop/QA normalization
 - `insightface`: GPU face embeddings on RTX machines
+- `deepface`: OSS face-model cross-checking and QA
 - `clip-style`: secondary style similarity scoring
+- `diffusion-generation`: Diffusers/ComfyUI candidate generation loop
 
 See `docs/architecture.md` for the folder contract and backend plan.
+See `docs/research-tracking.md` for the current GitHub Issue / ToDo breakdown.
 
 ## Output Meaning
 
@@ -112,6 +132,7 @@ See `docs/architecture.md` for the folder contract and backend plan.
 - `prompt.txt`: a generation prompt based on observed centroid descriptors.
 - evaluation `scores.csv`: similarity of candidate generated images to the centroid vectors.
 - evaluation `summary.json`: best/mean/median generated-image similarity for quick comparisons.
+- subject review outputs: per-person approximate similarity rankings.
 
 ## Verification
 

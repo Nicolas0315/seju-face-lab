@@ -22,6 +22,19 @@ class Score:
     centroid_score: float
 
 
+@dataclass(frozen=True)
+class SubjectReview:
+    subject: str
+    image_count: int
+    best_image_id: str | None
+    best_image_path: str | None
+    best_centroid_score: float | None
+    mean_centroid_score: float | None
+    median_centroid_score: float | None
+    mean_cosine_to_mean: float | None
+    mean_cosine_to_median: float | None
+
+
 def score_generated_images(
     model: CentroidModel,
     images_dir: Path,
@@ -32,6 +45,55 @@ def score_generated_images(
     vectors = [active_backend.vectorize(path, crop=crop) for path in iter_image_paths(images_dir)]
     scores = [_score_vector(model, vector) for vector in vectors]
     return sorted(scores, key=lambda item: item.centroid_score, reverse=True)
+
+
+def review_subject_directories(
+    model: CentroidModel,
+    subjects_dir: Path,
+    crop: str = "center",
+    backend: VectorBackend | None = None,
+) -> list[SubjectReview]:
+    active_backend = backend or get_vector_backend("deterministic")
+    subject_dirs = sorted(path for path in subjects_dir.iterdir() if path.is_dir())
+    reviews = [
+        _review_subject(model, subject_dir, crop=crop, backend=active_backend)
+        for subject_dir in subject_dirs
+    ]
+    return sorted(
+        reviews,
+        key=lambda item: item.mean_centroid_score if item.mean_centroid_score is not None else -1.0,
+        reverse=True,
+    )
+
+
+def write_subject_reviews(reviews: list[SubjectReview], out_dir: Path) -> None:
+    out_dir.mkdir(parents=True, exist_ok=True)
+    csv_lines = [
+        "subject,image_count,best_image_id,best_image_path,best_centroid_score,"
+        "mean_centroid_score,median_centroid_score,mean_cosine_to_mean,mean_cosine_to_median"
+    ]
+    for review in reviews:
+        csv_lines.append(
+            ",".join(
+                [
+                    _csv(review.subject),
+                    str(review.image_count),
+                    _csv(review.best_image_id or ""),
+                    _csv(review.best_image_path or ""),
+                    _optional_float(review.best_centroid_score),
+                    _optional_float(review.mean_centroid_score),
+                    _optional_float(review.median_centroid_score),
+                    _optional_float(review.mean_cosine_to_mean),
+                    _optional_float(review.mean_cosine_to_median),
+                ]
+            )
+        )
+    (out_dir / "subject_reviews.csv").write_text("\n".join(csv_lines) + "\n", encoding="utf-8-sig")
+    (out_dir / "subject_reviews.md").write_text(_render_subject_reviews(reviews), encoding="utf-8")
+    (out_dir / "subject_reviews.json").write_text(
+        json.dumps(_subject_review_summary(reviews), ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
 
 
 def write_scores(scores: list[Score], out_dir: Path) -> None:
@@ -78,6 +140,43 @@ def _score_vector(model: CentroidModel, vector: ImageVector) -> Score:
     )
 
 
+def _review_subject(
+    model: CentroidModel,
+    subject_dir: Path,
+    crop: str,
+    backend: VectorBackend,
+) -> SubjectReview:
+    vectors = [backend.vectorize(path, crop=crop) for path in iter_image_paths(subject_dir)]
+    scores = sorted((_score_vector(model, vector) for vector in vectors), key=lambda item: item.centroid_score, reverse=True)
+    if not scores:
+        return SubjectReview(
+            subject=subject_dir.name,
+            image_count=0,
+            best_image_id=None,
+            best_image_path=None,
+            best_centroid_score=None,
+            mean_centroid_score=None,
+            median_centroid_score=None,
+            mean_cosine_to_mean=None,
+            mean_cosine_to_median=None,
+        )
+    centroid_scores = np.asarray([score.centroid_score for score in scores], dtype=np.float32)
+    cosine_mean_scores = np.asarray([score.cosine_to_mean for score in scores], dtype=np.float32)
+    cosine_median_scores = np.asarray([score.cosine_to_median for score in scores], dtype=np.float32)
+    best = scores[0]
+    return SubjectReview(
+        subject=subject_dir.name,
+        image_count=len(scores),
+        best_image_id=best.image_id,
+        best_image_path=best.path,
+        best_centroid_score=float(best.centroid_score),
+        mean_centroid_score=float(np.mean(centroid_scores)),
+        median_centroid_score=float(np.median(centroid_scores)),
+        mean_cosine_to_mean=float(np.mean(cosine_mean_scores)),
+        mean_cosine_to_median=float(np.mean(cosine_median_scores)),
+    )
+
+
 def _cosine(a: np.ndarray, b: np.ndarray) -> float:
     denom = float(np.linalg.norm(a) * np.linalg.norm(b))
     if denom < 1e-12:
@@ -101,6 +200,32 @@ def _render_scores(scores: list[Score]) -> str:
         [
             "",
             "Scores are approximate vector similarity against this local centroid model.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _render_subject_reviews(reviews: list[SubjectReview]) -> str:
+    lines = ["# subject seju-face similarity review", ""]
+    if not reviews:
+        lines.extend(["No subject directories found.", ""])
+        return "\n".join(lines)
+    lines.append("| rank | subject | images | mean_score | median_score | best_score | best_image |")
+    lines.append("| --- | --- | ---: | ---: | ---: | ---: | --- |")
+    for rank, review in enumerate(reviews, start=1):
+        lines.append(
+            f"| {rank} | {review.subject} | {review.image_count} | "
+            f"{_optional_float(review.mean_centroid_score)} | "
+            f"{_optional_float(review.median_centroid_score)} | "
+            f"{_optional_float(review.best_centroid_score)} | "
+            f"{review.best_image_id or ''} |"
+        )
+    lines.extend(
+        [
+            "",
+            "Scores are approximate vector similarity against this local seju centroid model.",
+            "They are not identity, attractiveness, ethnicity, or objective face-type labels.",
             "",
         ]
     )
@@ -137,6 +262,39 @@ def _score_summary(scores: list[Score]) -> dict:
         ],
         "boundary": "Approximate vector similarity for this local centroid model only.",
     }
+
+
+def _subject_review_summary(reviews: list[SubjectReview]) -> dict:
+    return {
+        "subject_count": len(reviews),
+        "subjects": [
+            {
+                "subject": review.subject,
+                "image_count": review.image_count,
+                "best_image_id": review.best_image_id,
+                "best_image_path": review.best_image_path,
+                "best_centroid_score": _round_optional(review.best_centroid_score),
+                "mean_centroid_score": _round_optional(review.mean_centroid_score),
+                "median_centroid_score": _round_optional(review.median_centroid_score),
+                "mean_cosine_to_mean": _round_optional(review.mean_cosine_to_mean),
+                "mean_cosine_to_median": _round_optional(review.mean_cosine_to_median),
+            }
+            for review in reviews
+        ],
+        "boundary": "Approximate vector similarity for this local centroid model only.",
+    }
+
+
+def _optional_float(value: float | None) -> str:
+    if value is None:
+        return ""
+    return f"{value:.6f}"
+
+
+def _round_optional(value: float | None) -> float | None:
+    if value is None:
+        return None
+    return round(float(value), 6)
 
 
 def _csv(value: str) -> str:

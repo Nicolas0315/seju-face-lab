@@ -20,15 +20,21 @@ class PipelineTests(unittest.TestCase):
             root = Path(tmp)
             raw = root / "raw"
             generated = root / "generated"
+            subjects = root / "subjects"
             model_dir = root / "model"
             eval_dir = root / "eval"
+            review_dir = root / "review"
             raw.mkdir()
             generated.mkdir()
+            (subjects / "near_subject").mkdir(parents=True)
+            (subjects / "far_subject").mkdir(parents=True)
 
             _write_face_like_image(raw / "a.png", (235, 205, 190), eye_offset=0)
             _write_face_like_image(raw / "b.png", (225, 198, 184), eye_offset=2)
             _write_face_like_image(raw / "c.png", (240, 210, 196), eye_offset=-2)
             _write_face_like_image(generated / "candidate.png", (232, 202, 188), eye_offset=1)
+            _write_face_like_image(subjects / "near_subject" / "near.png", (232, 202, 188), eye_offset=1)
+            _write_face_like_image(subjects / "far_subject" / "far.png", (170, 145, 130), eye_offset=7)
 
             self.assertEqual(main(["build", "--images", str(raw), "--out", str(model_dir)]), 0)
             self.assertEqual(
@@ -69,6 +75,25 @@ class PipelineTests(unittest.TestCase):
             self.assertIn("candidate", scores)
             self.assertIn("centroid_score", scores)
             self.assertTrue((eval_dir / "summary.json").exists())
+
+            self.assertEqual(
+                main(
+                    [
+                        "review-subjects",
+                        "--model",
+                        str(model_dir),
+                        "--subjects",
+                        str(subjects),
+                        "--out",
+                        str(review_dir),
+                    ]
+                ),
+                0,
+            )
+            reviews = (review_dir / "subject_reviews.csv").read_text(encoding="utf-8-sig")
+            self.assertIn("near_subject", reviews)
+            self.assertIn("mean_centroid_score", reviews)
+            self.assertTrue((review_dir / "subject_reviews.json").exists())
 
     def test_backends_command_lists_planned_backends(self) -> None:
         self.assertEqual(main(["backends"]), 0)

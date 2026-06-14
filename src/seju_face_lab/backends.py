@@ -55,11 +55,23 @@ BACKENDS: dict[str, VectorBackend] = {
         description="InsightFace/ONNXRuntime face embeddings for identity-agnostic centroid geometry.",
         notes="Best candidate for robust face embeddings on RTX machines; keep raw images local.",
     ),
+    "deepface": PlannedBackend(
+        name="deepface",
+        extra="deepface",
+        description="DeepFace-family OSS adapters for model comparison and face QA.",
+        notes="Use for cross-checking embeddings; keep it optional because dependencies are heavy.",
+    ),
     "clip-style": PlannedBackend(
         name="clip-style",
         extra="clip",
         description="OpenCLIP image embeddings for style/photographic similarity scoring.",
         notes="Use as a secondary style axis, not as the primary face-geometry vector.",
+    ),
+    "diffusion-generation": PlannedBackend(
+        name="diffusion-generation",
+        extra="generation",
+        description="Diffusers/ComfyUI prompt and candidate-generation loop.",
+        notes="Use RTX machines for batches, then score outputs with evaluate/review commands.",
     ),
 }
 

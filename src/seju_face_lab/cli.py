@@ -8,7 +8,7 @@ import numpy as np
 
 from .backends import backend_help, get_vector_backend
 from .embeddings import iter_image_paths, render_appearance
-from .metrics import score_generated_images, write_scores
+from .metrics import review_subject_directories, score_generated_images, write_scores, write_subject_reviews
 from .model import build_centroid_model, load_model, save_model
 from .prompting import prompt_from_descriptors
 from .sources import discover_sources, download_source_images, read_source_manifest, write_source_manifest
@@ -43,6 +43,16 @@ def main(argv: list[str] | None = None) -> int:
     evaluate_parser.add_argument("--out", type=Path, required=True)
     evaluate_parser.add_argument("--crop", choices=["center", "none"], default="center")
     evaluate_parser.add_argument("--backend", default="deterministic")
+
+    review_parser = subparsers.add_parser(
+        "review-subjects",
+        help="rank per-person image folders against a seju centroid model",
+    )
+    review_parser.add_argument("--model", type=Path, required=True)
+    review_parser.add_argument("--subjects", type=Path, required=True)
+    review_parser.add_argument("--out", type=Path, required=True)
+    review_parser.add_argument("--crop", choices=["center", "none"], default="center")
+    review_parser.add_argument("--backend", default="deterministic")
 
     subparsers.add_parser("backends", help="list available vector backend plans")
 
@@ -86,6 +96,8 @@ def main(argv: list[str] | None = None) -> int:
         return _render(args.model, args.kind, args.out)
     if args.command == "evaluate":
         return _evaluate(args.model, args.images, args.out, args.crop, args.backend)
+    if args.command == "review-subjects":
+        return _review_subjects(args.model, args.subjects, args.out, args.crop, args.backend)
     if args.command == "backends":
         print(backend_help())
         return 0
@@ -158,6 +170,16 @@ def _evaluate(model_dir: Path, images: Path, out: Path, crop: str, backend_name:
     write_scores(scores, out)
     print(f"evaluated images: {len(scores)}")
     print(f"scores: {out / 'scores.csv'}")
+    return 0
+
+
+def _review_subjects(model_dir: Path, subjects: Path, out: Path, crop: str, backend_name: str) -> int:
+    model = load_model(model_dir)
+    backend = get_vector_backend(backend_name)
+    reviews = review_subject_directories(model, subjects, crop=crop, backend=backend)
+    write_subject_reviews(reviews, out)
+    print(f"reviewed subjects: {len(reviews)}")
+    print(f"reviews: {out / 'subject_reviews.csv'}")
     return 0
 
 
