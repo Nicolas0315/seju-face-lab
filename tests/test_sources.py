@@ -145,6 +145,7 @@ class SourceParsingTests(unittest.TestCase):
     def test_supported_content_type_handles_charset_and_absent_header(self) -> None:
         self.assertTrue(_is_supported_content_type("image/jpeg; charset=binary", "https://example.com/a"))
         self.assertTrue(_is_supported_content_type(None, "https://example.com/a.webp"))
+        self.assertFalse(_is_supported_content_type("text/html", "https://example.com/a.jpg"))
         self.assertFalse(_is_supported_content_type(None, "https://example.com/a"))
 
 

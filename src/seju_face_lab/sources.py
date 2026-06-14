@@ -464,9 +464,9 @@ def _extension_from_url(url: str) -> str:
 
 
 def _is_supported_content_type(content_type: str | None, url: str) -> bool:
-    if content_type and content_type.split(";", 1)[0].strip().lower().startswith("image/"):
-        return True
-    return IMAGE_RE.search(url) is not None
+    if content_type is None or not content_type.strip():
+        return IMAGE_RE.search(url) is not None
+    return content_type.split(";", 1)[0].strip().lower().startswith("image/")
 
 
 def _sha256_file(path: Path) -> str:
