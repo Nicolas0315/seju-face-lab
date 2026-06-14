@@ -84,7 +84,8 @@ def save_model(model: CentroidModel, out_dir: Path) -> None:
         "prompt": prompt,
         "negative_prompt": (
             "specific celebrity likeness, copied identity, distorted face, extra eyes, "
-            "asymmetry artifact, harsh shadows, low detail, watermark, text"
+            "asymmetry artifact, hair covering face, obscured eyes, harsh shadows, "
+            "illustration, doll, mannequin, painted skin, low detail, watermark, text"
         ),
         "reference_outputs": {
             "mean_face": "mean_face.png",

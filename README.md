@@ -136,6 +136,7 @@ Designed next:
 
 See `docs/architecture.md` for the folder contract and backend plan.
 See `docs/research-tracking.md` for the current GitHub Issue / ToDo breakdown.
+See `docs/gpu-generation-log.md` for RTX 4090 generation smoke results.
 
 ## Output Meaning
 

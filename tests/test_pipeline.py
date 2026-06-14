@@ -49,8 +49,16 @@ class PipelineTests(unittest.TestCase):
             self.assertGreater(model.embedding_dim, 100)
             self.assertTrue((model_dir / "mean_face.png").exists())
             self.assertTrue((model_dir / "median_face.png").exists())
-            self.assertIn("aggregate traits", (model_dir / "prompt.txt").read_text(encoding="utf-8"))
+            prompt_text = (model_dir / "prompt.txt").read_text(encoding="utf-8")
+            self.assertIn("Aggregate traits", prompt_text)
+            self.assertIn("new fictional person", prompt_text)
+            self.assertLessEqual(len(prompt_text.split()), 55)
             self.assertTrue((model_dir / "generation_manifest.json").exists())
+            generation_manifest = json.loads(
+                (model_dir / "generation_manifest.json").read_text(encoding="utf-8")
+            )
+            self.assertIn("hair covering face", generation_manifest["negative_prompt"])
+            self.assertIn("illustration", generation_manifest["negative_prompt"])
 
             self.assertEqual(
                 main(["render", "--model", str(model_dir), "--kind", "mean", "--out", str(root / "mean.png")]),

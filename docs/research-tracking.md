@@ -9,7 +9,7 @@ Retrieval/design date: 2026-06-14.
 - Deterministic centroid build/evaluate is implemented and tested.
 - Per-subject similarity review is implemented through `review-subjects`.
 - Neural backends and DeepFace cross-checking are planned.
-- Image-generation dry-run planning is implemented; full Diffusers execution is optional.
+- Image-generation dry-run planning and local RTX 4090 Diffusers smoke runs are implemented.
 
 ## GitHub Issue Plan
 
@@ -38,3 +38,10 @@ Create and track these issues:
 4. Run the same review with InsightFace or DeepFace once optional dependencies are installed.
 5. Plan aggregate candidate faces with `generate --provider dry-run`.
 6. Generate with Diffusers/ComfyUI on a GPU worker and score with `evaluate`.
+7. Compare deterministic scores against InsightFace/DeepFace once neural backends are available.
+
+## GPU Generation Notes
+
+- RTX 4090 smoke generation succeeded with `.venv` Python 3.12.13, torch 2.12.0+cu126, and Diffusers 0.38.0.
+- Small generated batches were evaluated locally; generated images and per-run scores remain ignored under `outputs/`.
+- Full committed workflow notes are in `docs/gpu-generation-log.md`.
