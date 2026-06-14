@@ -8,7 +8,7 @@ Retrieval/design date: 2026-06-14.
 - Reviewed eligible image staging is implemented through `sources download`.
 - Deterministic centroid build/evaluate is implemented and tested.
 - OpenCV face-crop normalization is implemented as optional backend `opencv-face`.
-- InsightFace adapter code is dependency-gated and reports ready only when `insightface` and `onnxruntime-gpu` are installed.
+- InsightFace adapter code is dependency-gated and has a sample-verified 512D comparison path when `insightface` and ONNXRuntime providers are available.
 - DeepFace adapter code is dependency-gated and uses `DeepFace.represent` for neural cross-checking.
 - `backend-diagnostics` records optional dependency, CUDA, and ONNXRuntime provider visibility.
 - `compare-backends` builds/evaluates multiple vector backends on the same local image sets and reports rank agreement.
@@ -29,7 +29,7 @@ Retrieval/design date: 2026-06-14.
 
 Create and track these issues:
 
-- `P1 GPU face embeddings`: install and verify InsightFace/ONNXRuntime-GPU on RTX machines, then record `backend-diagnostics`.
+- `P1 GPU face embeddings`: run full-set InsightFace/ONNXRuntime-GPU comparisons on RTX machines, then record `backend-diagnostics` plus `compare-backends` summaries.
 - `P1 Celebrity subject review workflow`: collect reviewed subject folders and run `review-subjects`.
 - `P1 Generation loop`: connect `generation_manifest.json` to Diffusers or ComfyUI batches.
 - `P1 SNS correlation workflow`: run handle extraction, engagement manifesting, and correlation reports.
@@ -70,7 +70,7 @@ Create and track these issues:
 - OpenCV face-crop build succeeded on the local official image set with 173 usable face crops from 259 source images.
 - Detector-friendly RTX 4090 v2 produced one QA-passing candidate out of two; v3/v4 showed why QA is needed by producing extreme crops, off-center faces, and collages.
 - The current committed route is detector-friendly generation, then `review-generated` or deterministic/OpenCV evaluation + `qa-images` + `compare-runs` with QA-gated ranking before any visual interpretation.
-- InsightFace sample build/evaluate succeeded on `data/raw/seju_official_sample` with 2 usable images and 512D embeddings.
-- Current ONNXRuntime reports CUDA provider availability, but InsightFace execution fell back to CPU because `cublasLt64_12.dll` is missing.
+- InsightFace sample `compare-backends` succeeded on `data/raw/seju_official_sample` against `outputs/generated_detector_v5`: 2 usable reference images, 1 generated image, 512D embeddings, best generated image `candidate_0001_seed_260623`, best InsightFace centroid score `0.052322`.
+- Current ONNXRuntime reports `TensorrtExecutionProvider`, `CUDAExecutionProvider`, and `CPUExecutionProvider`; this is provider visibility evidence, while per-dataset backend success is tracked through `compare-backends`.
 - `compare-backends` is now the committed review path for checking whether deterministic/OpenCV and neural embeddings rank the same generated or subject images.
 - Full committed workflow notes are in `docs/gpu-generation-log.md`.

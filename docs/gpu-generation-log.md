@@ -19,7 +19,7 @@ Run date: 2026-06-15.
 - Compared evaluated local batches with `seju_face_lab compare-runs`.
 - Built and evaluated an optional OpenCV face-crop centroid model as a detector-visible face QA gate.
 - Added and verified `qa-images` to reject generated collages, extreme crops, and off-center faces before visual review.
-- Added dependency-gated InsightFace backend code for later RTX neural embedding verification.
+- Added and sample-verified the dependency-gated InsightFace backend path for 512D neural embedding comparison.
 - Confirmed generated images, manifests, and scores stay ignored under `outputs/`.
 - Confirmed the shortened default prompt avoids CLIP prompt truncation in the smoke run.
 - The detector-friendly profile initially emitted a CLIP token-length warning in Diffusers v1.5 runs; v5 compacted the detector-friendly negative prompt and removed that warning in a one-image RTX 4090 run.
@@ -46,6 +46,7 @@ Observed local results:
 - v6 `generate --review` smoke run completed generation, evaluation, QA, and one-run review in one command; deterministic best `0.044308`, QA pass `0/1` because OpenCV detected no face.
 - QA-gated `compare-runs` over v2-v5 still ranks v2 first: deterministic QA best `0.363268`; OpenCV QA best `0.641401`.
 - `review-generated` on v5 reproduced the standard generated-image review in one command: deterministic `image_count=1`, QA pass `1/1`, one-run review best QA score `0.168881`.
+- `compare-backends` on the v5 sample completed both `deterministic` and `insightface`: 2 reference images, 1 generated image, InsightFace embedding dimension `512`, best generated image `candidate_0001_seed_260623`, best InsightFace centroid score `0.052322`.
 
 Current best local candidate for review remains:
 
@@ -72,6 +73,7 @@ python -m seju_face_lab generate --model outputs/seju_model_official --out outpu
 
 - Run larger ignored GPU batches and keep only summarized findings in committed docs.
 - Run larger detector-friendly batches, then score with `review-generated` plus OpenCV/InsightFace or DeepFace where available.
-- Fix ONNXRuntime CUDA DLL availability for InsightFace; current sample build/evaluate succeeds through CPU fallback.
-- Add full-set InsightFace or DeepFace scoring before treating deterministic scores as face-geometry quality.
+- Run full-set InsightFace comparison on the ignored official source set and larger generated batches; current verification is a small sample.
+- Verify DeepFace installation/runtime and compare its rankings with deterministic/OpenCV/InsightFace.
+- Treat ONNXRuntime CUDA provider visibility as environment evidence only; record backend vectorization results separately for each image set.
 - Compare deterministic, neural face-embedding, and visual-review rankings before closing the generation-loop issue.
