@@ -452,7 +452,7 @@ def _sources_import_engagement(args: argparse.Namespace) -> int:
     records = import_engagement_csv(
         csv_path=args.csv,
         out_path=args.out,
-        existing_path=args.existing,
+        existing_path=args.existing or (args.out if args.out.exists() else None),
         overwrite_platforms=not args.no_overwrite,
     )
     total_engs = sum(len(r.engagements) for r in records)

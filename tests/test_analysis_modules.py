@@ -22,6 +22,7 @@ from seju_face_lab.sns_metrics import (
     SnsHandleRecord,
     TalentEngagementRecord,
     extract_sns_handles_from_links,
+    fetch_tiktok_engagement,
     read_engagement_manifest,
     read_handles_manifest,
     import_engagement_csv,
@@ -109,6 +110,52 @@ class AnalysisModuleTests(unittest.TestCase):
             self.assertEqual(records[0].engagements[0].followers, 1200)
             self.assertEqual(records[0].engagements[0].engagement_rate, 0.01)
             self.assertTrue(out_path.exists())
+
+    def test_cli_import_engagement_merges_existing_output_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            csv_path = root / "manual.csv"
+            out_path = root / "engagement.jsonl"
+            write_engagement_manifest(
+                [
+                    TalentEngagementRecord(
+                        talent_slug="talent_a",
+                        name="Talent A",
+                        engagements=[_engagement("twitter", "talent_a", 500, 20)],
+                    )
+                ],
+                out_path,
+            )
+            csv_path.write_text(
+                "talent_slug,platform,handle,followers\n"
+                "talent_a,instagram,talent_a,1200\n",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                main(["sources", "import-engagement", "--csv", str(csv_path), "--out", str(out_path)]),
+                0,
+            )
+            loaded = read_engagement_manifest(out_path)
+            platforms = sorted(e.platform for e in loaded[0].engagements)
+            self.assertEqual(platforms, ["instagram", "twitter"])
+
+    def test_tiktok_sigi_fallback_preserves_post_stats(self) -> None:
+        html = (
+            '<script id="SIGI_STATE">'
+            '{"UserPage":{"userInfo":{"user":{"nickname":"Talent","signature":"bio"},'
+            '"stats":{"followerCount":1000,"followingCount":25,"videoCount":10,"heartCount":200}}}}'
+            "</script>"
+        )
+        with patch(
+            "seju_face_lab.sns_metrics._Fetcher.fetch_text",
+            side_effect=[RuntimeError("api blocked"), html],
+        ):
+            engagement = fetch_tiktok_engagement("talent")
+
+        self.assertEqual(engagement.following, 25)
+        self.assertEqual(engagement.posts, 10)
+        self.assertEqual(engagement.engagement_rate, 0.02)
 
     def test_correlation_report_joins_face_scores_and_engagement(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

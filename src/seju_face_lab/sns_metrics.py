@@ -317,6 +317,7 @@ def fetch_tiktok_engagement(handle: str) -> SnsEngagement:
             data = json.loads(m.group(1))
             user_info = (
                 data.get("UserPage", {}).get("userInfo", {})
+                or data.get("userPage", {}).get("userInfo", {})
                 or _deep_find(data, "userInfo")
                 or {}
             )
@@ -324,13 +325,14 @@ def fetch_tiktok_engagement(handle: str) -> SnsEngagement:
             stats = user_info.get("stats") or {}
             if stats:
                 followers = _int_or_none(stats.get("followerCount"))
+                following = _int_or_none(stats.get("followingCount"))
+                posts = _int_or_none(stats.get("videoCount"))
                 hearts = _int_or_none(stats.get("heartCount") or stats.get("diggCount"))
                 return SnsEngagement(
                     platform="tiktok", handle=handle, profile_url=profile_url,
-                    followers=followers, following=None,
-                    posts=_int_or_none(stats.get("videoCount")),
+                    followers=followers, following=following, posts=posts,
                     total_engagement=hearts,
-                    engagement_rate=_engagement_rate(hearts, followers, None),
+                    engagement_rate=_engagement_rate(hearts, followers, posts),
                     bio=user.get("signature") or None,
                     display_name=user.get("nickname") or None,
                     fetch_status="ok" if followers else "partial",
