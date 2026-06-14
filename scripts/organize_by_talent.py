@@ -5,7 +5,8 @@ Usage:
         --src data/raw/seju_official \\
         --dst data/raw/seju_by_talent
 
-Images in src are named: {num}_{talent_slug}_{hash}.{ext}
+Images in src are named: {talent_slug}_{digest}.{ext}
+Legacy numbered files like {num}_{talent_slug}_{digest}.{ext} are also accepted.
 Output: dst/{talent_slug}/{filename}
 """
 from __future__ import annotations
@@ -32,11 +33,10 @@ def main() -> None:
     by_talent: dict[str, list[Path]] = {}
     skipped = 0
     for img in sorted(images):
-        parts = img.stem.split("_", 2)
-        if len(parts) < 3:
+        slug = _talent_slug_from_filename(img)
+        if slug is None:
             skipped += 1
             continue
-        slug = parts[1]
         by_talent.setdefault(slug, []).append(img)
 
     print(f"talents found: {len(by_talent)}")
@@ -62,6 +62,17 @@ def main() -> None:
             "Next: seju-face-lab review-subjects --model outputs/seju_model_official "
             f"--subjects {dst} --out outputs/seju_subject_reviews"
         )
+
+
+def _talent_slug_from_filename(path: Path) -> str | None:
+    parts = path.stem.rsplit("_", 1)
+    if len(parts) != 2 or len(parts[1]) != 10:
+        return None
+    slug = parts[0]
+    legacy_parts = slug.split("_", 1)
+    if len(legacy_parts) == 2 and legacy_parts[0].isdigit():
+        return legacy_parts[1]
+    return slug or None
 
 
 if __name__ == "__main__":

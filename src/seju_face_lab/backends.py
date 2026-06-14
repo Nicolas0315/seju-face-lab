@@ -107,8 +107,7 @@ class InsightFaceBackend:
         faces = app.get(img_bgr)
 
         if not faces:
-            # No face detected — fall back to pixel-based vector
-            return vectorize_image(path, crop=crop)
+            raise ValueError(f"No face detected in {path}")
 
         face = max(
             faces,

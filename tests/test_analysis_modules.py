@@ -4,8 +4,14 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import bootstrap  # noqa: F401
+import numpy as np
+from PIL import Image
+from scripts.organize_by_talent import _talent_slug_from_filename
+from seju_face_lab.backends import InsightFaceBackend
+from seju_face_lab.cli import main
 from seju_face_lab.correlation import (
     build_correlation_dataset,
     compute_correlations,
@@ -21,7 +27,7 @@ from seju_face_lab.sns_metrics import (
     write_engagement_manifest,
     write_handles_manifest,
 )
-from seju_face_lab.workers import _split_paths
+from seju_face_lab.workers import WorkerConfig, _split_paths, distribute_vectorize
 
 
 class AnalysisModuleTests(unittest.TestCase):
@@ -125,6 +131,50 @@ class AnalysisModuleTests(unittest.TestCase):
         chunks = _split_paths([Path(f"{idx}.png") for idx in range(5)], 2)
         self.assertEqual([len(chunk) for chunk in chunks], [3, 2])
 
+    def test_insightface_no_face_raises_instead_of_mixing_dimensions(self) -> None:
+        backend = InsightFaceBackend()
+        backend._app = _NoFaceApp()  # noqa: SLF001 - direct injection keeps this test offline.
+
+        with patch("seju_face_lab.backends._import_cv2", return_value=_FakeCV2()):
+            with self.assertRaisesRegex(ValueError, "No face detected"):
+                backend.vectorize(Path("missing-face.jpg"))
+
+    def test_distribute_vectorize_scores_only_assigned_local_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "raw"
+            generated = root / "generated"
+            out = root / "worker_out"
+            raw.mkdir()
+            generated.mkdir()
+            _write_image(raw / "a.png", (230, 210, 200))
+            _write_image(raw / "b.png", (180, 160, 150))
+            _write_image(generated / "selected.png", (231, 211, 201))
+            _write_image(generated / "unselected.png", (80, 70, 60))
+
+            model = root / "model"
+            self.assertEqual(main(["build", "--images", str(raw), "--out", str(model)]), 0)
+            scores = distribute_vectorize(
+                [generated / "selected.png"],
+                model,
+                out,
+                backend="deterministic",
+                workers=[WorkerConfig(name="local-test", python="", project_dir="")],
+            )
+
+            self.assertEqual([score["image_id"] for score in scores], ["selected"])
+
+    def test_organizer_parses_downloader_and_legacy_filenames(self) -> None:
+        self.assertEqual(
+            _talent_slug_from_filename(Path("airi-yamakawa_92064b501f.jpg")),
+            "airi-yamakawa",
+        )
+        self.assertEqual(
+            _talent_slug_from_filename(Path("0001_airi-yamakawa_92064b501f.jpg")),
+            "airi-yamakawa",
+        )
+        self.assertIsNone(_talent_slug_from_filename(Path("unrecognized.jpg")))
+
 
 def _engagement(
     platform: str,
@@ -147,6 +197,21 @@ def _engagement(
         fetch_error=None,
         retrieved_at="2026-06-15T00:00:00+00:00",
     )
+
+
+def _write_image(path: Path, color: tuple[int, int, int]) -> None:
+    Image.new("RGB", (32, 32), color).save(path)
+
+
+class _NoFaceApp:
+    def get(self, _image: np.ndarray) -> list[object]:
+        return []
+
+
+class _FakeCV2:
+    @staticmethod
+    def imread(_path: str) -> np.ndarray:
+        return np.zeros((32, 32, 3), dtype=np.uint8)
 
 
 if __name__ == "__main__":

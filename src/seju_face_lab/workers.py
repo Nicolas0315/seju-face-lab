@@ -53,7 +53,8 @@ def distribute_vectorize(
 ) -> list[dict]:
     """Split images across available workers and collect evaluation results.
 
-    Each worker runs `seju-face-lab evaluate` on its assigned subset.
+    Local workers score only their assigned image-path subset. Remote workers
+    currently require an explicit shared-path/sync implementation before use.
     Returns merged list of score dicts.
     """
     active_workers = workers or [LOCAL_4090]
@@ -98,24 +99,27 @@ def distribute_vectorize(
 
 
 def run_local_evaluate(
-    images_dir: Path,
+    image_paths: list[Path],
     model_dir: Path,
     out_dir: Path,
     backend: str = "insightface",
 ) -> list[dict]:
-    """Run evaluate on the local machine directly (no subprocess).
-
-    images_dir must be a directory containing the images to evaluate.
-    """
+    """Run evaluation for an explicit image-path subset on the local machine."""
     from .backends import get_vector_backend
-    from .metrics import score_generated_images, write_scores
+    from .embeddings import vectorize_batch_parallel
+    from .metrics import _score_vector, write_scores
     from .model import load_model
 
     model = load_model(model_dir)
     backend_obj = get_vector_backend(backend)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    scores = score_generated_images(model, images_dir, crop="center", backend=backend_obj)
+    vectors = vectorize_batch_parallel(image_paths, backend_obj, workers=4)
+    scores = sorted(
+        [_score_vector(model, vector) for vector in vectors],
+        key=lambda item: item.centroid_score,
+        reverse=True,
+    )
     write_scores(scores, out_dir)
     return [
         {
@@ -149,39 +153,15 @@ def _run_worker_evaluate(
     backend: str,
     tmp_root: Path,
 ) -> list[dict]:
-    # Write image list to a temp file the worker can read
+    # Persist the assignment as an audit artifact even for local direct evaluation.
     list_file = tmp_root / f"{worker.name}_images.txt"
     list_file.write_text(
         "\n".join(str(p) for p in image_paths), encoding="utf-8"
     )
 
     if worker.remote_host is None:
-        return _run_local_subprocess(worker, model_dir, out_dir, backend)
-    else:
-        return _run_remote_subprocess(worker, image_paths, model_dir, out_dir, backend)
-
-
-def _run_local_subprocess(
-    worker: WorkerConfig,
-    model_dir: Path,
-    out_dir: Path,
-    backend: str,
-) -> list[dict]:
-    cmd = [
-        worker.python, "-m", "seju_face_lab", "evaluate",
-        "--model", str(model_dir),
-        "--images", str(out_dir.parent),
-        "--out", str(out_dir),
-        "--backend", backend,
-    ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
-    if result.returncode != 0:
-        raise RuntimeError(f"evaluate failed: {result.stderr[:400]}")
-    summary = out_dir / "summary.json"
-    if summary.exists():
-        data = json.loads(summary.read_text(encoding="utf-8"))
-        return data.get("top_images", [])
-    return []
+        return run_local_evaluate(image_paths, model_dir, out_dir, backend)
+    return _run_remote_subprocess(worker, image_paths, model_dir, out_dir, backend)
 
 
 def _run_remote_subprocess(
@@ -191,29 +171,11 @@ def _run_remote_subprocess(
     out_dir: Path,
     backend: str,
 ) -> list[dict]:
-    """Run evaluate on a remote Windows host via SSH."""
-    remote_out = worker.project_dir + "/outputs/distributed_worker_out"
-    remote_model = worker.project_dir + "/outputs/seju_model_official"
-
-    evaluate_cmd = (
-        f'"{worker.python}" -m seju_face_lab evaluate '
-        f'--model "{remote_model}" '
-        f'--images "{worker.project_dir}/data/raw/seju_official" '
-        f'--out "{remote_out}" '
-        f'--backend {backend}'
+    """Placeholder for a future shared-path remote evaluator."""
+    raise NotImplementedError(
+        "remote worker subset evaluation needs an explicit shared-path or sync manifest; "
+        f"not running unrelated default paths on {worker.name}"
     )
-    cmd = _ssh_cmd(worker, evaluate_cmd)
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
-    if result.returncode != 0:
-        raise RuntimeError(f"remote evaluate failed: {result.stderr[:400]}")
-
-    # Fetch results via SSH
-    fetch_cmd = _ssh_cmd(worker, f'type "{remote_out}\\summary.json"')
-    fetch = subprocess.run(fetch_cmd, capture_output=True, text=True, timeout=30)
-    if fetch.returncode == 0 and fetch.stdout.strip():
-        data = json.loads(fetch.stdout)
-        return data.get("top_images", [])
-    return []
 
 
 def _ssh_cmd(worker: WorkerConfig, remote_cmd: str) -> list[str]:
