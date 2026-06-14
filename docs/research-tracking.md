@@ -23,7 +23,7 @@ Retrieval/design date: 2026-06-14.
 - `compare-runs` now reads `quality/` outputs and reports QA-gated best centroid scores.
 - `review-generated` runs generated-image evaluation, QA, and one-run comparison as the standard precision-review shortcut.
 - `generate --review` now chains real Diffusers generation into the same generated-image review shortcut.
-- `precision-report` consolidates centroid, generated-image, QA, subject-review, and backend-comparison evidence into a review bundle.
+- `precision-report` consolidates centroid, mean/median vector audit metadata, generated-image, QA, subject-review, and backend-comparison evidence into a review bundle.
 - `run-pipeline` executes JSON-configured build/evaluate/review/backend-comparison/precision steps and records a pipeline run manifest.
 - `configs/pipelines/full-retinaface-review.example.json` captures the current full review path with deterministic continuity plus `deepface-retinaface` backend rank agreement.
 
@@ -90,4 +90,5 @@ Create and track these issues:
 - Full v7 `retinaface` audit accepted refs `221/259` and generated images `5/6`, best image `candidate_0005_seed_260704`, best score `0.574721`; it improved on DeepFace/OpenCV's `139/259` refs while keeping Spearman `0.800000` vs OpenCV over 5 common generated images.
 - `deepface-retinaface` is now registered as a normal backend, so backend comparison and model/evaluation runs can use the audited DeepFace RetinaFace path directly.
 - Registered-backend smoke check completed on `data/raw/seju_official_sample` vs `outputs/generated_detector_v5`: `deepface-retinaface` refs `2/2`, generated images `1/1`, best image `candidate_0001_seed_260623`, best score `0.293422`.
+- `precision-report` vector audit smoke completed on `outputs/seju_model_official`: model images `259`, mean/median embedding shapes `[1073]`, both L2 norms `1.0`, mean SHA-256 prefix `bc562e5703aa`, median SHA-256 prefix `0b9b938d2460`.
 - Full committed workflow notes are in `docs/gpu-generation-log.md`.

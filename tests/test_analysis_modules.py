@@ -188,13 +188,19 @@ class AnalysisModuleTests(unittest.TestCase):
             generation.mkdir()
             subjects.mkdir()
             backend_comparison.mkdir()
-            (model / "centroids.npz").write_bytes(b"placeholder")
+            np.savez_compressed(
+                model / "centroids.npz",
+                mean_embedding=np.asarray([0.6, 0.8], dtype=np.float32),
+                median_embedding=np.asarray([1.0, 0.0], dtype=np.float32),
+                mean_appearance=np.zeros((2, 2, 1), dtype=np.float32),
+                median_appearance=np.ones((2, 2, 1), dtype=np.float32),
+            )
             (model / "profile.json").write_text(
                 json.dumps(
                     {
                         "image_count": 3,
-                        "embedding_dim": 1073,
-                        "appearance_shape": [64, 64, 3],
+                        "embedding_dim": 2,
+                        "appearance_shape": [2, 2, 1],
                         "descriptors": {
                             "mean": {"brightness": 0.5},
                             "median": {"brightness": 0.6},
@@ -270,6 +276,9 @@ class AnalysisModuleTests(unittest.TestCase):
             )
 
             self.assertEqual(report["model"]["image_count"], 3)
+            self.assertEqual(report["model"]["centroid_vectors"]["mean_embedding"]["shape"], [2])
+            self.assertEqual(report["model"]["centroid_vectors"]["mean_embedding"]["l2_norm"], 1.0)
+            self.assertEqual(len(report["model"]["centroid_vectors"]["mean_embedding"]["sha256"]), 64)
             self.assertEqual(report["generation"]["best_centroid_score"], 0.45)
             self.assertEqual(report["generation"]["qa_pass_count"], 1)
             self.assertEqual(report["subjects"]["top_subject"], "near_subject")
@@ -279,6 +288,10 @@ class AnalysisModuleTests(unittest.TestCase):
             self.assertTrue((out / "precision_report.json").exists())
             self.assertIn(
                 "Backend Comparison",
+                (out / "precision_report.md").read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                "mean_embedding_sha256",
                 (out / "precision_report.md").read_text(encoding="utf-8"),
             )
 
@@ -327,6 +340,31 @@ class AnalysisModuleTests(unittest.TestCase):
 
             self.assertEqual(report["generation"]["best_centroid_score"], 0.33)
             self.assertEqual(report["generation"]["best_image_id"], "candidate_centroid")
+
+    def test_precision_report_handles_malformed_centroid_npz(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            model = root / "model"
+            out = root / "precision"
+            model.mkdir()
+            (model / "centroids.npz").write_bytes(b"PK\x03\x04broken")
+            (model / "profile.json").write_text(
+                json.dumps(
+                    {
+                        "image_count": 1,
+                        "embedding_dim": 2,
+                        "appearance_shape": [1, 1, 1],
+                        "descriptors": {"mean": {}, "median": {}},
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            report = write_precision_report(model_dir=model, out_dir=out)
+
+        self.assertTrue(report["model"]["has_centroid_vectors"])
+        self.assertFalse(report["model"]["centroid_vectors"]["available"])
+        self.assertEqual(report["model"]["centroid_vectors"]["error"], "unreadable centroids.npz")
 
     def test_precision_report_keeps_combined_winner_separate_from_centroid_winner(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

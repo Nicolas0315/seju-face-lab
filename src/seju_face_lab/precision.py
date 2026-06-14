@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
+import zipfile
+
+import numpy as np
 
 
 def write_precision_report(
@@ -68,19 +72,56 @@ def build_precision_report(
 
 def _model_summary(model_dir: Path, profile: dict[str, Any]) -> dict[str, Any]:
     descriptors = profile.get("descriptors", {})
+    centroid_path = model_dir / "centroids.npz"
     return {
         "model_dir": str(model_dir),
         "image_count": profile.get("image_count"),
         "embedding_dim": profile.get("embedding_dim"),
         "appearance_shape": profile.get("appearance_shape"),
-        "has_centroid_vectors": (model_dir / "centroids.npz").exists(),
+        "has_centroid_vectors": centroid_path.exists(),
+        "centroid_vectors": _centroid_vector_summary(centroid_path),
         "mean_descriptor": descriptors.get("mean", {}),
         "median_descriptor": descriptors.get("median", {}),
         "reference_outputs": {
             "mean_face": str(model_dir / "mean_face.png"),
             "median_face": str(model_dir / "median_face.png"),
-            "centroid_vectors": str(model_dir / "centroids.npz"),
+            "centroid_vectors": str(centroid_path),
         },
+    }
+
+
+def _centroid_vector_summary(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {"available": False}
+    if not zipfile.is_zipfile(path):
+        return {"available": False, "error": "unreadable centroids.npz"}
+    try:
+        with np.load(path, allow_pickle=False) as data:
+            return {
+                "available": True,
+                "mean_embedding": _array_summary(data, "mean_embedding"),
+                "median_embedding": _array_summary(data, "median_embedding"),
+                "mean_appearance": _array_summary(data, "mean_appearance"),
+                "median_appearance": _array_summary(data, "median_appearance"),
+            }
+    except (OSError, ValueError, zipfile.BadZipFile):
+        return {"available": False, "error": "unreadable centroids.npz"}
+
+
+def _array_summary(data: np.lib.npyio.NpzFile, key: str) -> dict[str, Any]:
+    if key not in data:
+        return {"available": False}
+    array = np.asarray(data[key], dtype=np.float32)
+    flat = array.reshape(-1)
+    preview = [round(float(value), 6) for value in flat[:8]]
+    digest = hashlib.sha256(np.ascontiguousarray(array).tobytes()).hexdigest()
+    return {
+        "available": True,
+        "shape": [int(value) for value in array.shape],
+        "dtype": str(array.dtype),
+        "l2_norm": round(float(np.linalg.norm(flat)), 6),
+        "sha256": digest,
+        "preview": preview,
     }
 
 
@@ -179,6 +220,10 @@ def _render_precision_report(report: dict[str, Any]) -> str:
         f"- has_centroid_vectors: {model['has_centroid_vectors']}",
         f"- mean_face: {model['reference_outputs']['mean_face']}",
         f"- median_face: {model['reference_outputs']['median_face']}",
+        f"- mean_embedding_norm: {_value(_vector_field(model, 'mean_embedding', 'l2_norm'))}",
+        f"- median_embedding_norm: {_value(_vector_field(model, 'median_embedding', 'l2_norm'))}",
+        f"- mean_embedding_sha256: {_value(_vector_field(model, 'mean_embedding', 'sha256'))}",
+        f"- median_embedding_sha256: {_value(_vector_field(model, 'median_embedding', 'sha256'))}",
         "",
         "## Generated Image Review",
         "",
@@ -299,3 +344,13 @@ def _value(value: Any) -> str:
     if value is None:
         return ""
     return str(value)
+
+
+def _vector_field(model: dict[str, Any], vector_name: str, field: str) -> Any:
+    vectors = model.get("centroid_vectors")
+    if not isinstance(vectors, dict):
+        return None
+    summary = vectors.get(vector_name)
+    if not isinstance(summary, dict):
+        return None
+    return summary.get(field)
