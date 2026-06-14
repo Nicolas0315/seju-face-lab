@@ -65,6 +65,7 @@ class PipelineTests(unittest.TestCase):
             scores = (eval_dir / "scores.csv").read_text(encoding="utf-8-sig")
             self.assertIn("candidate", scores)
             self.assertIn("centroid_score", scores)
+            self.assertTrue((eval_dir / "summary.json").exists())
 
     def test_backends_command_lists_planned_backends(self) -> None:
         self.assertEqual(main(["backends"]), 0)

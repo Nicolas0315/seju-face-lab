@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from pathlib import Path
 
 import numpy as np
@@ -54,6 +55,10 @@ def write_scores(scores: list[Score], out_dir: Path) -> None:
         )
     (out_dir / "scores.csv").write_text("\n".join(csv_lines) + "\n", encoding="utf-8-sig")
     (out_dir / "evaluation.md").write_text(_render_scores(scores), encoding="utf-8")
+    (out_dir / "summary.json").write_text(
+        json.dumps(_score_summary(scores), ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
 
 
 def _score_vector(model: CentroidModel, vector: ImageVector) -> Score:
@@ -100,6 +105,38 @@ def _render_scores(scores: list[Score]) -> str:
         ]
     )
     return "\n".join(lines)
+
+
+def _score_summary(scores: list[Score]) -> dict:
+    if not scores:
+        return {
+            "image_count": 0,
+            "best_image_id": None,
+            "best_centroid_score": None,
+            "mean_centroid_score": None,
+            "median_centroid_score": None,
+            "top_images": [],
+        }
+    centroid_scores = np.asarray([score.centroid_score for score in scores], dtype=np.float32)
+    best = scores[0]
+    return {
+        "image_count": len(scores),
+        "best_image_id": best.image_id,
+        "best_centroid_score": round(float(best.centroid_score), 6),
+        "mean_centroid_score": round(float(np.mean(centroid_scores)), 6),
+        "median_centroid_score": round(float(np.median(centroid_scores)), 6),
+        "top_images": [
+            {
+                "image_id": score.image_id,
+                "path": score.path,
+                "centroid_score": round(float(score.centroid_score), 6),
+                "cosine_to_mean": round(float(score.cosine_to_mean), 6),
+                "cosine_to_median": round(float(score.cosine_to_median), 6),
+            }
+            for score in scores[:5]
+        ],
+        "boundary": "Approximate vector similarity for this local centroid model only.",
+    }
 
 
 def _csv(value: str) -> str:
