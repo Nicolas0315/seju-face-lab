@@ -7,6 +7,10 @@
   "review_out": "outputs/generated_detector/review",
   "subjects": "data/subjects",
   "subject_review_out": "outputs/subject_reviews",
+  "backend_comparison": {
+    "out": "outputs/backend_compare",
+    "backends": ["deterministic", "opencv-face", "insightface", "deepface"]
+  },
   "precision_out": "outputs/precision_report",
   "vector_backend": "deterministic",
   "crop": "center",

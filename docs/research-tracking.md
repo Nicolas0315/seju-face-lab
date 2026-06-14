@@ -22,8 +22,8 @@ Retrieval/design date: 2026-06-14.
 - `compare-runs` now reads `quality/` outputs and reports QA-gated best centroid scores.
 - `review-generated` runs generated-image evaluation, QA, and one-run comparison as the standard precision-review shortcut.
 - `generate --review` now chains real Diffusers generation into the same generated-image review shortcut.
-- `precision-report` consolidates centroid, generated-image, QA, and subject-review evidence into a review bundle.
-- `run-pipeline` executes JSON-configured build/evaluate/review/precision steps and records a pipeline run manifest.
+- `precision-report` consolidates centroid, generated-image, QA, subject-review, and backend-comparison evidence into a review bundle.
+- `run-pipeline` executes JSON-configured build/evaluate/review/backend-comparison/precision steps and records a pipeline run manifest.
 
 ## GitHub Issue Plan
 
@@ -57,7 +57,7 @@ Create and track these issues:
 8. Run `style-evaluate` so generated candidates have both face-geometry and style-axis scores.
 9. Run `qa-images` or `review-generated` before visual review so collages/extreme crops do not win on score alone.
 10. Rank evaluated generated batches with `compare-runs`, including QA-gated and combined face/style scores when available.
-11. Write a `precision-report` for the model, best generation review, QA, and subject-review outputs.
+11. Write a `precision-report` for the model, best generation review, QA, subject-review, and backend-comparison outputs.
 12. Use `run-pipeline` for repeatable local build/evaluate/review/precision runs from config.
 13. Run SNS handle/engagement manifests and `analyze correlation` for reviewable metric joins.
 14. Run `backend-diagnostics` on each RTX node and archive the ignored output path in the Issue comment.

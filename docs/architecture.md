@@ -39,9 +39,9 @@ Retrieval/design date: 2026-06-14.
    - convenience command that runs `evaluate`, `qa-images`, and one-run `compare-runs` for a generated directory
    - also used by `generate --review` so generated batches can be scored immediately
 10. `precision-report`
-   - consolidates centroid metadata, generated-image review, QA, and subject-review summaries for tracking
+   - consolidates centroid metadata, generated-image review, QA, subject-review, and backend-comparison summaries for tracking
 11. `run-pipeline`
-   - executes configured build, generation, evaluation, review, and precision-report steps from JSON
+   - executes configured build, generation, evaluation, review, backend comparison, and precision-report steps from JSON
    - writes `pipeline_run.json` and `pipeline_run.md` as the orchestration trace
 12. `review-subjects`
    - per-person image folders are ranked against the local seju centroid
@@ -71,6 +71,8 @@ python -m seju_face_lab compare-backends --reference-images data/raw/seju_offici
 
 `backend-diagnostics` records dependency/provider visibility. `compare-backends` builds a separate
 centroid per backend and compares same-image rankings, avoiding cross-backend embedding averaging.
+Pass the comparison output into `precision-report --backend-comparison` or set
+`backend_comparison.out` in a pipeline config so final precision bundles include backend agreement.
 
 ## Subject Review Contract
 

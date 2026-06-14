@@ -121,11 +121,11 @@ python -m seju_face_lab review-generated --model outputs/seju_model --images out
 
 This writes `evaluation/`, `quality/`, and a one-run `generation_run_reviews.*` report.
 
-Summarize the centroid model, generated-image precision review, QA gate, and optional
-subject-review evidence into one reviewable bundle:
+Summarize the centroid model, generated-image precision review, QA gate, optional
+subject-review evidence, and backend agreement into one reviewable bundle:
 
 ```powershell
-python -m seju_face_lab precision-report --model outputs/seju_model --generation-review outputs/generated_detector/review --subject-review outputs/subject_reviews --out outputs/precision_report
+python -m seju_face_lab precision-report --model outputs/seju_model --generation-review outputs/generated_detector/review --subject-review outputs/subject_reviews --backend-comparison outputs/backend_compare --out outputs/precision_report
 ```
 
 This writes `precision_report.json` and `precision_report.md`.
@@ -136,7 +136,7 @@ Run a reproducible local pipeline from a JSON config:
 python -m seju_face_lab run-pipeline --config configs/pipelines/full-local-review.example.json --out outputs/local_pipeline_run
 ```
 
-The runner executes configured build/evaluate/review/precision steps and writes
+The runner executes configured build/evaluate/review/backend-comparison/precision steps and writes
 `pipeline_run.json` plus `pipeline_run.md`.
 
 Review other public-figure or celebrity image sets by folder:
@@ -282,8 +282,8 @@ See `docs/gpu-generation-log.md` for RTX 4090 generation smoke results.
 - evaluation `scores.csv`: similarity of candidate generated images to the centroid vectors.
 - evaluation `summary.json`: best/mean/median generated-image similarity for quick comparisons.
 - generated review `generation_run_reviews.csv`: one-command generated-image evaluation + QA + run review via `review-generated`, or directly after Diffusers generation with `generate --review`.
-- precision report `precision_report.json`: model centroid, generation review, QA, and subject-review summary via `precision-report`.
-- pipeline run `pipeline_run.json`: configured build/evaluate/review/precision orchestration via `run-pipeline`.
+- precision report `precision_report.json`: model centroid, generation review, QA, subject-review, and backend-comparison summary via `precision-report`.
+- pipeline run `pipeline_run.json`: configured build/evaluate/review/backend-comparison/precision orchestration via `run-pipeline`.
 - backend diagnostics `backend_diagnostics.json`: optional dependency, CUDA, and provider visibility for neural backends.
 - backend comparison `backend_comparison.json`: per-backend model/evaluation outputs and same-image rank agreement.
 - style evaluation `style_scores.csv`: OpenCLIP image-style similarity to mean/median renderings.
