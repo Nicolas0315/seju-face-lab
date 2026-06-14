@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import shutil
 
 import numpy as np
 
@@ -556,6 +557,7 @@ def _run_pipeline(args: argparse.Namespace) -> int:
         "build": _run_pipeline_build,
         "generate": _run_pipeline_generate,
         "evaluate": _run_pipeline_evaluate,
+        "style-evaluate": _run_pipeline_style_evaluate,
         "review-generated": _run_pipeline_review_generated,
         "review-subjects": _run_pipeline_review_subjects,
         "compare-backends": _run_pipeline_compare_backends,
@@ -616,6 +618,24 @@ def _run_pipeline_evaluate(config: dict) -> int:
         str(config.get("crop", "center")),
         str(config.get("evaluation_backend", config.get("vector_backend", "deterministic"))),
     )
+
+
+def _run_pipeline_style_evaluate(config: dict) -> int:
+    style = _pipeline_style_evaluation_config(config)
+    generated_images = _pipeline_generated_images(config)
+    out = Path(style["out"])
+    result = _style_evaluate(
+        argparse.Namespace(
+            model=_pipeline_model(config),
+            images=Path(style.get("images") or generated_images),
+            out=out,
+            clip_model=str(style.get("clip_model", "ViT-B-32")),
+            pretrained=str(style.get("pretrained", "laion2b_s34b_b79k")),
+            device=str(style.get("device", "auto")),
+        )
+    )
+    _mirror_style_output_for_review(out, generated_images)
+    return result
 
 
 def _run_pipeline_review_generated(config: dict) -> int:
@@ -706,6 +726,31 @@ def _pipeline_generation_review_out(config: dict) -> Path | None:
     if generation.get("review"):
         return _pipeline_generated_images(config) / "run_review"
     return None
+
+
+def _pipeline_style_evaluation_config(config: dict) -> dict:
+    style = config.get("style_evaluation")
+    if isinstance(style, dict):
+        merged = dict(style)
+        if "out" not in merged and config.get("style_evaluation_out"):
+            merged["out"] = config["style_evaluation_out"]
+        if "out" not in merged:
+            merged["out"] = str(_pipeline_generated_images(config) / "style_evaluation")
+        return merged
+    if config.get("style_evaluation_out"):
+        return {"out": config["style_evaluation_out"]}
+    return {}
+
+
+def _mirror_style_output_for_review(out: Path, generated_images: Path) -> None:
+    review_style_dir = generated_images / "style_evaluation"
+    if out.resolve() == review_style_dir.resolve():
+        return
+    review_style_dir.mkdir(parents=True, exist_ok=True)
+    for name in ("style_scores.csv", "style_summary.json", "style_evaluation.md"):
+        source = out / name
+        if source.exists():
+            shutil.copy2(source, review_style_dir / name)
 
 
 def _pipeline_model(config: dict) -> Path:

@@ -41,7 +41,7 @@ Retrieval/design date: 2026-06-14.
 10. `precision-report`
    - consolidates centroid metadata, generated-image review, QA, subject-review, backend-comparison, and subject-backend-comparison summaries for tracking
 11. `run-pipeline`
-   - executes configured build, generation, evaluation, review, backend comparison, subject backend comparison, and precision-report steps from JSON
+   - executes configured build, generation, evaluation, style evaluation, review, backend comparison, subject backend comparison, and precision-report steps from JSON
    - writes `pipeline_run.json` and `pipeline_run.md` as the orchestration trace
 12. `review-subjects`
    - per-person image folders are ranked against the local seju centroid

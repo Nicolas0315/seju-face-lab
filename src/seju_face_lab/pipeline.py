@@ -62,6 +62,10 @@ def build_pipeline_plan(config: dict[str, Any], config_path: Path) -> PipelinePl
     if model_out and generated_images and evaluation_out:
         steps.append(PipelineStep("evaluate", "planned", str(evaluation_out)))
 
+    style_evaluation = _style_evaluation_config(config, generated_images)
+    if model_out and generated_images and style_evaluation:
+        steps.append(PipelineStep("style-evaluate", "planned", str(style_evaluation["out"])))
+
     review_out = _path_value(config, "review_out")
     if model_out and generated_images and review_out:
         steps.append(PipelineStep("review-generated", "planned", str(review_out)))
@@ -146,6 +150,22 @@ def _subject_review_config(config: dict[str, Any]) -> dict[str, Path] | None:
     if not subjects or not out or not model:
         return None
     return {"subjects": subjects, "out": out, "model": model}
+
+
+def _style_evaluation_config(
+    config: dict[str, Any],
+    generated_images: Path | None,
+) -> dict[str, Path] | None:
+    style = config.get("style_evaluation")
+    out = None
+    if isinstance(style, dict):
+        out = _path_value(style, "out")
+    out = out or _path_value(config, "style_evaluation_out")
+    if out is None and isinstance(style, dict) and generated_images:
+        out = generated_images / "style_evaluation"
+    if not out:
+        return None
+    return {"out": out}
 
 
 def _backend_comparison_config(config: dict[str, Any]) -> dict[str, Path] | None:

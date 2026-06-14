@@ -25,7 +25,7 @@ Retrieval/design date: 2026-06-14.
 - `review-generated` runs generated-image evaluation, QA, and one-run comparison as the standard precision-review shortcut.
 - `generate --review` now chains real Diffusers generation into the same generated-image review shortcut.
 - `precision-report` consolidates centroid, mean/median vector audit metadata, generated-image mean/median score components, QA, subject-review, backend-comparison, and subject-backend-comparison evidence into a review bundle.
-- `run-pipeline` executes JSON-configured build/evaluate/review/backend-comparison/subject-backend-comparison/precision steps and records a pipeline run manifest.
+- `run-pipeline` executes JSON-configured build/evaluate/style-evaluate/review/backend-comparison/subject-backend-comparison/precision steps and records a pipeline run manifest.
 - `configs/pipelines/full-retinaface-review.example.json` captures the current full review path with deterministic continuity plus `deepface-retinaface` backend rank agreement.
 - `worker-diagnostics` records local RTX 4090 and optional SSH remote-GPU Python/CUDA/torch/package readiness without remote writes.
 
@@ -62,7 +62,7 @@ Create and track these issues:
 9. Run `qa-images` or `review-generated` before visual review so collages/extreme crops do not win on score alone.
 10. Rank evaluated generated batches with `compare-runs`, including QA-gated and combined face/style scores when available.
 11. Write a `precision-report` for the model, best generation review, QA, subject-review, backend-comparison, and subject-backend-comparison outputs.
-12. Use `run-pipeline` for repeatable local build/evaluate/review/backend-agreement/precision runs from config.
+12. Use `run-pipeline` for repeatable local build/evaluate/style-evaluate/review/backend-agreement/precision runs from config.
 13. Run SNS handle/engagement manifests and `analyze correlation` for reviewable metric joins.
 14. Run `backend-diagnostics` and `worker-diagnostics --include-remote` on RTX nodes and archive the ignored output paths in the Issue comment.
 15. Compare deterministic scores against InsightFace/DeepFace on the same ignored image sets with `compare-backends`.

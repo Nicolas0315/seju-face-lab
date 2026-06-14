@@ -347,6 +347,8 @@ class PipelineTests(unittest.TestCase):
             subjects = root / "subjects"
             model_dir = root / "model"
             eval_dir = root / "evaluation"
+            style_eval_dir = root / "style_eval_custom"
+            review_dir = generated / "review"
             subject_review_dir = root / "subject_review"
             backend_compare_dir = root / "backend_compare"
             subject_backend_compare_dir = root / "subject_backend_compare"
@@ -368,6 +370,11 @@ class PipelineTests(unittest.TestCase):
                         "model_out": str(model_dir),
                         "generated_images": str(generated),
                         "evaluation_out": str(eval_dir),
+                        "style_evaluation": {
+                            "out": str(style_eval_dir),
+                            "device": "cpu",
+                        },
+                        "review_out": str(review_dir),
                         "subjects": str(subjects),
                         "subject_review_out": str(subject_review_dir),
                         "backend_comparison": {
@@ -385,18 +392,21 @@ class PipelineTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            self.assertEqual(
-                main(["run-pipeline", "--config", str(config_path), "--out", str(pipeline_dir)]),
-                0,
-            )
+            with patch("seju_face_lab.cli.OpenClipStyleBackend", return_value=_FakeStyleBackend()):
+                self.assertEqual(
+                    main(["run-pipeline", "--config", str(config_path), "--out", str(pipeline_dir)]),
+                    0,
+                )
 
             pipeline_run = json.loads((pipeline_dir / "pipeline_run.json").read_text(encoding="utf-8"))
-            self.assertEqual([step["status"] for step in pipeline_run["steps"]], ["completed"] * 6)
+            self.assertEqual([step["status"] for step in pipeline_run["steps"]], ["completed"] * 8)
             self.assertEqual(
                 [step["name"] for step in pipeline_run["steps"]],
                 [
                     "build",
                     "evaluate",
+                    "style-evaluate",
+                    "review-generated",
                     "review-subjects",
                     "compare-backends",
                     "compare-subject-backends",
@@ -405,6 +415,9 @@ class PipelineTests(unittest.TestCase):
             )
             self.assertTrue((model_dir / "centroids.npz").exists())
             self.assertTrue((eval_dir / "summary.json").exists())
+            self.assertTrue((style_eval_dir / "style_summary.json").exists())
+            self.assertTrue((generated / "style_evaluation" / "style_summary.json").exists())
+            self.assertTrue((review_dir / "generation_run_reviews.json").exists())
             self.assertTrue((subject_review_dir / "subject_reviews.json").exists())
             self.assertTrue((backend_compare_dir / "backend_comparison.json").exists())
             self.assertTrue((subject_backend_compare_dir / "subject_backend_comparison.json").exists())
@@ -413,6 +426,8 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(precision["subjects"]["top_subject"], "near_subject")
             self.assertEqual(precision["backend_comparison"]["completed_backends"], ["deterministic"])
             self.assertEqual(precision["subject_backend_comparison"]["completed_backends"], ["deterministic"])
+            self.assertIsNotNone(precision["generation"]["best_style_score"])
+            self.assertIsNotNone(precision["generation"]["best_combined_score"])
 
     def test_run_pipeline_uses_nested_generation_output_for_evaluation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
