@@ -5,6 +5,7 @@ import unittest
 from dataclasses import replace
 from datetime import date
 from pathlib import Path
+from unittest.mock import patch
 
 import bootstrap  # noqa: F401
 from seju_face_lab.sources import (
@@ -178,6 +179,48 @@ class SourceParsingTests(unittest.TestCase):
             )
             self.assertEqual(second_run[0].status, "skipped")
             self.assertEqual(fetched.count(second.image_url), 1)
+
+    def test_download_source_images_caches_robots_per_origin(self) -> None:
+        class FakeRobotParser:
+            reads = 0
+
+            def set_url(self, _url: str) -> None:
+                pass
+
+            def read(self) -> None:
+                type(self).reads += 1
+
+            def can_fetch(self, _agent: str, _url: str) -> bool:
+                return True
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            first = SourceCandidate(
+                profile_url="https://seju.tokyo/talents/example/",
+                talent_slug="example",
+                name="Example",
+                birthdate="2000-01-01",
+                age_as_of=24,
+                image_url="https://seju.tokyo/wp-content/uploads/example_01.jpg",
+                image_kind="img",
+                alt=None,
+                eligible_for_analysis=True,
+                exclusion_reason=None,
+                retrieved_at=date(2026, 6, 14).isoformat(),
+                source_policy="manifest_only_review_before_download",
+            )
+            second = replace(first, image_url="https://seju.tokyo/wp-content/uploads/example_02.jpg")
+            with patch(
+                "seju_face_lab.sources.urllib.robotparser.RobotFileParser",
+                side_effect=FakeRobotParser,
+            ):
+                results = download_source_images(
+                    [first, second],
+                    root / "robots-cache",
+                    fetch_bytes=lambda _url: (b"fake-jpeg-bytes", "image/jpeg"),
+                )
+            self.assertEqual([result.status for result in results], ["downloaded", "downloaded"])
+            self.assertEqual(FakeRobotParser.reads, 1)
 
     def test_quote_url_preserves_ascii_and_encodes_japanese_path(self) -> None:
         quoted = _quote_url("https://seju.tokyo/wp-content/uploads/2023/07/秋葉聡さん撮影.jpg")

@@ -195,7 +195,8 @@ def download_source_images(
         selected = selected[:max_count]
 
     fetcher = _ThrottledFetcher(user_agent=user_agent, delay_seconds=delay_seconds)
-    robots_check = check_robots or _assert_robots_allowed
+    robots_cache = _RobotsPolicyCache()
+    robots_check = check_robots or robots_cache.assert_allowed
     results: list[DownloadResult] = []
     for candidate in selected:
         target = out_dir / _download_filename(candidate)
@@ -315,14 +316,30 @@ def _eligibility(age: int | None, min_age: int, include_under_min_age: bool) -> 
 
 
 def _assert_robots_allowed(url: str, user_agent: str) -> None:
-    parsed = urllib.parse.urlparse(url)
-    robots_url = urllib.parse.urlunparse((parsed.scheme, parsed.netloc, "/robots.txt", "", "", ""))
-    parser = urllib.robotparser.RobotFileParser()
-    parser.set_url(robots_url)
-    parser.read()
-    if not parser.can_fetch(user_agent, url):
-        raise PermissionError(f"robots.txt disallows fetch: {url}")
+    _RobotsPolicyCache().assert_allowed(url, user_agent)
 
+
+class _RobotsPolicyCache:
+    def __init__(self) -> None:
+        self._parsers: dict[tuple[str, str], urllib.robotparser.RobotFileParser] = {}
+
+    def assert_allowed(self, url: str, user_agent: str) -> None:
+        parsed = urllib.parse.urlparse(url)
+        key = (parsed.scheme, parsed.netloc)
+        parser = self._parsers.get(key)
+        if parser is None:
+            parser = self._read_parser(parsed)
+            self._parsers[key] = parser
+        if not parser.can_fetch(user_agent, url):
+            raise PermissionError(f"robots.txt disallows fetch: {url}")
+
+    @staticmethod
+    def _read_parser(parsed: urllib.parse.ParseResult) -> urllib.robotparser.RobotFileParser:
+        robots_url = urllib.parse.urlunparse((parsed.scheme, parsed.netloc, "/robots.txt", "", "", ""))
+        parser = urllib.robotparser.RobotFileParser()
+        parser.set_url(robots_url)
+        parser.read()
+        return parser
 
 def _age_on_date(birthdate: date, as_of_date: date) -> int:
     years = as_of_date.year - birthdate.year
