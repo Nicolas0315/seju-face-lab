@@ -55,7 +55,7 @@ def build_generation_config(
     return GenerationConfig(
         provider=provider,
         model_id=model_id,
-        prompt=prompt_override or manifest["prompt"],
+        prompt=prompt_override if prompt_override is not None else manifest["prompt"],
         negative_prompt=(
             negative_prompt_override
             if negative_prompt_override is not None

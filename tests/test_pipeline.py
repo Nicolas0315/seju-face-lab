@@ -94,6 +94,8 @@ class PipelineTests(unittest.TestCase):
                         "2",
                         "--seed",
                         "42",
+                        "--prompt",
+                        "",
                         "--negative-prompt",
                         "copied identity",
                     ]
@@ -104,6 +106,7 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(generation_run["result"]["status"], "planned")
             self.assertEqual(generation_run["config"]["provider"], "dry-run")
             self.assertEqual(generation_run["config"]["count"], 2)
+            self.assertEqual(generation_run["config"]["prompt"], "")
             self.assertEqual(generation_run["config"]["variant"], "fp16")
             self.assertEqual(generation_run["config"]["negative_prompt"], "copied identity")
             self.assertIn("evaluate", generation_run["result"]["evaluation_command"])
