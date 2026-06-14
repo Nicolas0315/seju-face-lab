@@ -17,6 +17,8 @@ Run date: 2026-06-15.
 - Generated small GPU batches from `generation_manifest.json`.
 - Evaluated generated candidates with `seju_face_lab evaluate`.
 - Compared evaluated local batches with `seju_face_lab compare-runs`.
+- Built and evaluated an optional OpenCV face-crop centroid model as a detector-visible face QA gate.
+- Added dependency-gated InsightFace backend code for later RTX neural embedding verification.
 - Confirmed generated images, manifests, and scores stay ignored under `outputs/`.
 - Confirmed the shortened default prompt avoids CLIP prompt truncation in the smoke run.
 
@@ -31,5 +33,7 @@ Run date: 2026-06-15.
 ## Next Steps
 
 - Run larger ignored GPU batches and keep only summarized findings in committed docs.
-- Add InsightFace or DeepFace scoring before treating deterministic scores as face-geometry quality.
+- Add a generation prompt/profile pass that improves OpenCV detector-visible frontal faces.
+- Fix ONNXRuntime CUDA DLL availability for InsightFace; current sample build/evaluate succeeds through CPU fallback.
+- Add full-set InsightFace or DeepFace scoring before treating deterministic scores as face-geometry quality.
 - Compare deterministic, neural face-embedding, and visual-review rankings before closing the generation-loop issue.

@@ -11,6 +11,7 @@ It can:
 - write generation prompts from centroid descriptors
 - score generated images against the mean/median vectors
 - review per-person image folders against the seju centroid
+- extract SNS handles/engagement manifests and correlate them with face-score outputs
 
 The current implementation is intentionally local and dependency-light: Python + `numpy` + `Pillow`. It does not identify people, infer identity, or claim that the result is a universal definition of "seju face"; it only summarizes the images you provide.
 
@@ -44,6 +45,7 @@ outputs/seju_model/median_face.png
 outputs/seju_model/prompt.txt
 outputs/seju_model/generation_manifest.json
 outputs/seju_model/report.md
+outputs/seju_model/vectors/image_vector_failures.json  # only when some images fail
 ```
 
 After generating candidate images with any image generator, place them in `outputs/generated/` and evaluate:
@@ -59,6 +61,8 @@ python -m seju_face_lab evaluate --model outputs/seju_model --images outputs/gen
 python -m seju_face_lab evaluate --model outputs/seju_model --images outputs/generated_b --out outputs/generated_b/evaluation
 python -m seju_face_lab compare-runs --runs outputs/generated_a outputs/generated_b --out outputs/run_reviews
 ```
+
+`compare-runs` also accepts evaluation output directories that contain `summary.json`.
 
 Plan a reproducible generation batch without downloading or running a model:
 
@@ -124,6 +128,31 @@ python -m seju_face_lab sources download --manifest data/processed/seju_sources.
 
 Use `--dry-run` first to inspect planned local file names without downloading.
 
+To reorganize downloaded official images into per-talent folders for subject review:
+
+```powershell
+python scripts/organize_by_talent.py --src data/raw/seju_official --dst data/raw/seju_by_talent --dry-run
+```
+
+SNS handle and public engagement collection are separate, reviewable manifests:
+
+```powershell
+python -m seju_face_lab sources scrape-handles --manifest data/processed/seju_sources.jsonl --out data/processed/sns_handles.jsonl
+python -m seju_face_lab sources fetch-engagement --handles data/processed/sns_handles.jsonl --out data/processed/sns_engagement.jsonl --platforms instagram tiktok
+```
+
+The SNS fetchers are best-effort public-page readers. Treat blocked/partial rows as expected data quality signals.
+
+## Correlation Analysis
+
+After running `review-subjects`, join those face scores to SNS engagement:
+
+```powershell
+python -m seju_face_lab analyze correlation --face-scores outputs/subject_reviews/subject_reviews.json --engagement data/processed/sns_engagement.jsonl --out outputs/correlation
+```
+
+This writes `correlation_dataset.csv`, `correlations.csv`, `correlation_report.md`, and `correlation_summary.json`.
+
 ## Analysis Backends
 
 ```powershell
@@ -133,11 +162,19 @@ python -m seju_face_lab backends
 Implemented now:
 
 - `deterministic`: no neural dependency, good for local smoke tests and rough visual centroids
+- `opencv-face`: optional `.[vision]` backend for OpenCV face crop normalization
+- `insightface`: optional `.[face]` backend; shown as ready only when `insightface` and `onnxruntime-gpu` are installed
+
+Use the OpenCV face-crop backend after installing the optional vision dependencies:
+
+```powershell
+python -m pip install -e ".[vision]"
+python -m seju_face_lab build --images data/raw --out outputs/seju_model_facecrop --backend opencv-face
+python -m seju_face_lab evaluate --model outputs/seju_model_facecrop --images outputs/generated --out outputs/evaluation_facecrop --backend opencv-face
+```
 
 Designed next:
 
-- `opencv-face`: face crop/QA normalization
-- `insightface`: GPU face embeddings on RTX machines
 - `deepface`: OSS face-model cross-checking and QA
 - `clip-style`: secondary style similarity scoring
 - `diffusion-generation`: Diffusers/ComfyUI candidate generation loop

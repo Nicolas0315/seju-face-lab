@@ -27,12 +27,16 @@ Retrieval/design date: 2026-06-14.
 6. `review-subjects`
    - per-person image folders are ranked against the local seju centroid
    - output is CSV, Markdown, and JSON for review and tracking
+7. SNS and correlation analysis
+   - `sources scrape-handles` writes reviewed SNS handle manifests
+   - `sources fetch-engagement` writes best-effort public engagement manifests
+   - `analyze correlation` joins `subject_reviews.json` to SNS metrics
 
 ## Backends
 
 - `deterministic`: implemented. Uses local image statistics and needs only `numpy` + `Pillow`.
-- `opencv-face`: planned. Face-box normalization and QA using `opencv-python`.
-- `insightface`: planned. Face embedding adapter with `insightface` + `onnxruntime-gpu`.
+- `opencv-face`: implemented optional `vision` extra. Uses OpenCV Haar face boxes before deterministic vectors.
+- `insightface`: implemented dependency-gated adapter with `insightface` + `onnxruntime-gpu`; listed as planned when optional dependencies are absent.
 - `deepface`: planned. OSS face-model adapter for cross-checking and dataset QA.
 - `clip-style`: planned. Secondary style similarity with `open-clip-torch`.
 - `diffusion-generation`: planned. Diffusers/ComfyUI generation loop for prompt batches.
@@ -63,6 +67,7 @@ identity recognition, attractiveness scoring, ethnicity classification, or an ob
 - Use `insightface` or `deepface` for face-embedding cross-checks after deterministic results are stable.
 - Use Diffusers or ComfyUI to generate candidates from `generation_manifest.json`, then score them with `evaluate`.
 - Keep generated-image prompts aggregate-only; avoid copying a specific real person.
+- `seju_face_lab.workers` contains local/SSH worker helpers; treat remote writes as explicit ops steps, not default CLI behavior.
 
 Dry-run planning:
 
@@ -81,6 +86,7 @@ python -m seju_face_lab generate --model outputs/seju_model --out outputs/genera
 - `configs/`: reproducible source and pipeline configuration.
 - `data/raw/`: reviewed local reference images, ignored.
 - `data/processed/`: manifests and intermediate derived data, ignored.
+- `data/processed/sns_*.jsonl`: SNS handles/engagement manifests, ignored.
 - `docs/`: design notes, retrieval evidence, and runbooks.
 - `outputs/`: centroid models, prompts, generated images, evaluations, ignored.
 - `src/seju_face_lab/`: package code.
