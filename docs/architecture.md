@@ -62,6 +62,16 @@ Retrieval/design date: 2026-06-14.
 
 Keep geometry and style axes separate. A generated image can match the style prompt while missing face geometry, so evaluation should report neural face-embedding scores and style scores separately.
 
+Backend diagnostics and comparison:
+
+```powershell
+python -m seju_face_lab backend-diagnostics --out outputs/backend_diagnostics
+python -m seju_face_lab compare-backends --reference-images data/raw/seju_official --images outputs/generated_detector --out outputs/backend_compare --backends deterministic opencv-face insightface deepface
+```
+
+`backend-diagnostics` records dependency/provider visibility. `compare-backends` builds a separate
+centroid per backend and compares same-image rankings, avoiding cross-backend embedding averaging.
+
 ## Subject Review Contract
 
 Store reviewed comparison images under:

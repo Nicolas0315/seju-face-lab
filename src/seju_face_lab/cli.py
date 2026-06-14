@@ -7,6 +7,8 @@ from pathlib import Path
 import numpy as np
 
 from .backends import backend_help, get_vector_backend
+from .backend_compare import compare_vector_backends
+from .backend_diagnostics import write_backend_diagnostics
 from .embeddings import iter_image_paths, render_appearance
 from .generation import build_generation_config, run_diffusers_generation, write_generation_plan
 from .metrics import review_subject_directories, score_generated_images, write_scores, write_subject_reviews
@@ -150,6 +152,22 @@ def main(argv: list[str] | None = None) -> int:
 
     subparsers.add_parser("backends", help="list available vector backend plans")
 
+    backend_diag_parser = subparsers.add_parser(
+        "backend-diagnostics",
+        help="write dependency and GPU/provider diagnostics for optional backends",
+    )
+    backend_diag_parser.add_argument("--out", type=Path, required=True)
+
+    compare_backends_parser = subparsers.add_parser(
+        "compare-backends",
+        help="build/evaluate multiple vector backends on the same local image sets",
+    )
+    compare_backends_parser.add_argument("--reference-images", type=Path, required=True)
+    compare_backends_parser.add_argument("--images", type=Path, required=True)
+    compare_backends_parser.add_argument("--out", type=Path, required=True)
+    compare_backends_parser.add_argument("--backends", nargs="+", default=["deterministic", "opencv-face"])
+    compare_backends_parser.add_argument("--crop", choices=["center", "none"], default="center")
+
     source_parsers = subparsers.add_parser("sources", help="discover and audit web source candidates")
     source_subparsers = source_parsers.add_subparsers(dest="sources_command", required=True)
     discover_parser = source_subparsers.add_parser("discover", help="write seju profile image URL manifest")
@@ -265,6 +283,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "backends":
         print(backend_help())
         return 0
+    if args.command == "backend-diagnostics":
+        return _backend_diagnostics(args.out)
+    if args.command == "compare-backends":
+        return _compare_backends(args)
     if args.command == "sources" and args.sources_command == "discover":
         return _sources_discover(args)
     if args.command == "sources" and args.sources_command == "download":
@@ -616,6 +638,32 @@ def _review_subjects(model_dir: Path, subjects: Path, out: Path, crop: str, back
     print(f"reviewed subjects: {len(reviews)}")
     print(f"reviews: {out / 'subject_reviews.csv'}")
     return 0
+
+
+def _backend_diagnostics(out: Path) -> int:
+    report = write_backend_diagnostics(out)
+    implemented = sum(1 for backend in report["backends"] if backend["implemented"])
+    cuda_available = report["runtime"]["torch"]["cuda_available"]
+    print(f"backend diagnostics: {out / 'backend_diagnostics.md'}")
+    print(f"implemented backends: {implemented}")
+    print(f"torch cuda available: {cuda_available}")
+    return 0
+
+
+def _compare_backends(args: argparse.Namespace) -> int:
+    report = compare_vector_backends(
+        reference_images=args.reference_images,
+        images=args.images,
+        out_dir=args.out,
+        backend_names=args.backends,
+        crop=args.crop,
+    )
+    completed = sum(1 for run in report["runs"] if run["status"] == "completed")
+    failed = sum(1 for run in report["runs"] if run["status"] == "failed")
+    print(f"backend comparison: {args.out / 'backend_comparison.md'}")
+    print(f"completed backends: {completed}")
+    print(f"failed backends: {failed}")
+    return 1 if completed == 0 else 0
 
 
 def _sources_discover(args: argparse.Namespace) -> int:

@@ -10,6 +10,8 @@ Retrieval/design date: 2026-06-14.
 - OpenCV face-crop normalization is implemented as optional backend `opencv-face`.
 - InsightFace adapter code is dependency-gated and reports ready only when `insightface` and `onnxruntime-gpu` are installed.
 - DeepFace adapter code is dependency-gated and uses `DeepFace.represent` for neural cross-checking.
+- `backend-diagnostics` records optional dependency, CUDA, and ONNXRuntime provider visibility.
+- `compare-backends` builds/evaluates multiple vector backends on the same local image sets and reports rank agreement.
 - Per-subject similarity review is implemented through `review-subjects`.
 - SNS handle/engagement manifests and face-score correlation reports are implemented.
 - OpenCLIP style-axis scoring is implemented through `style-evaluate`.
@@ -27,11 +29,11 @@ Retrieval/design date: 2026-06-14.
 
 Create and track these issues:
 
-- `P1 GPU face embeddings`: install and verify InsightFace/ONNXRuntime-GPU on RTX machines.
+- `P1 GPU face embeddings`: install and verify InsightFace/ONNXRuntime-GPU on RTX machines, then record `backend-diagnostics`.
 - `P1 Celebrity subject review workflow`: collect reviewed subject folders and run `review-subjects`.
 - `P1 Generation loop`: connect `generation_manifest.json` to Diffusers or ComfyUI batches.
 - `P1 SNS correlation workflow`: run handle extraction, engagement manifesting, and correlation reports.
-- `P2 DeepFace adapter`: verify optional DeepFace install on local GPU/CPU and compare embeddings against InsightFace/deterministic scores.
+- `P2 DeepFace adapter`: verify optional DeepFace install on local GPU/CPU and compare embeddings with `compare-backends`.
 - `P2 CLIP style axis`: verify optional OpenCLIP install and use `style-evaluate` alongside face geometry scores.
 - `P2 Remote worker playbook`: document RTX 4090 and RTX 5060 Ti split-run commands.
 
@@ -58,7 +60,8 @@ Create and track these issues:
 11. Write a `precision-report` for the model, best generation review, QA, and subject-review outputs.
 12. Use `run-pipeline` for repeatable local build/evaluate/review/precision runs from config.
 13. Run SNS handle/engagement manifests and `analyze correlation` for reviewable metric joins.
-14. Compare deterministic scores against InsightFace/DeepFace on the same ignored image sets.
+14. Run `backend-diagnostics` on each RTX node and archive the ignored output path in the Issue comment.
+15. Compare deterministic scores against InsightFace/DeepFace on the same ignored image sets with `compare-backends`.
 
 ## GPU Generation Notes
 
@@ -69,4 +72,5 @@ Create and track these issues:
 - The current committed route is detector-friendly generation, then `review-generated` or deterministic/OpenCV evaluation + `qa-images` + `compare-runs` with QA-gated ranking before any visual interpretation.
 - InsightFace sample build/evaluate succeeded on `data/raw/seju_official_sample` with 2 usable images and 512D embeddings.
 - Current ONNXRuntime reports CUDA provider availability, but InsightFace execution fell back to CPU because `cublasLt64_12.dll` is missing.
+- `compare-backends` is now the committed review path for checking whether deterministic/OpenCV and neural embeddings rank the same generated or subject images.
 - Full committed workflow notes are in `docs/gpu-generation-log.md`.

@@ -226,6 +226,7 @@ This writes `correlation_dataset.csv`, `correlations.csv`, `correlation_report.m
 
 ```powershell
 python -m seju_face_lab backends
+python -m seju_face_lab backend-diagnostics --out outputs/backend_diagnostics
 ```
 
 Implemented now:
@@ -252,6 +253,16 @@ python -m seju_face_lab build --images data/raw --out outputs/seju_model_deepfac
 python -m seju_face_lab evaluate --model outputs/seju_model_deepface --images outputs/generated --out outputs/evaluation_deepface --backend deepface
 ```
 
+Compare multiple backend rankings on the same local reference and target image sets:
+
+```powershell
+python -m seju_face_lab compare-backends --reference-images data/raw/seju_official --images outputs/generated_detector --out outputs/backend_compare --backends deterministic opencv-face insightface deepface
+```
+
+This writes one model/evaluation folder per backend plus `backend_comparison.json` and
+`backend_comparison.md`. Score scales are backend-specific; use the rank-agreement section to
+review whether deterministic, face-crop, InsightFace, and DeepFace choose the same candidates.
+
 Designed next:
 
 - `diffusion-generation`: Diffusers/ComfyUI candidate generation loop
@@ -273,6 +284,8 @@ See `docs/gpu-generation-log.md` for RTX 4090 generation smoke results.
 - generated review `generation_run_reviews.csv`: one-command generated-image evaluation + QA + run review via `review-generated`, or directly after Diffusers generation with `generate --review`.
 - precision report `precision_report.json`: model centroid, generation review, QA, and subject-review summary via `precision-report`.
 - pipeline run `pipeline_run.json`: configured build/evaluate/review/precision orchestration via `run-pipeline`.
+- backend diagnostics `backend_diagnostics.json`: optional dependency, CUDA, and provider visibility for neural backends.
+- backend comparison `backend_comparison.json`: per-backend model/evaluation outputs and same-image rank agreement.
 - style evaluation `style_scores.csv`: OpenCLIP image-style similarity to mean/median renderings.
 - style evaluation `style_summary.json`: best/mean/median style-axis scores.
 - image quality `image_quality.csv`: OpenCV single-face QA for generated candidates.

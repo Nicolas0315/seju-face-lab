@@ -503,6 +503,57 @@ class PipelineTests(unittest.TestCase):
     def test_backends_command_lists_planned_backends(self) -> None:
         self.assertEqual(main(["backends"]), 0)
 
+    def test_backend_diagnostics_writes_report(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "diagnostics"
+
+            self.assertEqual(main(["backend-diagnostics", "--out", str(out)]), 0)
+
+            report = json.loads((out / "backend_diagnostics.json").read_text(encoding="utf-8"))
+            self.assertIn("backends", report)
+            self.assertIn("runtime", report)
+            self.assertTrue((out / "backend_diagnostics.md").exists())
+            self.assertIn("insightface", {item["name"] for item in report["backends"]})
+
+    def test_compare_backends_writes_rank_agreement(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "raw"
+            generated = root / "generated"
+            out = root / "backend_compare"
+            raw.mkdir()
+            generated.mkdir()
+            _write_face_like_image(raw / "a.png", (235, 205, 190), eye_offset=0)
+            _write_face_like_image(raw / "b.png", (225, 198, 184), eye_offset=2)
+            _write_face_like_image(generated / "candidate_a.png", (232, 202, 188), eye_offset=1)
+            _write_face_like_image(generated / "candidate_b.png", (170, 145, 130), eye_offset=7)
+
+            with patch("seju_face_lab.backends._import_cv2", return_value=_FakeCV2()):
+                self.assertEqual(
+                    main(
+                        [
+                            "compare-backends",
+                            "--reference-images",
+                            str(raw),
+                            "--images",
+                            str(generated),
+                            "--out",
+                            str(out),
+                            "--backends",
+                            "deterministic",
+                            "opencv-face",
+                        ]
+                    ),
+                    0,
+                )
+
+            report = json.loads((out / "backend_comparison.json").read_text(encoding="utf-8"))
+            self.assertEqual([run["status"] for run in report["runs"]], ["completed", "completed"])
+            self.assertEqual(len(report["rank_agreement"]), 1)
+            self.assertEqual(report["rank_agreement"][0]["common_image_count"], 2)
+            self.assertTrue((out / "deterministic" / "evaluation" / "scores.csv").exists())
+            self.assertTrue((out / "opencv-face" / "model" / "centroids.npz").exists())
+
     def test_review_subjects_reports_missing_directory(self) -> None:
         with self.assertRaisesRegex(SystemExit, "No subject directory found"):
             main(
