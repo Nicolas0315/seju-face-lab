@@ -18,6 +18,7 @@ Retrieval/design date: 2026-06-14.
 - `generate --prompt-profile detector-friendly` records detector-oriented prompt settings for frontal, unobscured candidate batches.
 - `qa-images` flags generated candidates that are collages, extreme crops, off-center faces, or missing a frontal OpenCV face.
 - `compare-runs` now reads `quality/` outputs and reports QA-gated best centroid scores.
+- `review-generated` runs generated-image evaluation, QA, and one-run comparison as the standard precision-review shortcut.
 
 ## GitHub Issue Plan
 
@@ -47,10 +48,10 @@ Create and track these issues:
 4. Run the same review with InsightFace or DeepFace once optional dependencies are installed.
 5. Plan aggregate candidate faces with `generate --provider dry-run`.
 6. For detector-visible scoring batches, use `generate --prompt-profile detector-friendly`.
-7. Generate with Diffusers/ComfyUI on a GPU worker and score with `evaluate`.
+7. Generate with Diffusers/ComfyUI on a GPU worker and score with `review-generated`.
 8. Run `style-evaluate` so generated candidates have both face-geometry and style-axis scores.
-9. Run `qa-images` before visual review so collages/extreme crops do not win on score alone.
-10. Rank evaluated generated batches with `compare-runs`, including combined face/style scores when available.
+9. Run `qa-images` or `review-generated` before visual review so collages/extreme crops do not win on score alone.
+10. Rank evaluated generated batches with `compare-runs`, including QA-gated and combined face/style scores when available.
 11. Run SNS handle/engagement manifests and `analyze correlation` for reviewable metric joins.
 12. Compare deterministic scores against InsightFace/DeepFace on the same ignored image sets.
 
@@ -60,7 +61,7 @@ Create and track these issues:
 - Small generated batches were evaluated locally; generated images and per-run scores remain ignored under `outputs/`.
 - OpenCV face-crop build succeeded on the local official image set with 173 usable face crops from 259 source images.
 - Detector-friendly RTX 4090 v2 produced one QA-passing candidate out of two; v3/v4 showed why QA is needed by producing extreme crops, off-center faces, and collages.
-- The current committed route is detector-friendly generation, deterministic/OpenCV evaluation, `qa-images`, then `compare-runs` with QA-gated ranking before any visual interpretation.
+- The current committed route is detector-friendly generation, then `review-generated` or deterministic/OpenCV evaluation + `qa-images` + `compare-runs` with QA-gated ranking before any visual interpretation.
 - InsightFace sample build/evaluate succeeded on `data/raw/seju_official_sample` with 2 usable images and 512D embeddings.
 - Current ONNXRuntime reports CUDA provider availability, but InsightFace execution fell back to CPU because `cublasLt64_12.dll` is missing.
 - Full committed workflow notes are in `docs/gpu-generation-log.md`.

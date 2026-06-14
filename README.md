@@ -106,6 +106,14 @@ python -m seju_face_lab qa-images --images outputs/generated_detector --out outp
 This writes `image_quality.csv`, `image_quality.md`, and `image_quality.json`. A candidate passes only
 when OpenCV sees one centered frontal face with a usable crop size.
 
+Or run the standard generated-image review in one command:
+
+```powershell
+python -m seju_face_lab review-generated --model outputs/seju_model --images outputs/generated_detector --out outputs/generated_detector/review
+```
+
+This writes `evaluation/`, `quality/`, and a one-run `generation_run_reviews.*` report.
+
 Review other public-figure or celebrity image sets by folder:
 
 ```text
@@ -237,6 +245,7 @@ See `docs/gpu-generation-log.md` for RTX 4090 generation smoke results.
 - generation `prompt_profile`: `balanced` by default, or `detector-friendly` for frontal, unobscured candidate batches.
 - evaluation `scores.csv`: similarity of candidate generated images to the centroid vectors.
 - evaluation `summary.json`: best/mean/median generated-image similarity for quick comparisons.
+- generated review `generation_run_reviews.csv`: one-command generated-image evaluation + QA + run review via `review-generated`.
 - style evaluation `style_scores.csv`: OpenCLIP image-style similarity to mean/median renderings.
 - style evaluation `style_summary.json`: best/mean/median style-axis scores.
 - image quality `image_quality.csv`: OpenCV single-face QA for generated candidates.

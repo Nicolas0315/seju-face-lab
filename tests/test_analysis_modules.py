@@ -67,6 +67,36 @@ class AnalysisModuleTests(unittest.TestCase):
             summary = json.loads((out / "image_quality.json").read_text(encoding="utf-8"))
             self.assertEqual(summary["pass_count"], 1)
 
+    def test_cli_review_generated_runs_evaluation_quality_and_compare(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            model = root / "model"
+            images = root / "generated"
+            out = root / "review"
+            images.mkdir()
+
+            with patch("seju_face_lab.cli._evaluate") as evaluate:
+                with patch("seju_face_lab.cli._qa_images") as qa_images:
+                    with patch("seju_face_lab.cli._compare_runs") as compare_runs:
+                        self.assertEqual(
+                            main(
+                                [
+                                    "review-generated",
+                                    "--model",
+                                    str(model),
+                                    "--images",
+                                    str(images),
+                                    "--out",
+                                    str(out),
+                                ]
+                            ),
+                            0,
+                        )
+
+            evaluate.assert_called_once_with(model, images, images / "evaluation", "center", "deterministic")
+            qa_images.assert_called_once_with(images, images / "quality")
+            compare_runs.assert_called_once_with([images], out)
+
     def test_image_quality_records_per_file_failures(self) -> None:
         with patch("seju_face_lab.quality._import_cv2", return_value=object()):
             with patch(

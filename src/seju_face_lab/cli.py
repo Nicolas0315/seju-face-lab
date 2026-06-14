@@ -104,6 +104,16 @@ def main(argv: list[str] | None = None) -> int:
     qa_parser.add_argument("--images", type=Path, required=True)
     qa_parser.add_argument("--out", type=Path, required=True)
 
+    review_generated_parser = subparsers.add_parser(
+        "review-generated",
+        help="run evaluate, QA, and one-run comparison for a generated image directory",
+    )
+    review_generated_parser.add_argument("--model", type=Path, required=True)
+    review_generated_parser.add_argument("--images", type=Path, required=True)
+    review_generated_parser.add_argument("--out", type=Path, default=None)
+    review_generated_parser.add_argument("--crop", choices=["center", "none"], default="center")
+    review_generated_parser.add_argument("--backend", default="deterministic")
+
     review_parser = subparsers.add_parser(
         "review-subjects",
         help="rank per-person image folders against a seju centroid model",
@@ -220,6 +230,8 @@ def main(argv: list[str] | None = None) -> int:
         return _compare_runs(args.runs, args.out)
     if args.command == "qa-images":
         return _qa_images(args.images, args.out)
+    if args.command == "review-generated":
+        return _review_generated(args)
     if args.command == "review-subjects":
         return _review_subjects(args.model, args.subjects, args.out, args.crop, args.backend)
     if args.command == "backends":
@@ -392,6 +404,17 @@ def _qa_images(images: Path, out: Path) -> int:
     print(f"reviewed images: {len(reviews)}")
     print(f"qa pass: {pass_count}")
     print(f"qa report: {out / 'image_quality.csv'}")
+    return 0
+
+
+def _review_generated(args: argparse.Namespace) -> int:
+    review_out = args.out or (args.images / "run_review")
+    evaluation_out = args.images / "evaluation"
+    quality_out = args.images / "quality"
+    _evaluate(args.model, args.images, evaluation_out, args.crop, args.backend)
+    _qa_images(args.images, quality_out)
+    _compare_runs([args.images], review_out)
+    print(f"generated review: {review_out / 'generation_run_reviews.csv'}")
     return 0
 
 

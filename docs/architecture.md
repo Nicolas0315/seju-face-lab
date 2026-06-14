@@ -34,10 +34,12 @@ Retrieval/design date: 2026-06-14.
 8. `compare-runs`
    - generation batches are ranked by QA-gated face score when quality outputs are present
    - otherwise batches are ranked by face score, or by best per-image combined face/style score when style outputs are present
-9. `review-subjects`
+9. `review-generated`
+   - convenience command that runs `evaluate`, `qa-images`, and one-run `compare-runs` for a generated directory
+10. `review-subjects`
    - per-person image folders are ranked against the local seju centroid
    - output is CSV, Markdown, and JSON for review and tracking
-10. SNS and correlation analysis
+11. SNS and correlation analysis
    - `sources scrape-handles` writes reviewed SNS handle manifests
    - `sources fetch-engagement` writes best-effort public engagement manifests
    - `analyze correlation` joins `subject_reviews.json` to SNS metrics
@@ -102,6 +104,12 @@ Generated-image QA:
 
 ```powershell
 python -m seju_face_lab qa-images --images outputs/generated_detector --out outputs/generated_detector/quality
+```
+
+One-command generated-image review:
+
+```powershell
+python -m seju_face_lab review-generated --model outputs/seju_model --images outputs/generated_detector --out outputs/generated_detector/review
 ```
 
 Style-axis evaluation:

@@ -44,6 +44,7 @@ Observed local results:
 - v4 v2-style prompt plus stronger collage negatives: deterministic `image_count=2`, OpenCV `image_count=1`, QA pass `0/2`; failures were 4-face collage and no detected frontal face.
 - v5 compact detector-friendly negative prompt: no CLIP token-length warning, deterministic best `0.168881`, OpenCV best `0.487359`, QA pass `1/1`.
 - QA-gated `compare-runs` over v2-v5 still ranks v2 first: deterministic QA best `0.363268`; OpenCV QA best `0.641401`.
+- `review-generated` on v5 reproduced the standard generated-image review in one command: deterministic `image_count=1`, QA pass `1/1`, one-run review best QA score `0.168881`.
 
 Current best local candidate for review remains:
 
@@ -69,7 +70,7 @@ python -m seju_face_lab generate --model outputs/seju_model_official --out outpu
 ## Next Steps
 
 - Run larger ignored GPU batches and keep only summarized findings in committed docs.
-- Run larger detector-friendly batches, then score with deterministic/OpenCV/InsightFace or DeepFace where available and filter with `qa-images`.
+- Run larger detector-friendly batches, then score with `review-generated` plus OpenCV/InsightFace or DeepFace where available.
 - Fix ONNXRuntime CUDA DLL availability for InsightFace; current sample build/evaluate succeeds through CPU fallback.
 - Add full-set InsightFace or DeepFace scoring before treating deterministic scores as face-geometry quality.
 - Compare deterministic, neural face-embedding, and visual-review rankings before closing the generation-loop issue.
