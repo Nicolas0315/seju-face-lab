@@ -103,6 +103,20 @@ class PipelineTests(unittest.TestCase):
     def test_backends_command_lists_planned_backends(self) -> None:
         self.assertEqual(main(["backends"]), 0)
 
+    def test_review_subjects_reports_missing_directory(self) -> None:
+        with self.assertRaisesRegex(SystemExit, "No subject directory found"):
+            main(
+                [
+                    "review-subjects",
+                    "--model",
+                    "unused",
+                    "--subjects",
+                    "missing-subjects",
+                    "--out",
+                    "unused",
+                ]
+            )
+
     def test_sources_download_returns_nonzero_on_failed_rows(self) -> None:
         failed = DownloadResult(
             profile_url="https://seju.tokyo/talents/example/",

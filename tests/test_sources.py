@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+import urllib.error
 from dataclasses import replace
 from datetime import date
 from pathlib import Path
@@ -10,6 +11,7 @@ from unittest.mock import patch
 import bootstrap  # noqa: F401
 from seju_face_lab.sources import (
     SourceCandidate,
+    _RobotsPolicyCache,
     _is_supported_content_type,
     _quote_url,
     download_source_images,
@@ -219,6 +221,18 @@ class SourceParsingTests(unittest.TestCase):
                 )
             self.assertEqual([result.status for result in results], ["downloaded", "downloaded"])
             self.assertEqual(FakeRobotsResponse.reads, 1)
+
+    def test_robots_policy_cache_caches_fetch_failures(self) -> None:
+        cache = _RobotsPolicyCache()
+        with patch(
+            "seju_face_lab.sources.urllib.request.urlopen",
+            side_effect=urllib.error.URLError("offline"),
+        ) as urlopen:
+            with self.assertRaises(PermissionError):
+                cache.assert_allowed("https://example.com/a.jpg", "test-agent")
+            with self.assertRaises(PermissionError):
+                cache.assert_allowed("https://example.com/b.jpg", "test-agent")
+        self.assertEqual(urlopen.call_count, 1)
 
     def test_quote_url_preserves_ascii_and_encodes_japanese_path(self) -> None:
         quoted = _quote_url("https://seju.tokyo/wp-content/uploads/2023/07/秋葉聡さん撮影.jpg")

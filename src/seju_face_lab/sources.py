@@ -61,7 +61,8 @@ def discover_sources(
 ) -> list[SourceCandidate]:
     as_of_date = date.fromisoformat(as_of) if as_of else date.today()
     fetcher = _ThrottledFetcher(user_agent=user_agent, delay_seconds=delay_seconds)
-    _assert_robots_allowed(index_url, user_agent)
+    robots_cache = _RobotsPolicyCache()
+    robots_cache.assert_allowed(index_url, user_agent)
     index_html = fetcher.fetch_text(index_url)
     profile_urls = parse_talent_links(index_html, index_url)
     if max_profiles is not None:
@@ -81,6 +82,7 @@ def discover_sources(
                     include_under_min_age,
                     retrieved_at,
                     user_agent,
+                    robots_cache.assert_allowed,
                 )
             )
     else:
@@ -95,6 +97,7 @@ def discover_sources(
                     include_under_min_age,
                     retrieved_at,
                     user_agent,
+                    robots_cache.assert_allowed,
                 ): profile_url
                 for profile_url in profile_urls
             }
@@ -281,8 +284,9 @@ def _discover_profile(
     include_under_min_age: bool,
     retrieved_at: str,
     user_agent: str,
+    check_robots: Callable[[str, str], None],
 ) -> list[SourceCandidate]:
-    _assert_robots_allowed(profile_url, user_agent)
+    check_robots(profile_url, user_agent)
     html = fetcher.fetch_text(profile_url)
     profile, images = parse_profile(html, profile_url)
     birthdate = profile["birthdate"]
@@ -323,14 +327,16 @@ def _assert_robots_allowed(url: str, user_agent: str) -> None:
 class _RobotsPolicyCache:
     def __init__(self) -> None:
         self._parsers: dict[tuple[str, str], urllib.robotparser.RobotFileParser] = {}
+        self._lock = Lock()
 
     def assert_allowed(self, url: str, user_agent: str) -> None:
         parsed = urllib.parse.urlparse(url)
         key = (parsed.scheme, parsed.netloc)
-        parser = self._parsers.get(key)
-        if parser is None:
-            parser = self._read_parser(parsed, user_agent)
-            self._parsers[key] = parser
+        with self._lock:
+            parser = self._parsers.get(key)
+            if parser is None:
+                parser = self._read_parser(parsed, user_agent)
+                self._parsers[key] = parser
         if not parser.can_fetch(user_agent, url):
             raise PermissionError(f"robots.txt disallows fetch: {url}")
 
@@ -352,10 +358,13 @@ class _RobotsPolicyCache:
             elif 400 <= exc.code < 500:
                 parser.allow_all = True
             else:
-                raise
+                parser.disallow_all = True
+        except (OSError, TimeoutError, urllib.error.URLError):
+            parser.disallow_all = True
         else:
             parser.parse(raw.decode("utf-8", "surrogateescape").splitlines())
         return parser
+
 
 def _age_on_date(birthdate: date, as_of_date: date) -> int:
     years = as_of_date.year - birthdate.year

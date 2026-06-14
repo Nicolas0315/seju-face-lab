@@ -174,6 +174,8 @@ def _evaluate(model_dir: Path, images: Path, out: Path, crop: str, backend_name:
 
 
 def _review_subjects(model_dir: Path, subjects: Path, out: Path, crop: str, backend_name: str) -> int:
+    if not subjects.is_dir():
+        raise SystemExit(f"No subject directory found: {subjects}")
     model = load_model(model_dir)
     backend = get_vector_backend(backend_name)
     reviews = review_subject_directories(model, subjects, crop=crop, backend=backend)
