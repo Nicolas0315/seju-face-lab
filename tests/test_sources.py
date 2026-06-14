@@ -42,6 +42,16 @@ class SourceParsingTests(unittest.TestCase):
         self.assertEqual(len(images), 2)
         self.assertTrue(all("wp-content/uploads" in image[0] for image in images))
 
+    def test_parse_profile_falls_back_to_body_text_birthdate(self) -> None:
+        html = """
+        <title>Example | seju</title>
+        <meta name="description" content="Example Profile" />
+        <main><p>Profile</p><p>2000年1月2日・東京都</p></main>
+        <meta property="og:image" content="https://seju.tokyo/wp-content/uploads/example.jpg" />
+        """
+        profile, _images = parse_profile(html, "https://seju.tokyo/talents/example/")
+        self.assertEqual(profile["birthdate"], "2000-01-02")
+
     def test_write_source_manifest_outputs_jsonl_and_audit(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / "sources.jsonl"

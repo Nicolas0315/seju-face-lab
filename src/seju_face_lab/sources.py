@@ -116,8 +116,12 @@ def parse_profile(html: str, profile_url: str) -> tuple[dict[str, str | None], l
 
     title = parser.meta.get("og:title") or parser.title
     name = _clean_name(title)
-    description = parser.meta.get("description") or parser.meta.get("og:description") or " ".join(parser.text)
-    birthdate = _extract_birthdate(description)
+    text_candidates = [
+        parser.meta.get("description"),
+        parser.meta.get("og:description"),
+        " ".join(parser.text),
+    ]
+    birthdate = _extract_first_birthdate(value for value in text_candidates if value)
 
     images: list[tuple[str, str, str | None]] = []
     for key in ("og:image", "twitter:image"):
@@ -216,6 +220,14 @@ def _extract_birthdate(text: str) -> str | None:
         return None
     year, month, day = (int(group) for group in match.groups())
     return date(year, month, day).isoformat()
+
+
+def _extract_first_birthdate(texts: Iterable[str]) -> str | None:
+    for text in texts:
+        birthdate = _extract_birthdate(text)
+        if birthdate:
+            return birthdate
+    return None
 
 
 def _clean_name(title: str | None) -> str | None:
