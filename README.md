@@ -89,6 +89,12 @@ Run a Diffusers batch after installing a CUDA-enabled PyTorch build and `.[gener
 python -m seju_face_lab generate --model outputs/seju_model --out outputs/generated --provider diffusers --hf-model runwayml/stable-diffusion-v1-5 --count 8 --negative-prompt "copied identity"
 ```
 
+For batches meant to pass face detectors before scoring, use the detector-friendly prompt profile:
+
+```powershell
+python -m seju_face_lab generate --model outputs/seju_model --out outputs/generated_detector --provider diffusers --prompt-profile detector-friendly --count 8
+```
+
 Review other public-figure or celebrity image sets by folder:
 
 ```text
@@ -217,6 +223,7 @@ See `docs/gpu-generation-log.md` for RTX 4090 generation smoke results.
 - `profile.json`: compact descriptor values and vector metadata.
 - `prompt.txt`: a generation prompt based on observed centroid descriptors.
 - generation `generation_run.json`: prompt, seed, provider, output paths, and evaluation command/argv.
+- generation `prompt_profile`: `balanced` by default, or `detector-friendly` for frontal, unobscured candidate batches.
 - evaluation `scores.csv`: similarity of candidate generated images to the centroid vectors.
 - evaluation `summary.json`: best/mean/median generated-image similarity for quick comparisons.
 - style evaluation `style_scores.csv`: OpenCLIP image-style similarity to mean/median renderings.

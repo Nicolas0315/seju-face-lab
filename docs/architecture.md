@@ -22,6 +22,7 @@ Retrieval/design date: 2026-06-14.
    - `generate --provider diffusers` runs an optional local Diffusers batch
    - `--dry-run` always records `provider: dry-run`, even if the requested provider was diffusers
    - `--variant auto` maps `--dtype float16` to the Diffusers `fp16` variant
+   - `--prompt-profile detector-friendly` steers aggregate prompts toward frontal, unobscured faces for detector/evaluation passes
 5. `evaluate`
    - generated candidates are scored against mean and median vectors
 6. `style-evaluate`
@@ -84,6 +85,12 @@ Diffusers execution:
 
 ```powershell
 python -m seju_face_lab generate --model outputs/seju_model --out outputs/generated --provider diffusers --hf-model runwayml/stable-diffusion-v1-5 --count 8 --device cuda --negative-prompt "copied identity"
+```
+
+Detector-friendly generation pass:
+
+```powershell
+python -m seju_face_lab generate --model outputs/seju_model --out outputs/generated_detector --provider diffusers --prompt-profile detector-friendly --count 8 --device cuda
 ```
 
 Style-axis evaluation:

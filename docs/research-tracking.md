@@ -15,6 +15,7 @@ Retrieval/design date: 2026-06-14.
 - OpenCLIP style-axis scoring is implemented through `style-evaluate`.
 - `compare-runs` reports style and same-image combined scores when style outputs are present.
 - Image-generation dry-run planning and local RTX 4090 Diffusers smoke runs are implemented.
+- `generate --prompt-profile detector-friendly` records detector-oriented prompt settings for frontal, unobscured candidate batches.
 
 ## GitHub Issue Plan
 
@@ -43,11 +44,12 @@ Create and track these issues:
 3. Run `review-subjects` with the deterministic and `opencv-face` backends.
 4. Run the same review with InsightFace or DeepFace once optional dependencies are installed.
 5. Plan aggregate candidate faces with `generate --provider dry-run`.
-6. Generate with Diffusers/ComfyUI on a GPU worker and score with `evaluate`.
-7. Run `style-evaluate` so generated candidates have both face-geometry and style-axis scores.
-8. Rank evaluated generated batches with `compare-runs`, including combined face/style scores when available.
-9. Run SNS handle/engagement manifests and `analyze correlation` for reviewable metric joins.
-10. Compare deterministic scores against InsightFace/DeepFace on the same ignored image sets.
+6. For detector-visible scoring batches, use `generate --prompt-profile detector-friendly`.
+7. Generate with Diffusers/ComfyUI on a GPU worker and score with `evaluate`.
+8. Run `style-evaluate` so generated candidates have both face-geometry and style-axis scores.
+9. Rank evaluated generated batches with `compare-runs`, including combined face/style scores when available.
+10. Run SNS handle/engagement manifests and `analyze correlation` for reviewable metric joins.
+11. Compare deterministic scores against InsightFace/DeepFace on the same ignored image sets.
 
 ## GPU Generation Notes
 
@@ -55,6 +57,7 @@ Create and track these issues:
 - Small generated batches were evaluated locally; generated images and per-run scores remain ignored under `outputs/`.
 - OpenCV face-crop build succeeded on the local official image set with 173 usable face crops from 259 source images.
 - Existing generated smoke candidates did not pass OpenCV face detection, so the next generation pass should optimize for detector-visible frontal faces.
+- The detector-friendly prompt profile is the committed route for that next generation pass.
 - InsightFace sample build/evaluate succeeded on `data/raw/seju_official_sample` with 2 usable images and 512D embeddings.
 - Current ONNXRuntime reports CUDA provider availability, but InsightFace execution fell back to CPU because `cublasLt64_12.dll` is missing.
 - Full committed workflow notes are in `docs/gpu-generation-log.md`.

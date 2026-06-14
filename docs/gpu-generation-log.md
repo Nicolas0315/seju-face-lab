@@ -29,11 +29,16 @@ Run date: 2026-06-15.
 - State aggregate/new-fictional-person/no-celebrity-likeness early.
 - Put quality failures such as hair-obscured face, illustration, doll/mannequin, and copied identity in the negative prompt.
 - Use `generate --prompt` for study-specific target styling instead of hard-coding traits in `prompt_from_descriptors`.
+- Use `generate --prompt-profile detector-friendly` for the next face-detector-visible scoring batch.
+
+```powershell
+python -m seju_face_lab generate --model outputs/seju_model_official --out outputs/generated_detector --provider diffusers --prompt-profile detector-friendly --count 8 --device cuda
+```
 
 ## Next Steps
 
 - Run larger ignored GPU batches and keep only summarized findings in committed docs.
-- Add a generation prompt/profile pass that improves OpenCV detector-visible frontal faces.
+- Run the detector-friendly generation pass, then score with deterministic/OpenCV/InsightFace or DeepFace where available.
 - Fix ONNXRuntime CUDA DLL availability for InsightFace; current sample build/evaluate succeeds through CPU fallback.
 - Add full-set InsightFace or DeepFace scoring before treating deterministic scores as face-geometry quality.
 - Compare deterministic, neural face-embedding, and visual-review rankings before closing the generation-loop issue.
