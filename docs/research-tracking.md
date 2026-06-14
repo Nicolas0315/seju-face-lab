@@ -26,6 +26,7 @@ Retrieval/design date: 2026-06-14.
 - `review-generated` runs generated-image evaluation, QA, and one-run comparison as the standard precision-review shortcut.
 - `generate --review` now chains real Diffusers generation into the same generated-image review shortcut.
 - `precision-report` consolidates centroid, mean/median vector audit metadata, generated-image mean/median score components, QA, subject-review, backend-comparison, and subject-backend-comparison evidence into a review bundle.
+- `audit-model` writes standalone mean/median vector hashes, norms, distance metrics, and descriptor deltas for centroid-model review.
 - `run-pipeline` executes JSON-configured build/evaluate/style-evaluate/review/backend-comparison/subject-backend-comparison/precision steps and records a pipeline run manifest.
 - `configs/pipelines/full-retinaface-review.example.json` captures the current full review path with deterministic continuity plus `deepface-retinaface` backend rank agreement.
 - `worker-diagnostics` records local RTX 4090 and optional SSH remote-GPU Python/CUDA/torch/package readiness without remote writes.

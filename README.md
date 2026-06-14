@@ -49,6 +49,12 @@ outputs/seju_model/report.md
 outputs/seju_model/vectors/image_vector_failures.json  # only when some images fail
 ```
 
+Audit mean/median centroid vectors and descriptor deltas:
+
+```powershell
+python -m seju_face_lab audit-model --model outputs/seju_model --out outputs/model_audit
+```
+
 After generating candidate images with any image generator, place them in `outputs/generated/` and evaluate:
 
 ```powershell
@@ -314,6 +320,7 @@ See `docs/gpu-generation-log.md` for RTX 4090 generation smoke results.
 - `mean_face.png`: pixel-wise mean of the normalized image crops.
 - `median_face.png`: pixel-wise median, often more robust to outliers.
 - `profile.json`: compact descriptor values and vector metadata.
+- model audit `model_audit.json`: mean/median vector hashes, norms, cosine/euclidean distance, and descriptor deltas.
 - `prompt.txt`: a generation prompt based on observed centroid descriptors.
 - generation `generation_run.json`: prompt, seed, provider, output paths, and evaluation command/argv.
 - generation `prompt_profile`: `balanced` by default, or `detector-friendly` for frontal, unobscured candidate batches.

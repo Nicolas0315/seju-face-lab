@@ -24,6 +24,7 @@ from seju_face_lab.correlation import (
     write_correlation_report,
 )
 from seju_face_lab.precision import write_precision_report
+from seju_face_lab.model_audit import write_model_audit
 from seju_face_lab.quality import ImageQuality, judge_face_quality, review_image_quality
 from seju_face_lab.run_reviews import review_generation_runs, write_generation_run_reviews
 from seju_face_lab.sns_metrics import (
@@ -375,6 +376,65 @@ class AnalysisModuleTests(unittest.TestCase):
                 "best_cosine_to_mean: 0.41",
                 (out / "precision_report.md").read_text(encoding="utf-8"),
             )
+
+    def test_model_audit_reports_mean_median_vector_distance(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            model = root / "model"
+            out = root / "audit"
+            model.mkdir()
+            np.savez(
+                model / "centroids.npz",
+                mean_embedding=np.asarray([1.0, 0.0], dtype=np.float32),
+                median_embedding=np.asarray([0.0, 1.0], dtype=np.float32),
+                mean_appearance=np.asarray([[[0.2, 0.4, 0.6]]], dtype=np.float32),
+                median_appearance=np.asarray([[[0.2, 0.4, 0.2]]], dtype=np.float32),
+            )
+            (model / "profile.json").write_text(
+                json.dumps(
+                    {
+                        "image_count": 2,
+                        "embedding_dim": 2,
+                        "appearance_shape": [1, 1, 3],
+                        "descriptors": {
+                            "mean": {"brightness": 0.7, "contrast": 0.3},
+                            "median": {"brightness": 0.5, "contrast": 0.4},
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            audit = write_model_audit(model, out)
+
+            self.assertEqual(audit["image_count"], 2)
+            self.assertEqual(audit["centroids"]["mean_median_embedding"]["cosine"], 0.0)
+            self.assertEqual(audit["centroids"]["mean_median_embedding"]["euclidean"], 1.414214)
+            self.assertEqual(audit["descriptor_delta"]["brightness"], 0.2)
+            self.assertTrue((out / "model_audit.json").exists())
+            self.assertIn(
+                "mean_median_embedding_cosine: 0.0",
+                (out / "model_audit.md").read_text(encoding="utf-8"),
+            )
+
+    def test_cli_audit_model_writes_outputs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            model = root / "model"
+            out = root / "audit"
+            model.mkdir()
+            np.savez(
+                model / "centroids.npz",
+                mean_embedding=np.asarray([1.0, 0.0], dtype=np.float32),
+                median_embedding=np.asarray([1.0, 0.0], dtype=np.float32),
+                mean_appearance=np.asarray([[[0.1, 0.1, 0.1]]], dtype=np.float32),
+                median_appearance=np.asarray([[[0.1, 0.1, 0.1]]], dtype=np.float32),
+            )
+
+            self.assertEqual(main(["audit-model", "--model", str(model), "--out", str(out)]), 0)
+
+            audit = json.loads((out / "model_audit.json").read_text(encoding="utf-8"))
+            self.assertEqual(audit["centroids"]["mean_median_embedding"]["cosine"], 1.0)
 
     def test_precision_report_keeps_centroid_only_best_image_id(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

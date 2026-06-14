@@ -14,6 +14,7 @@ from .embeddings import iter_image_paths, render_appearance
 from .generation import build_generation_config, run_diffusers_generation, write_generation_plan
 from .metrics import review_subject_directories, score_generated_images, write_scores, write_subject_reviews
 from .model import build_centroid_model, load_model, save_model
+from .model_audit import write_model_audit
 from .pipeline import run_pipeline_config
 from .prompting import prompt_from_descriptors
 from .precision import write_precision_report
@@ -81,6 +82,13 @@ def main(argv: list[str] | None = None) -> int:
     render_parser.add_argument("--model", type=Path, required=True)
     render_parser.add_argument("--kind", choices=["mean", "median"], default="median")
     render_parser.add_argument("--out", type=Path, required=True)
+
+    audit_parser = subparsers.add_parser(
+        "audit-model",
+        help="audit mean/median centroid vectors and descriptor deltas for a built model",
+    )
+    audit_parser.add_argument("--model", type=Path, required=True)
+    audit_parser.add_argument("--out", type=Path, required=True)
 
     evaluate_parser = subparsers.add_parser("evaluate", help="score generated images against centroids")
     evaluate_parser.add_argument("--model", type=Path, required=True)
@@ -335,6 +343,8 @@ def main(argv: list[str] | None = None) -> int:
         return _generate(args)
     if args.command == "render":
         return _render(args.model, args.kind, args.out)
+    if args.command == "audit-model":
+        return _audit_model(args.model, args.out)
     if args.command == "evaluate":
         return _evaluate(args.model, args.images, args.out, args.crop, args.backend)
     if args.command == "style-evaluate":
@@ -495,6 +505,16 @@ def _render(model_dir: Path, kind: str, out: Path) -> int:
     appearance = model.mean_appearance if kind == "mean" else model.median_appearance
     render_appearance(appearance, out)
     print(f"rendered: {out}")
+    return 0
+
+
+def _audit_model(model_dir: Path, out: Path) -> int:
+    audit = write_model_audit(model_dir, out)
+    centroids = audit["centroids"]
+    embedding_pair = centroids.get("mean_median_embedding", {})
+    print(f"model audit: {out / 'model_audit.md'}")
+    print(f"centroids available: {centroids.get('available', False)}")
+    print(f"mean/median embedding cosine: {embedding_pair.get('cosine')}")
     return 0
 
 
