@@ -191,12 +191,14 @@ class AnalysisModuleTests(unittest.TestCase):
             evaluation = root / "evaluation"
             subjects = root / "subject_review"
             backend_comparison = root / "backend_compare"
+            subject_backend_comparison = root / "subject_backend_compare"
             out = root / "precision"
             model.mkdir()
             generation.mkdir()
             evaluation.mkdir()
             subjects.mkdir()
             backend_comparison.mkdir()
+            subject_backend_comparison.mkdir()
             np.savez_compressed(
                 model / "centroids.npz",
                 mean_embedding=np.asarray([0.6, 0.8], dtype=np.float32),
@@ -304,6 +306,25 @@ class AnalysisModuleTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            (subject_backend_comparison / "subject_backend_comparison.json").write_text(
+                json.dumps(
+                    {
+                        "runs": [
+                            {"backend": "deterministic", "status": "completed"},
+                            {"backend": "opencv-face", "status": "completed"},
+                        ],
+                        "rank_agreement": [
+                            {
+                                "backend_a": "deterministic",
+                                "backend_b": "opencv-face",
+                                "common_subject_count": 1,
+                                "spearman_rank": None,
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
 
             report = write_precision_report(
                 model_dir=model,
@@ -312,6 +333,7 @@ class AnalysisModuleTests(unittest.TestCase):
                 evaluation=evaluation,
                 subject_review=subjects,
                 backend_comparison=backend_comparison,
+                subject_backend_comparison=subject_backend_comparison,
             )
 
             self.assertEqual(report["model"]["image_count"], 3)
@@ -328,9 +350,21 @@ class AnalysisModuleTests(unittest.TestCase):
             self.assertEqual(report["backend_comparison"]["completed_backends"], ["deterministic"])
             self.assertEqual(report["backend_comparison"]["failed_backends"], ["deepface"])
             self.assertEqual(report["backend_comparison"]["rank_agreement"][0]["spearman_rank"], 0.5)
+            self.assertEqual(
+                report["subject_backend_comparison"]["completed_backends"],
+                ["deterministic", "opencv-face"],
+            )
+            self.assertEqual(
+                report["subject_backend_comparison"]["rank_agreement"][0]["common_subject_count"],
+                1,
+            )
             self.assertTrue((out / "precision_report.json").exists())
             self.assertIn(
                 "Backend Comparison",
+                (out / "precision_report.md").read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                "Subject Backend Comparison",
                 (out / "precision_report.md").read_text(encoding="utf-8"),
             )
             self.assertIn(

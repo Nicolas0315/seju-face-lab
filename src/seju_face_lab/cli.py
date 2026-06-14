@@ -117,6 +117,7 @@ def main(argv: list[str] | None = None) -> int:
     precision_parser.add_argument("--evaluation", type=Path, default=None)
     precision_parser.add_argument("--quality", type=Path, default=None)
     precision_parser.add_argument("--backend-comparison", type=Path, default=None)
+    precision_parser.add_argument("--subject-backend-comparison", type=Path, default=None)
 
     run_pipeline_parser = subparsers.add_parser(
         "run-pipeline",
@@ -541,6 +542,7 @@ def _precision_report(args: argparse.Namespace) -> int:
         evaluation=args.evaluation,
         quality=args.quality,
         backend_comparison=args.backend_comparison,
+        subject_backend_comparison=args.subject_backend_comparison,
     )
     print(f"precision report: {args.out / 'precision_report.md'}")
     print(f"model images: {report['model']['image_count']}")
@@ -557,6 +559,7 @@ def _run_pipeline(args: argparse.Namespace) -> int:
         "review-generated": _run_pipeline_review_generated,
         "review-subjects": _run_pipeline_review_subjects,
         "compare-backends": _run_pipeline_compare_backends,
+        "compare-subject-backends": _run_pipeline_compare_subject_backends,
         "precision-report": _run_pipeline_precision_report,
     }
     plan = run_pipeline_config(args.config, args.out, handlers)
@@ -650,6 +653,19 @@ def _run_pipeline_compare_backends(config: dict) -> int:
     )
 
 
+def _run_pipeline_compare_subject_backends(config: dict) -> int:
+    comparison = _pipeline_subject_backend_comparison_config(config)
+    return _compare_subject_backends(
+        argparse.Namespace(
+            reference_images=Path(comparison.get("reference_images") or config["reference_images"]),
+            subjects=Path(comparison.get("subjects") or config["subjects"]),
+            out=Path(comparison["out"]),
+            backends=[str(name) for name in comparison.get("backends", ["deterministic", "opencv-face"])],
+            crop=str(comparison.get("crop", config.get("crop", "center"))),
+        )
+    )
+
+
 def _run_pipeline_precision_report(config: dict) -> int:
     return _precision_report(
         argparse.Namespace(
@@ -664,6 +680,7 @@ def _run_pipeline_precision_report(config: dict) -> int:
             evaluation=Path(config["evaluation_out"]) if config.get("evaluation_out") else None,
             quality=Path(config["quality_out"]) if config.get("quality_out") else None,
             backend_comparison=_pipeline_backend_comparison_out(config),
+            subject_backend_comparison=_pipeline_subject_backend_comparison_out(config),
         )
     )
 
@@ -709,6 +726,22 @@ def _pipeline_backend_comparison_config(config: dict) -> dict:
 
 def _pipeline_backend_comparison_out(config: dict) -> Path | None:
     comparison = _pipeline_backend_comparison_config(config)
+    if comparison.get("out"):
+        return Path(comparison["out"])
+    return None
+
+
+def _pipeline_subject_backend_comparison_config(config: dict) -> dict:
+    comparison = config.get("subject_backend_comparison")
+    if isinstance(comparison, dict):
+        return comparison
+    if config.get("subject_backend_comparison_out"):
+        return {"out": config["subject_backend_comparison_out"]}
+    return {}
+
+
+def _pipeline_subject_backend_comparison_out(config: dict) -> Path | None:
+    comparison = _pipeline_subject_backend_comparison_config(config)
     if comparison.get("out"):
         return Path(comparison["out"])
     return None

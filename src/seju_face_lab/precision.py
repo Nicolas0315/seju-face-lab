@@ -18,6 +18,7 @@ def write_precision_report(
     evaluation: Path | None = None,
     quality: Path | None = None,
     backend_comparison: Path | None = None,
+    subject_backend_comparison: Path | None = None,
 ) -> dict[str, Any]:
     """Write a compact review bundle for centroid, generation, QA, and subject evidence."""
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -28,6 +29,7 @@ def write_precision_report(
         evaluation=evaluation,
         quality=quality,
         backend_comparison=backend_comparison,
+        subject_backend_comparison=subject_backend_comparison,
     )
     (out_dir / "precision_report.json").write_text(
         json.dumps(report, ensure_ascii=False, indent=2),
@@ -44,6 +46,7 @@ def build_precision_report(
     evaluation: Path | None = None,
     quality: Path | None = None,
     backend_comparison: Path | None = None,
+    subject_backend_comparison: Path | None = None,
 ) -> dict[str, Any]:
     profile = _load_optional_json(model_dir / "profile.json")
     generation = _load_optional_json(_resolve_generation_review_path(generation_review))
@@ -52,6 +55,9 @@ def build_precision_report(
     evaluation_scores = _load_score_rows(_resolve_evaluation_scores_path(evaluation))
     quality_summary = _load_optional_json(_resolve_quality_path(quality))
     backend_comparison_summary = _load_optional_json(_resolve_backend_comparison_path(backend_comparison))
+    subject_backend_comparison_summary = _load_optional_json(
+        _resolve_subject_backend_comparison_path(subject_backend_comparison)
+    )
     return {
         "model": _model_summary(model_dir, profile),
         "generation": _generation_summary(
@@ -62,6 +68,7 @@ def build_precision_report(
         ),
         "subjects": _subject_summary(subjects),
         "backend_comparison": _backend_comparison_summary(backend_comparison_summary),
+        "subject_backend_comparison": _backend_comparison_summary(subject_backend_comparison_summary),
         "inputs": {
             "model_dir": str(model_dir),
             "generation_review": str(generation_review) if generation_review else None,
@@ -69,6 +76,9 @@ def build_precision_report(
             "evaluation": str(evaluation) if evaluation else None,
             "quality": str(quality) if quality else None,
             "backend_comparison": str(backend_comparison) if backend_comparison else None,
+            "subject_backend_comparison": (
+                str(subject_backend_comparison) if subject_backend_comparison else None
+            ),
         },
         "boundary": (
             "Approximate local precision review only. Scores are model-relative vector "
@@ -223,6 +233,7 @@ def _render_precision_report(report: dict[str, Any]) -> str:
     generation = report["generation"]
     subjects = report["subjects"]
     backend_comparison = report["backend_comparison"]
+    subject_backend_comparison = report["subject_backend_comparison"]
     lines = [
         "# seju-face precision report",
         "",
@@ -266,6 +277,12 @@ def _render_precision_report(report: dict[str, Any]) -> str:
         f"- run_count: {_value(backend_comparison['run_count'])}",
         f"- completed_backends: {', '.join(backend_comparison['completed_backends'])}",
         f"- failed_backends: {', '.join(backend_comparison['failed_backends'])}",
+        "",
+        "## Subject Backend Comparison",
+        "",
+        f"- run_count: {_value(subject_backend_comparison['run_count'])}",
+        f"- completed_backends: {', '.join(subject_backend_comparison['completed_backends'])}",
+        f"- failed_backends: {', '.join(subject_backend_comparison['failed_backends'])}",
     ]
     if backend_comparison["rank_agreement"]:
         lines.extend(["", "| backend_a | backend_b | common_images | spearman_rank |"])
@@ -275,6 +292,15 @@ def _render_precision_report(report: dict[str, Any]) -> str:
                 lines.append(
                     f"| {_value(row.get('backend_a'))} | {_value(row.get('backend_b'))} | "
                     f"{_value(row.get('common_image_count'))} | {_value(row.get('spearman_rank'))} |"
+                )
+    if subject_backend_comparison["rank_agreement"]:
+        lines.extend(["", "| backend_a | backend_b | common_subjects | spearman_rank |"])
+        lines.append("| --- | --- | ---: | ---: |")
+        for row in subject_backend_comparison["rank_agreement"]:
+            if isinstance(row, dict):
+                lines.append(
+                    f"| {_value(row.get('backend_a'))} | {_value(row.get('backend_b'))} | "
+                    f"{_value(row.get('common_subject_count'))} | {_value(row.get('spearman_rank'))} |"
                 )
     lines.extend(
         [
@@ -337,6 +363,14 @@ def _resolve_backend_comparison_path(path: Path | None) -> Path | None:
         return None
     if path.is_dir():
         return path / "backend_comparison.json"
+    return path
+
+
+def _resolve_subject_backend_comparison_path(path: Path | None) -> Path | None:
+    if path is None:
+        return None
+    if path.is_dir():
+        return path / "subject_backend_comparison.json"
     return path
 
 

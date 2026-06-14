@@ -74,6 +74,10 @@ def build_pipeline_plan(config: dict[str, Any], config_path: Path) -> PipelinePl
     if backend_comparison and reference_images and generated_images:
         steps.append(PipelineStep("compare-backends", "planned", str(backend_comparison["out"])))
 
+    subject_backend_comparison = _subject_backend_comparison_config(config)
+    if subject_backend_comparison and reference_images:
+        steps.append(PipelineStep("compare-subject-backends", "planned", str(subject_backend_comparison["out"])))
+
     precision_out = _path_value(config, "precision_out")
     if model_out and precision_out:
         steps.append(PipelineStep("precision-report", "planned", str(precision_out)))
@@ -153,6 +157,18 @@ def _backend_comparison_config(config: dict[str, Any]) -> dict[str, Path] | None
     if not out:
         return None
     return {"out": out}
+
+
+def _subject_backend_comparison_config(config: dict[str, Any]) -> dict[str, Path] | None:
+    comparison = config.get("subject_backend_comparison")
+    out = None
+    if isinstance(comparison, dict):
+        out = _path_value(comparison, "out")
+    out = out or _path_value(config, "subject_backend_comparison_out")
+    subjects = _path_value(config, "subjects")
+    if not out or not subjects:
+        return None
+    return {"out": out, "subjects": subjects}
 
 
 def _default_out_dir(config: dict[str, Any], config_path: Path) -> Path:
