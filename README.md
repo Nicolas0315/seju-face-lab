@@ -280,6 +280,8 @@ This writes `deepface_detector_comparison.json` and `.md`, plus per-detector mod
 folders. Use it to compare detector acceptance counts before interpreting DeepFace rank divergence.
 For long sweeps, rerun with `--reuse-existing` so completed detector folders are kept and only
 missing detector outputs are computed.
+For slow detectors, start with `--max-reference-images 50 --max-images 6`, then rerun without
+limits once the detector looks useful.
 
 Designed next:
 

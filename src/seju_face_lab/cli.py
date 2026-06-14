@@ -197,6 +197,18 @@ def main(argv: list[str] | None = None) -> int:
     compare_deepface_parser.add_argument("--model-name", default="ArcFace")
     compare_deepface_parser.add_argument("--crop", choices=["center", "none"], default="center")
     compare_deepface_parser.add_argument(
+        "--max-reference-images",
+        type=int,
+        default=None,
+        help="limit reference images for slow detector smoke audits",
+    )
+    compare_deepface_parser.add_argument(
+        "--max-images",
+        type=int,
+        default=None,
+        help="limit target images for slow detector smoke audits",
+    )
+    compare_deepface_parser.add_argument(
         "--reuse-existing",
         action="store_true",
         help="reuse completed per-detector model/evaluation outputs already present under --out",
@@ -743,6 +755,8 @@ def _compare_deepface_detectors(args: argparse.Namespace) -> int:
         model_name=args.model_name,
         crop=args.crop,
         reuse_existing=args.reuse_existing,
+        max_reference_images=args.max_reference_images,
+        max_images=args.max_images,
     )
     completed = sum(1 for run in report["runs"] if run["status"] == "completed")
     failed = sum(1 for run in report["runs"] if run["status"] == "failed")

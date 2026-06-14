@@ -75,6 +75,8 @@ centroid per backend and compares same-image rankings, avoiding cross-backend em
 `compare-deepface-detectors` keeps the DeepFace model fixed and sweeps detector backends so
 reference acceptance counts and generated-image ranks can be audited before trusting a DeepFace run.
 Use `--reuse-existing` when a long detector sweep has completed some per-detector folders already.
+Use `--max-reference-images` and `--max-images` for slow detector smoke audits before committing
+to a full reference-set run.
 Pass the comparison output into `precision-report --backend-comparison` or set
 `backend_comparison.out` in a pipeline config so final precision bundles include backend agreement.
 

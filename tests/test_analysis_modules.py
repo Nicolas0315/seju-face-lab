@@ -1354,6 +1354,30 @@ class AnalysisModuleTests(unittest.TestCase):
             self.assertEqual(report["runs"][0]["reference_count"], 1)
             self.assertEqual(report["runs"][0]["image_count"], 1)
 
+            run_config_path = out / "deepface-opencv" / "detector_run.json"
+            legacy_run_config = json.loads(run_config_path.read_text(encoding="utf-8"))
+            legacy_run_config.pop("max_reference_images")
+            legacy_run_config.pop("max_images")
+            run_config_path.write_text(json.dumps(legacy_run_config), encoding="utf-8")
+            with patch("seju_face_lab.backends._import_deepface", side_effect=AssertionError("should not run")):
+                self.assertEqual(
+                    main(
+                        [
+                            "compare-deepface-detectors",
+                            "--reference-images",
+                            str(raw),
+                            "--images",
+                            str(generated),
+                            "--out",
+                            str(out),
+                            "--detectors",
+                            "opencv",
+                            "--reuse-existing",
+                        ]
+                    ),
+                    0,
+                )
+
             with patch("seju_face_lab.backends._import_deepface", return_value=_DetectorAwareDeepFace()):
                 self.assertEqual(
                     main(
@@ -1455,6 +1479,51 @@ class AnalysisModuleTests(unittest.TestCase):
             )
             self.assertEqual(report["runs"][0]["reference_failed_count"], 0)
             self.assertEqual(failures["failed_count"], 0)
+
+    def test_compare_deepface_detectors_can_limit_slow_detector_inputs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "raw"
+            generated = root / "generated"
+            out = root / "deepface_detectors"
+            raw.mkdir()
+            generated.mkdir()
+            _write_image(raw / "a.png", (235, 205, 190))
+            _write_image(raw / "b.png", (225, 198, 184))
+            _write_image(raw / "c.png", (215, 188, 174))
+            _write_image(generated / "candidate_a.png", (232, 202, 188))
+            _write_image(generated / "candidate_b.png", (170, 145, 130))
+
+            with patch("seju_face_lab.backends._import_deepface", return_value=_DetectorAwareDeepFace()):
+                self.assertEqual(
+                    main(
+                        [
+                            "compare-deepface-detectors",
+                            "--reference-images",
+                            str(raw),
+                            "--images",
+                            str(generated),
+                            "--out",
+                            str(out),
+                            "--detectors",
+                            "retinaface",
+                            "--max-reference-images",
+                            "2",
+                            "--max-images",
+                            "1",
+                        ]
+                    ),
+                    0,
+                )
+
+            report = json.loads((out / "deepface_detector_comparison.json").read_text(encoding="utf-8"))
+            run_config = json.loads((out / "deepface-retinaface" / "detector_run.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["max_reference_images"], 2)
+            self.assertEqual(report["max_images"], 1)
+            self.assertEqual(report["runs"][0]["reference_count"], 2)
+            self.assertEqual(report["runs"][0]["image_count"], 1)
+            self.assertEqual(run_config["max_reference_images"], "2")
+            self.assertEqual(run_config["max_images"], "1")
 
     def test_distribute_vectorize_scores_only_assigned_local_paths(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -10,7 +10,7 @@ import numpy as np
 
 from . import backends
 from .embeddings import iter_image_paths
-from .metrics import Score, score_generated_images, write_scores
+from .metrics import Score, _score_vector, score_generated_images, write_scores
 from .model import build_centroid_model, save_model
 
 
@@ -70,17 +70,44 @@ def compare_deepface_detectors(
     model_name: str = "ArcFace",
     crop: str = "center",
     reuse_existing: bool = False,
+    max_reference_images: int | None = None,
+    max_images: int | None = None,
 ) -> dict[str, Any]:
     _validate_detector_names(detector_backends)
     out_dir.mkdir(parents=True, exist_ok=True)
+    reference_paths = _limited_image_paths(reference_images, max_reference_images)
+    image_paths = _limited_image_paths(images, max_images)
     runs = []
     for detector in detector_backends:
         existing = (
-            _read_existing_detector_run(out_dir, detector, reference_images, images, model_name, crop)
+            _read_existing_detector_run(
+                out_dir,
+                detector,
+                reference_images,
+                images,
+                model_name,
+                crop,
+                max_reference_images,
+                max_images,
+            )
             if reuse_existing
             else None
         )
-        runs.append(existing or _run_deepface_detector(reference_images, images, out_dir, detector, model_name, crop))
+        runs.append(
+            existing
+            or _run_deepface_detector(
+                reference_images,
+                images,
+                out_dir,
+                detector,
+                model_name,
+                crop,
+                reference_paths,
+                image_paths,
+                max_reference_images,
+                max_images,
+            )
+        )
     tables = {
         run.backend: _read_scores(Path(run.evaluation_dir) / "scores.csv")
         for run in runs
@@ -92,6 +119,8 @@ def compare_deepface_detectors(
         "crop": crop,
         "model_name": model_name,
         "detector_backends": detector_backends,
+        "max_reference_images": max_reference_images,
+        "max_images": max_images,
         "runs": [asdict(run) for run in runs],
         "rank_agreement": _rank_agreement(tables),
         "boundary": (
@@ -166,6 +195,10 @@ def _run_deepface_detector(
     detector_backend: str,
     model_name: str,
     crop: str,
+    reference_paths: list[Path],
+    image_paths: list[Path],
+    max_reference_images: int | None,
+    max_images: int | None,
 ) -> BackendRun:
     label = f"deepface-{detector_backend}"
     model_dir = out_dir / label / "model"
@@ -176,7 +209,7 @@ def _run_deepface_detector(
             detector_backend=detector_backend,
         )
         vectors, failures = [], []
-        for path in iter_image_paths(reference_images):
+        for path in reference_paths:
             try:
                 vectors.append(backend.vectorize(path, crop=crop))
             except Exception as exc:  # noqa: BLE001 - detector comparison is an acceptance audit.
@@ -192,9 +225,18 @@ def _run_deepface_detector(
         save_model(model, model_dir)
         _write_reference_failures(model_dir, failures)
         failed_paths: list[str] = []
-        scores = score_generated_images(model, images, crop=crop, backend=backend, failed_paths=failed_paths)
+        scores = _score_image_paths(model, image_paths, crop=crop, backend=backend, failed_paths=failed_paths)
         write_scores(scores, evaluation_dir, failed_paths=failed_paths)
-        _write_detector_run_config(out_dir, detector_backend, reference_images, images, model_name, crop)
+        _write_detector_run_config(
+            out_dir,
+            detector_backend,
+            reference_images,
+            images,
+            model_name,
+            crop,
+            max_reference_images,
+            max_images,
+        )
         return _completed_run(
             label, model_dir, evaluation_dir, len(vectors), len(failures), model.embedding_dim, scores, len(failed_paths)
         )
@@ -219,6 +261,8 @@ def _read_existing_detector_run(
     images: Path,
     model_name: str,
     crop: str,
+    max_reference_images: int | None,
+    max_images: int | None,
 ) -> BackendRun | None:
     label = f"deepface-{detector_backend}"
     run_dir = out_dir / label
@@ -235,7 +279,15 @@ def _read_existing_detector_run(
         summary = json.loads(summary_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return None
-    if config != _detector_run_config(detector_backend, reference_images, images, model_name, crop):
+    if _normalized_detector_run_config(config) != _detector_run_config(
+        detector_backend,
+        reference_images,
+        images,
+        model_name,
+        crop,
+        max_reference_images,
+        max_images,
+    ):
         return None
     reference_count = int(profile.get("image_count") or 0)
     if reference_count <= 0:
@@ -263,13 +315,23 @@ def _write_detector_run_config(
     images: Path,
     model_name: str,
     crop: str,
+    max_reference_images: int | None,
+    max_images: int | None,
 ) -> None:
     label = f"deepface-{detector_backend}"
     run_dir = out_dir / label
     run_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / "detector_run.json").write_text(
         json.dumps(
-            _detector_run_config(detector_backend, reference_images, images, model_name, crop),
+            _detector_run_config(
+                detector_backend,
+                reference_images,
+                images,
+                model_name,
+                crop,
+                max_reference_images,
+                max_images,
+            ),
             ensure_ascii=False,
             indent=2,
         ),
@@ -283,6 +345,8 @@ def _detector_run_config(
     images: Path,
     model_name: str,
     crop: str,
+    max_reference_images: int | None,
+    max_images: int | None,
 ) -> dict[str, str]:
     return {
         "detector_backend": detector_backend,
@@ -290,7 +354,41 @@ def _detector_run_config(
         "images": str(images),
         "model_name": model_name,
         "crop": crop,
+        "max_reference_images": "" if max_reference_images is None else str(max_reference_images),
+        "max_images": "" if max_images is None else str(max_images),
     }
+
+
+def _normalized_detector_run_config(config: dict[str, Any]) -> dict[str, str]:
+    normalized = {str(key): str(value) for key, value in config.items()}
+    normalized.setdefault("max_reference_images", "")
+    normalized.setdefault("max_images", "")
+    return normalized
+
+
+def _limited_image_paths(root: Path, limit: int | None) -> list[Path]:
+    paths = iter_image_paths(root)
+    if limit is None:
+        return paths
+    if limit <= 0:
+        raise ValueError("image limits must be positive")
+    return paths[:limit]
+
+
+def _score_image_paths(
+    model: Any,
+    image_paths: list[Path],
+    crop: str,
+    backend: backends.VectorBackend,
+    failed_paths: list[str],
+) -> list[Score]:
+    scores = []
+    for path in image_paths:
+        try:
+            scores.append(_score_vector(model, backend.vectorize(path, crop=crop)))
+        except Exception:  # noqa: BLE001 - detector comparison should report per-image failures.
+            failed_paths.append(str(path))
+    return sorted(scores, key=lambda item: item.centroid_score, reverse=True)
 
 
 def _read_reference_failed_count(model_dir: Path) -> int:
