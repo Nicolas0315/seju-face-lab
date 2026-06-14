@@ -164,6 +164,11 @@ class DeepFaceBackend:
         self.detector_backend = detector_backend
         self.enforce_detection = enforce_detection
         self.align = align
+        self.description = (
+            "DeepFace-family OSS embeddings via DeepFace.represent; "
+            f"model={self.model_name}, detector={self.detector_backend}. "
+            "Requires: pip install 'seju-face-lab[deepface]'"
+        )
 
     def vectorize(self, path: Path, crop: str = "center") -> ImageVector:
         deepface = _import_deepface()
@@ -227,15 +232,26 @@ def _make_insightface_backend() -> InsightFaceBackend | PlannedBackend:
         )
 
 
-def _make_deepface_backend() -> DeepFaceBackend | PlannedBackend:
+def _make_deepface_backend(
+    detector_backend: str = "opencv",
+    name: str = "deepface",
+) -> DeepFaceBackend | PlannedBackend:
     """Return DeepFaceBackend if the optional package is installed."""
     if importlib.util.find_spec("deepface") is not None:
-        return DeepFaceBackend()
+        backend = DeepFaceBackend(detector_backend=detector_backend)
+        backend.name = name
+        return backend
     return PlannedBackend(
-        name="deepface",
+        name=name,
         extra="deepface",
-        description="DeepFace-family OSS adapters for model comparison and face QA.",
-        notes="Use for cross-checking embeddings; keep it optional because dependencies are heavy.",
+        description=(
+            "DeepFace-family OSS adapters for model comparison and face QA "
+            f"(model=ArcFace, detector={detector_backend})."
+        ),
+        notes=(
+            "Use for cross-checking embeddings; keep it optional because dependencies are heavy. "
+            f"This backend uses DeepFace detector_backend='{detector_backend}'."
+        ),
     )
 
 
@@ -244,6 +260,7 @@ BACKENDS: dict[str, VectorBackend] = {
     "opencv-face": OpenCVFaceBackend(),
     "insightface": _make_insightface_backend(),
     "deepface": _make_deepface_backend(),
+    "deepface-retinaface": _make_deepface_backend("retinaface", name="deepface-retinaface"),
     "diffusion-generation": PlannedBackend(
         name="diffusion-generation",
         extra="generation",

@@ -87,4 +87,6 @@ Create and track these issues:
 - A 25-reference/6-generated `mtcnn` smoke audit is now possible through `--max-reference-images` / `--max-images`: same first-25 refs gave OpenCV `18/25`, MTCNN `22/25`, both generated `5/6`, bests diverged, and Spearman was `0.100000`.
 - The same first-25 smoke audit with `retinaface` matched MTCNN on acceptance (`22/25`) and generated best image (`candidate_0006_seed_260705`); MTCNN-vs-RetinaFace Spearman was `1.000000`, while OpenCV-vs-neural detector Spearman stayed `0.100000`.
 - Full v7 `retinaface` audit accepted refs `221/259` and generated images `5/6`, best image `candidate_0005_seed_260704`, best score `0.574721`; it improved on DeepFace/OpenCV's `139/259` refs while keeping Spearman `0.800000` vs OpenCV over 5 common generated images.
+- `deepface-retinaface` is now registered as a normal backend, so backend comparison and model/evaluation runs can use the audited DeepFace RetinaFace path directly.
+- Registered-backend smoke check completed on `data/raw/seju_official_sample` vs `outputs/generated_detector_v5`: `deepface-retinaface` refs `2/2`, generated images `1/1`, best image `candidate_0001_seed_260623`, best score `0.293422`.
 - Full committed workflow notes are in `docs/gpu-generation-log.md`.

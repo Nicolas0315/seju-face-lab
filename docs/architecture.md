@@ -57,6 +57,7 @@ Retrieval/design date: 2026-06-14.
 - `opencv-face`: implemented optional `vision` extra. Uses OpenCV Haar face boxes before deterministic vectors.
 - `insightface`: implemented dependency-gated adapter with `insightface` + `onnxruntime-gpu`; listed as planned when optional dependencies are absent.
 - `deepface`: implemented dependency-gated adapter with `DeepFace.represent`; defaults to ArcFace and reports no-face images as vectorization failures.
+- `deepface-retinaface`: implemented dependency-gated adapter using DeepFace ArcFace embeddings with RetinaFace detection.
 - `clip-style`: implemented as `style-evaluate`. Uses optional `open-clip-torch` image embeddings as a secondary style axis.
 - `diffusion-generation`: planned. Diffusers/ComfyUI generation loop for prompt batches.
 
@@ -66,7 +67,7 @@ Backend diagnostics and comparison:
 
 ```powershell
 python -m seju_face_lab backend-diagnostics --out outputs/backend_diagnostics
-python -m seju_face_lab compare-backends --reference-images data/raw/seju_official --images outputs/generated_detector --out outputs/backend_compare --backends deterministic opencv-face insightface deepface
+python -m seju_face_lab compare-backends --reference-images data/raw/seju_official --images outputs/generated_detector --out outputs/backend_compare --backends deterministic opencv-face insightface deepface deepface-retinaface
 python -m seju_face_lab compare-deepface-detectors --reference-images data/raw/seju_official --images outputs/generated_detector --out outputs/deepface_detector_compare --detectors opencv mtcnn retinaface skip
 ```
 
@@ -101,7 +102,7 @@ identity recognition, attractiveness scoring, ethnicity classification, or an ob
 
 - RTX 4090 / RTX 5060 Ti nodes should run optional neural backends and generation batches only.
 - Keep raw image sets and generated candidates Git-ignored.
-- Use `insightface` or `deepface` for face-embedding cross-checks after deterministic results are stable.
+- Use `insightface`, `deepface`, or `deepface-retinaface` for face-embedding cross-checks after deterministic results are stable.
 - Use Diffusers or ComfyUI to generate candidates from `generation_manifest.json`, then score them with `evaluate` and `style-evaluate`.
 - Run `qa-images` before trusting generated-image scores; a collage can score well if one crop matches the centroid.
 - Keep generated-image prompts aggregate-only; avoid copying a specific real person.

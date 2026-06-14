@@ -235,6 +235,7 @@ Implemented now:
 - `opencv-face`: optional `.[vision]` backend for OpenCV face crop normalization
 - `insightface`: optional `.[face]` backend; shown as ready only when `insightface` and `onnxruntime-gpu` are installed
 - `deepface`: optional `.[deepface]` backend using `DeepFace.represent`, defaulting to ArcFace
+- `deepface-retinaface`: optional `.[deepface]` backend using ArcFace embeddings with the RetinaFace detector; current DeepFace face-validated cross-check candidate after the v7 detector audit
 - `clip-style`: optional `.[clip]` image-style scoring via `style-evaluate`; kept separate from face geometry
 
 On Windows, the InsightFace backend automatically adds torch's bundled CUDA DLL directory
@@ -258,17 +259,19 @@ Use the DeepFace backend as a neural cross-check after installing its optional d
 python -m pip install -e ".[deepface]"
 python -m seju_face_lab build --images data/raw --out outputs/seju_model_deepface --backend deepface
 python -m seju_face_lab evaluate --model outputs/seju_model_deepface --images outputs/generated --out outputs/evaluation_deepface --backend deepface
+python -m seju_face_lab build --images data/raw --out outputs/seju_model_deepface_retinaface --backend deepface-retinaface
+python -m seju_face_lab evaluate --model outputs/seju_model_deepface_retinaface --images outputs/generated --out outputs/evaluation_deepface_retinaface --backend deepface-retinaface
 ```
 
 Compare multiple backend rankings on the same local reference and target image sets:
 
 ```powershell
-python -m seju_face_lab compare-backends --reference-images data/raw/seju_official --images outputs/generated_detector --out outputs/backend_compare --backends deterministic opencv-face insightface deepface
+python -m seju_face_lab compare-backends --reference-images data/raw/seju_official --images outputs/generated_detector --out outputs/backend_compare --backends deterministic opencv-face insightface deepface deepface-retinaface
 ```
 
 This writes one model/evaluation folder per backend plus `backend_comparison.json` and
 `backend_comparison.md`. Score scales are backend-specific; use the rank-agreement section to
-review whether deterministic, face-crop, InsightFace, and DeepFace choose the same candidates.
+review whether deterministic, face-crop, InsightFace, and DeepFace detector variants choose the same candidates.
 
 When DeepFace rejects many reference images, sweep its detector choices directly:
 

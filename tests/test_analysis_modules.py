@@ -1259,6 +1259,24 @@ class AnalysisModuleTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "No face detected"):
                     backend.vectorize(image_path)
 
+    def test_deepface_retinaface_backend_factory_uses_retinaface_detector(self) -> None:
+        with patch("seju_face_lab.backends.importlib.util.find_spec", return_value=object()):
+            backend = backends_module._make_deepface_backend("retinaface", name="deepface-retinaface")  # noqa: SLF001
+
+        self.assertIsInstance(backend, DeepFaceBackend)
+        self.assertEqual(backend.name, "deepface-retinaface")
+        self.assertEqual(backend.detector_backend, "retinaface")
+        self.assertIn("detector=retinaface", backend.description)
+
+    def test_deepface_retinaface_backend_factory_stays_dependency_gated(self) -> None:
+        with patch("seju_face_lab.backends.importlib.util.find_spec", return_value=None):
+            backend = backends_module._make_deepface_backend("retinaface", name="deepface-retinaface")  # noqa: SLF001
+
+        self.assertIsInstance(backend, backends_module.PlannedBackend)
+        self.assertEqual(backend.name, "deepface-retinaface")
+        self.assertIn("detector=retinaface", backend.description)
+        self.assertIn("detector_backend='retinaface'", backend.notes)
+
     def test_compare_deepface_detectors_reports_detector_acceptance(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
