@@ -27,6 +27,7 @@ class PipelineTests(unittest.TestCase):
             subjects = root / "subjects"
             model_dir = root / "model space"
             eval_dir = root / "eval"
+            style_eval_dir = root / "style_eval"
             generation_dir = root / "generated faces"
             run_compare_dir = root / "run_compare"
             empty_run_compare_dir = root / "empty_run_compare"
@@ -133,6 +134,30 @@ class PipelineTests(unittest.TestCase):
             eval_summary = json.loads((eval_dir / "summary.json").read_text(encoding="utf-8"))
             self.assertEqual(eval_summary["image_count"], 1)
             self.assertEqual(eval_summary["failed_count"], 1)
+
+            with patch("seju_face_lab.cli.OpenClipStyleBackend", return_value=_FakeStyleBackend()):
+                self.assertEqual(
+                    main(
+                        [
+                            "style-evaluate",
+                            "--model",
+                            str(model_dir),
+                            "--images",
+                            str(generated),
+                            "--out",
+                            str(style_eval_dir),
+                        ]
+                    ),
+                    0,
+                )
+            style_scores = (style_eval_dir / "style_scores.csv").read_text(encoding="utf-8-sig")
+            self.assertIn("candidate", style_scores)
+            self.assertIn("style_score", style_scores)
+            style_summary = json.loads((style_eval_dir / "style_summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(style_summary["image_count"], 1)
+            self.assertEqual(style_summary["failed_count"], 1)
+            self.assertIn("not face geometry", style_summary["boundary"])
+
             self.assertEqual(
                 main(
                     [
@@ -336,6 +361,30 @@ class _FakeCV2:
             minSize: tuple[int, int],
         ) -> np.ndarray:
             return np.asarray([[24, 16, 52, 60]], dtype=np.int32)
+
+
+class _FakeStyleBackend:
+    name = "fake-style"
+    description = "test style backend"
+
+    def encode_path(self, path: Path) -> np.ndarray:
+        image = Image.open(path).convert("RGB")
+        return self.encode_pil(image)
+
+    def encode_pil(self, image: Image.Image) -> np.ndarray:
+        rgb = np.asarray(image, dtype=np.float32) / 255.0
+        vector = np.asarray(
+            [
+                float(np.mean(rgb[:, :, 0])),
+                float(np.mean(rgb[:, :, 1])),
+                float(np.mean(rgb[:, :, 2])),
+            ],
+            dtype=np.float32,
+        )
+        norm = float(np.linalg.norm(vector))
+        if norm == 0.0:
+            return vector
+        return vector / norm
 
 
 if __name__ == "__main__":

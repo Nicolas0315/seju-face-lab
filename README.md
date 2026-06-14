@@ -10,6 +10,7 @@ It can:
 - discover official seju profile image candidates into a source manifest
 - write generation prompts from centroid descriptors
 - score generated images against the mean/median vectors
+- score generated images on a separate OpenCLIP style axis
 - review per-person image folders against the seju centroid
 - extract SNS handles/engagement manifests and correlate them with face-score outputs
 
@@ -52,6 +53,13 @@ After generating candidate images with any image generator, place them in `outpu
 
 ```powershell
 python -m seju_face_lab evaluate --model outputs/seju_model --images outputs/generated --out outputs/evaluation
+```
+
+Evaluate the same generated images on a separate OpenCLIP image-style axis after installing `.[clip]`:
+
+```powershell
+python -m pip install -e ".[clip]"
+python -m seju_face_lab style-evaluate --model outputs/seju_model --images outputs/generated --out outputs/style_evaluation
 ```
 
 Compare evaluated generation runs:
@@ -172,6 +180,7 @@ Implemented now:
 - `opencv-face`: optional `.[vision]` backend for OpenCV face crop normalization
 - `insightface`: optional `.[face]` backend; shown as ready only when `insightface` and `onnxruntime-gpu` are installed
 - `deepface`: optional `.[deepface]` backend using `DeepFace.represent`, defaulting to ArcFace
+- `clip-style`: optional `.[clip]` image-style scoring via `style-evaluate`; kept separate from face geometry
 
 Use the OpenCV face-crop backend after installing the optional vision dependencies:
 
@@ -191,7 +200,6 @@ python -m seju_face_lab evaluate --model outputs/seju_model_deepface --images ou
 
 Designed next:
 
-- `clip-style`: secondary style similarity scoring
 - `diffusion-generation`: Diffusers/ComfyUI candidate generation loop
 
 See `docs/architecture.md` for the folder contract and backend plan.
@@ -207,6 +215,8 @@ See `docs/gpu-generation-log.md` for RTX 4090 generation smoke results.
 - generation `generation_run.json`: prompt, seed, provider, output paths, and evaluation command/argv.
 - evaluation `scores.csv`: similarity of candidate generated images to the centroid vectors.
 - evaluation `summary.json`: best/mean/median generated-image similarity for quick comparisons.
+- style evaluation `style_scores.csv`: OpenCLIP image-style similarity to mean/median renderings.
+- style evaluation `style_summary.json`: best/mean/median style-axis scores.
 - generation run reviews: rank evaluated candidate batches by local centroid scores.
 - subject review outputs: per-person approximate similarity rankings.
 

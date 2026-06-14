@@ -14,6 +14,7 @@ from .model import build_centroid_model, load_model, save_model
 from .prompting import prompt_from_descriptors
 from .run_reviews import review_generation_runs, write_generation_run_reviews
 from .sources import discover_sources, download_source_images, read_source_manifest, write_source_manifest
+from .style import OpenClipStyleBackend, score_style_images, write_style_scores
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -70,6 +71,17 @@ def main(argv: list[str] | None = None) -> int:
     evaluate_parser.add_argument("--out", type=Path, required=True)
     evaluate_parser.add_argument("--crop", choices=["center", "none"], default="center")
     evaluate_parser.add_argument("--backend", default="deterministic")
+
+    style_parser = subparsers.add_parser(
+        "style-evaluate",
+        help="rank generated images on a separate OpenCLIP style axis",
+    )
+    style_parser.add_argument("--model", type=Path, required=True)
+    style_parser.add_argument("--images", type=Path, required=True)
+    style_parser.add_argument("--out", type=Path, required=True)
+    style_parser.add_argument("--clip-model", default="ViT-B-32")
+    style_parser.add_argument("--pretrained", default="laion2b_s34b_b79k")
+    style_parser.add_argument("--device", default="auto")
 
     compare_runs_parser = subparsers.add_parser(
         "compare-runs",
@@ -188,6 +200,8 @@ def main(argv: list[str] | None = None) -> int:
         return _render(args.model, args.kind, args.out)
     if args.command == "evaluate":
         return _evaluate(args.model, args.images, args.out, args.crop, args.backend)
+    if args.command == "style-evaluate":
+        return _style_evaluate(args)
     if args.command == "compare-runs":
         return _compare_runs(args.runs, args.out)
     if args.command == "review-subjects":
@@ -327,6 +341,22 @@ def _evaluate(model_dir: Path, images: Path, out: Path, crop: str, backend_name:
     print(f"evaluated images: {len(scores)}")
     print(f"failed images: {len(failed_paths)}")
     print(f"scores: {out / 'scores.csv'}")
+    return 0
+
+
+def _style_evaluate(args: argparse.Namespace) -> int:
+    model = load_model(args.model)
+    backend = OpenClipStyleBackend(
+        model_name=args.clip_model,
+        pretrained=args.pretrained,
+        device=args.device,
+    )
+    failed_paths: list[str] = []
+    scores = score_style_images(model, args.images, backend=backend, failed_paths=failed_paths)
+    write_style_scores(scores, args.out, failed_paths=failed_paths)
+    print(f"style evaluated images: {len(scores)}")
+    print(f"failed images: {len(failed_paths)}")
+    print(f"style scores: {args.out / 'style_scores.csv'}")
     return 0
 
 

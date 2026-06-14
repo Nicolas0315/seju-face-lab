@@ -24,10 +24,13 @@ Retrieval/design date: 2026-06-14.
    - `--variant auto` maps `--dtype float16` to the Diffusers `fp16` variant
 5. `evaluate`
    - generated candidates are scored against mean and median vectors
-6. `review-subjects`
+6. `style-evaluate`
+   - generated candidates are scored against mean/median rendered appearances with OpenCLIP image embeddings
+   - this is a style/photographic axis, not a face-geometry score
+7. `review-subjects`
    - per-person image folders are ranked against the local seju centroid
    - output is CSV, Markdown, and JSON for review and tracking
-7. SNS and correlation analysis
+8. SNS and correlation analysis
    - `sources scrape-handles` writes reviewed SNS handle manifests
    - `sources fetch-engagement` writes best-effort public engagement manifests
    - `analyze correlation` joins `subject_reviews.json` to SNS metrics
@@ -38,7 +41,7 @@ Retrieval/design date: 2026-06-14.
 - `opencv-face`: implemented optional `vision` extra. Uses OpenCV Haar face boxes before deterministic vectors.
 - `insightface`: implemented dependency-gated adapter with `insightface` + `onnxruntime-gpu`; listed as planned when optional dependencies are absent.
 - `deepface`: implemented dependency-gated adapter with `DeepFace.represent`; defaults to ArcFace and reports no-face images as vectorization failures.
-- `clip-style`: planned. Secondary style similarity with `open-clip-torch`.
+- `clip-style`: implemented as `style-evaluate`. Uses optional `open-clip-torch` image embeddings as a secondary style axis.
 - `diffusion-generation`: planned. Diffusers/ComfyUI generation loop for prompt batches.
 
 Keep geometry and style axes separate. A generated image can match the style prompt while missing face geometry, so evaluation should report neural face-embedding scores and style scores separately.
@@ -65,7 +68,7 @@ identity recognition, attractiveness scoring, ethnicity classification, or an ob
 - RTX 4090 / RTX 5060 Ti nodes should run optional neural backends and generation batches only.
 - Keep raw image sets and generated candidates Git-ignored.
 - Use `insightface` or `deepface` for face-embedding cross-checks after deterministic results are stable.
-- Use Diffusers or ComfyUI to generate candidates from `generation_manifest.json`, then score them with `evaluate`.
+- Use Diffusers or ComfyUI to generate candidates from `generation_manifest.json`, then score them with `evaluate` and `style-evaluate`.
 - Keep generated-image prompts aggregate-only; avoid copying a specific real person.
 - `seju_face_lab.workers` contains local/SSH worker helpers; treat remote writes as explicit ops steps, not default CLI behavior.
 
@@ -79,6 +82,12 @@ Diffusers execution:
 
 ```powershell
 python -m seju_face_lab generate --model outputs/seju_model --out outputs/generated --provider diffusers --hf-model runwayml/stable-diffusion-v1-5 --count 8 --device cuda --negative-prompt "copied identity"
+```
+
+Style-axis evaluation:
+
+```powershell
+python -m seju_face_lab style-evaluate --model outputs/seju_model --images outputs/generated --out outputs/style_evaluation
 ```
 
 ## Folder Contract

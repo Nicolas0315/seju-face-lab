@@ -238,12 +238,6 @@ BACKENDS: dict[str, VectorBackend] = {
     "opencv-face": OpenCVFaceBackend(),
     "insightface": _make_insightface_backend(),
     "deepface": _make_deepface_backend(),
-    "clip-style": PlannedBackend(
-        name="clip-style",
-        extra="clip",
-        description="OpenCLIP image embeddings for style/photographic similarity scoring.",
-        notes="Use as a secondary style axis, not as the primary face-geometry vector.",
-    ),
     "diffusion-generation": PlannedBackend(
         name="diffusion-generation",
         extra="generation",
@@ -305,6 +299,16 @@ def backend_help() -> str:
         lines.append(f"  {backend.description}")
         if isinstance(backend, PlannedBackend):
             lines.append(f"  {backend.notes}")
+    lines.extend(
+        [
+            "",
+            "Available style axes:",
+            "",
+            "- clip-style: implemented extra=clip",
+            "  OpenCLIP image embeddings for style/photographic similarity scoring.",
+            "  Use via: python -m seju_face_lab style-evaluate --model MODEL --images IMAGES --out OUT",
+        ]
+    )
     return "\n".join(lines)
 
 

@@ -12,6 +12,7 @@ Retrieval/design date: 2026-06-14.
 - DeepFace adapter code is dependency-gated and uses `DeepFace.represent` for neural cross-checking.
 - Per-subject similarity review is implemented through `review-subjects`.
 - SNS handle/engagement manifests and face-score correlation reports are implemented.
+- OpenCLIP style-axis scoring is implemented through `style-evaluate`.
 - Image-generation dry-run planning and local RTX 4090 Diffusers smoke runs are implemented.
 
 ## GitHub Issue Plan
@@ -23,7 +24,7 @@ Create and track these issues:
 - `P1 Generation loop`: connect `generation_manifest.json` to Diffusers or ComfyUI batches.
 - `P1 SNS correlation workflow`: run handle extraction, engagement manifesting, and correlation reports.
 - `P2 DeepFace adapter`: verify optional DeepFace install on local GPU/CPU and compare embeddings against InsightFace/deterministic scores.
-- `P2 CLIP style axis`: add OpenCLIP style scoring as a separate axis from face geometry.
+- `P2 CLIP style axis`: verify optional OpenCLIP install and use `style-evaluate` alongside face geometry scores.
 - `P2 Remote worker playbook`: document RTX 4090 and RTX 5060 Ti split-run commands.
 
 ## Local ToDo
@@ -42,9 +43,10 @@ Create and track these issues:
 4. Run the same review with InsightFace or DeepFace once optional dependencies are installed.
 5. Plan aggregate candidate faces with `generate --provider dry-run`.
 6. Generate with Diffusers/ComfyUI on a GPU worker and score with `evaluate`.
-7. Rank evaluated generated batches with `compare-runs`.
-8. Run SNS handle/engagement manifests and `analyze correlation` for reviewable metric joins.
-9. Compare deterministic scores against InsightFace/DeepFace on the same ignored image sets.
+7. Run `style-evaluate` so generated candidates have both face-geometry and style-axis scores.
+8. Rank evaluated generated batches with `compare-runs`.
+9. Run SNS handle/engagement manifests and `analyze correlation` for reviewable metric joins.
+10. Compare deterministic scores against InsightFace/DeepFace on the same ignored image sets.
 
 ## GPU Generation Notes
 
