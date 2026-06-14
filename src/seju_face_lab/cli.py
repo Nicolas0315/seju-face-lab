@@ -734,7 +734,10 @@ def _pipeline_backend_comparison_out(config: dict) -> Path | None:
 def _pipeline_subject_backend_comparison_config(config: dict) -> dict:
     comparison = config.get("subject_backend_comparison")
     if isinstance(comparison, dict):
-        return comparison
+        merged = dict(comparison)
+        if "out" not in merged and config.get("subject_backend_comparison_out"):
+            merged["out"] = config["subject_backend_comparison_out"]
+        return merged
     if config.get("subject_backend_comparison_out"):
         return {"out": config["subject_backend_comparison_out"]}
     return {}
