@@ -288,6 +288,13 @@ missing detector outputs are computed.
 For slow detectors, start with `--max-reference-images 50 --max-images 6`, then rerun without
 limits once the detector looks useful.
 
+Record local RTX 4090 and optional SSH remote-GPU readiness before split-run planning:
+
+```powershell
+python -m seju_face_lab worker-diagnostics --out outputs/worker_diagnostics
+python -m seju_face_lab worker-diagnostics --out outputs/worker_diagnostics_fleet --include-remote
+```
+
 Designed next:
 
 - `diffusion-generation`: Diffusers/ComfyUI candidate generation loop
@@ -311,6 +318,7 @@ See `docs/gpu-generation-log.md` for RTX 4090 generation smoke results.
 - pipeline run `pipeline_run.json`: configured build/evaluate/review/backend-comparison/precision orchestration via `run-pipeline`.
 - pipeline config `configs/pipelines/full-retinaface-review.example.json`: deterministic continuity plus `deepface-retinaface` neural rank agreement for the precision bundle.
 - backend diagnostics `backend_diagnostics.json`: optional dependency, CUDA, and provider visibility for neural backends.
+- worker diagnostics `worker_diagnostics.json`: local/SSH Python, CUDA, torch, and package readiness for GPU split-run planning.
 - backend comparison `backend_comparison.json`: per-backend model/evaluation outputs and same-image rank agreement.
 - style evaluation `style_scores.csv`: OpenCLIP image-style similarity to mean/median renderings.
 - style evaluation `style_summary.json`: best/mean/median style-axis scores.

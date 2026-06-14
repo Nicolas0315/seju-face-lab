@@ -20,6 +20,7 @@ from .quality import review_image_quality, write_image_quality
 from .run_reviews import review_generation_runs, write_generation_run_reviews
 from .sources import discover_sources, download_source_images, read_source_manifest, write_source_manifest
 from .style import OpenClipStyleBackend, score_style_images, write_style_scores
+from .workers import DEFAULT_DIAGNOSTIC_WORKERS, LOCAL_4090, write_worker_diagnostics
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -158,6 +159,18 @@ def main(argv: list[str] | None = None) -> int:
         help="write dependency and GPU/provider diagnostics for optional backends",
     )
     backend_diag_parser.add_argument("--out", type=Path, required=True)
+
+    worker_diag_parser = subparsers.add_parser(
+        "worker-diagnostics",
+        help="write local/SSH worker readiness diagnostics for GPU split-run planning",
+    )
+    worker_diag_parser.add_argument("--out", type=Path, required=True)
+    worker_diag_parser.add_argument(
+        "--include-remote",
+        action="store_true",
+        help="also probe the configured remote GPU worker over SSH",
+    )
+    worker_diag_parser.add_argument("--timeout-seconds", type=int, default=30)
 
     compare_backends_parser = subparsers.add_parser(
         "compare-backends",
@@ -331,6 +344,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "backend-diagnostics":
         return _backend_diagnostics(args.out)
+    if args.command == "worker-diagnostics":
+        return _worker_diagnostics(args.out, args.include_remote, args.timeout_seconds)
     if args.command == "compare-backends":
         return _compare_backends(args)
     if args.command == "compare-deepface-detectors":
@@ -727,6 +742,15 @@ def _backend_diagnostics(out: Path) -> int:
     print(f"backend diagnostics: {out / 'backend_diagnostics.md'}")
     print(f"implemented backends: {implemented}")
     print(f"torch cuda available: {cuda_available}")
+    return 0
+
+
+def _worker_diagnostics(out: Path, include_remote: bool, timeout_seconds: int) -> int:
+    workers = DEFAULT_DIAGNOSTIC_WORKERS if include_remote else [LOCAL_4090]
+    report = write_worker_diagnostics(out, workers=workers, timeout_seconds=timeout_seconds)
+    ready_count = sum(1 for worker in report["workers"] if worker["ok"])
+    print(f"worker diagnostics: {out / 'worker_diagnostics.md'}")
+    print(f"workers ready: {ready_count}/{report['worker_count']}")
     return 0
 
 

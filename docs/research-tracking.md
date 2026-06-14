@@ -26,6 +26,7 @@ Retrieval/design date: 2026-06-14.
 - `precision-report` consolidates centroid, mean/median vector audit metadata, generated-image mean/median score components, QA, subject-review, and backend-comparison evidence into a review bundle.
 - `run-pipeline` executes JSON-configured build/evaluate/review/backend-comparison/precision steps and records a pipeline run manifest.
 - `configs/pipelines/full-retinaface-review.example.json` captures the current full review path with deterministic continuity plus `deepface-retinaface` backend rank agreement.
+- `worker-diagnostics` records local RTX 4090 and optional SSH remote-GPU Python/CUDA/torch/package readiness without remote writes.
 
 ## GitHub Issue Plan
 
@@ -37,7 +38,7 @@ Create and track these issues:
 - `P1 SNS correlation workflow`: run handle extraction, engagement manifesting, and correlation reports.
 - `P2 DeepFace adapter`: run the committed detector sweep after the default DeepFace/OpenCV detector accepted only `139/259` official references.
 - `P2 CLIP style axis`: verify optional OpenCLIP install and use `style-evaluate` alongside face geometry scores.
-- `P2 Remote worker playbook`: document RTX 4090 and RTX 5060 Ti split-run commands.
+- `P2 Remote worker playbook`: document RTX 4090 and SSH remote-GPU split-run commands.
 
 ## Local ToDo
 
@@ -62,7 +63,7 @@ Create and track these issues:
 11. Write a `precision-report` for the model, best generation review, QA, subject-review, and backend-comparison outputs.
 12. Use `run-pipeline` for repeatable local build/evaluate/review/precision runs from config.
 13. Run SNS handle/engagement manifests and `analyze correlation` for reviewable metric joins.
-14. Run `backend-diagnostics` on each RTX node and archive the ignored output path in the Issue comment.
+14. Run `backend-diagnostics` and `worker-diagnostics --include-remote` on RTX nodes and archive the ignored output paths in the Issue comment.
 15. Compare deterministic scores against InsightFace/DeepFace on the same ignored image sets with `compare-backends`.
 16. When DeepFace diverges, run `compare-deepface-detectors` with `opencv mtcnn retinaface skip` and compare acceptance counts before reviewing ranks.
 

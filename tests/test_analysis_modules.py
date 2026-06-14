@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -39,7 +40,13 @@ from seju_face_lab.sns_metrics import (
     write_engagement_manifest,
     write_handles_manifest,
 )
-from seju_face_lab.workers import WorkerConfig, _split_paths, distribute_vectorize, run_local_evaluate
+from seju_face_lab.workers import (
+    WorkerConfig,
+    _split_paths,
+    distribute_vectorize,
+    run_local_evaluate,
+    write_worker_diagnostics,
+)
 
 
 class AnalysisModuleTests(unittest.TestCase):
@@ -1856,6 +1863,167 @@ class AnalysisModuleTests(unittest.TestCase):
             self.assertEqual(scores, [])
             self.assertEqual(summary["failed_count"], 2)
             self.assertEqual(summary["failed_paths"], [str(bad), str(bad2)])
+
+    def test_worker_diagnostics_writes_local_probe_report(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            out = root / "worker_diag"
+            worker = WorkerConfig(name="local-test", python="python", project_dir=str(root))
+            probe = {
+                "hostname": "ultra2025",
+                "seju_face_lab_importable": True,
+                "torch_importable": True,
+                "torch_cuda_available": True,
+                "torch_cuda_device_count": 1,
+                "torch_cuda_device_name": "NVIDIA GeForce RTX 4090",
+                "configured_project_exists": True,
+                "configured_python_exists": True,
+            }
+
+            with patch(
+                "seju_face_lab.workers.subprocess.run",
+                return_value=subprocess.CompletedProcess(
+                    args=["python"],
+                    returncode=0,
+                    stdout=json.dumps(probe) + "\n",
+                    stderr="",
+                ),
+            ) as run:
+                report = write_worker_diagnostics(out, workers=[worker])
+
+            self.assertEqual(report["worker_count"], 1)
+            self.assertTrue(report["workers"][0]["ok"])
+            self.assertEqual(report["workers"][0]["probe"]["torch_cuda_device_name"], "NVIDIA GeForce RTX 4090")
+            self.assertTrue((out / "worker_diagnostics.json").exists())
+            self.assertIn("NVIDIA GeForce RTX 4090", (out / "worker_diagnostics.md").read_text(encoding="utf-8"))
+            self.assertEqual(run.call_args.kwargs["cwd"], str(root))
+            self.assertEqual(run.call_args.kwargs["env"]["CUDA_VISIBLE_DEVICES"], "0")
+
+    def test_worker_diagnostics_can_probe_remote_over_ssh(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "worker_diag"
+            worker = WorkerConfig(
+                name="remote-test",
+                python=r"C:\repo\.venv\Scripts\python.exe",
+                project_dir=r"C:\repo",
+                remote_host="nicolas2025",
+            )
+            probe = {
+                "hostname": "nicolas2025",
+                "seju_face_lab_importable": True,
+                "torch_importable": True,
+                "torch_cuda_available": True,
+                "torch_cuda_device_count": 1,
+                "torch_cuda_device_name": "NVIDIA GeForce RTX 5060 Ti",
+                "configured_project_exists": True,
+                "configured_python_exists": True,
+            }
+
+            with patch(
+                "seju_face_lab.workers.subprocess.run",
+                return_value=subprocess.CompletedProcess(
+                    args=["ssh"],
+                    returncode=0,
+                    stdout=json.dumps(probe) + "\n",
+                    stderr="",
+                ),
+            ) as run:
+                report = write_worker_diagnostics(out, workers=[worker])
+
+            self.assertTrue(report["workers"][0]["ok"])
+            self.assertEqual(report["workers"][0]["remote_host"], "nicolas2025")
+            self.assertEqual(run.call_args.args[0][0], "ssh")
+            self.assertIn("nicolas2025", run.call_args.args[0])
+
+    def test_worker_diagnostics_requires_cuda_for_ready_status(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "worker_diag"
+            worker = WorkerConfig(name="cpu-only", python="python", project_dir=str(Path(tmp)))
+            probe = {
+                "hostname": "cpu-host",
+                "seju_face_lab_importable": True,
+                "torch_importable": True,
+                "torch_cuda_available": False,
+                "torch_cuda_device_count": 0,
+                "torch_cuda_device_name": None,
+            }
+
+            with patch(
+                "seju_face_lab.workers.subprocess.run",
+                return_value=subprocess.CompletedProcess(
+                    args=["python"],
+                    returncode=0,
+                    stdout=json.dumps(probe) + "\n",
+                    stderr="",
+                ),
+            ):
+                report = write_worker_diagnostics(out, workers=[worker])
+
+            self.assertFalse(report["workers"][0]["ok"])
+            self.assertFalse(report["workers"][0]["probe"]["torch_cuda_available"])
+
+    def test_worker_diagnostics_requires_configured_remote_paths_for_ready_status(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "worker_diag"
+            worker = WorkerConfig(
+                name="remote-stale-venv",
+                python=r"C:\missing\.venv\Scripts\python.exe",
+                project_dir=r"C:\missing\repo",
+                remote_host="nicolas2025",
+            )
+            probe = {
+                "hostname": "nicolas2025",
+                "seju_face_lab_importable": True,
+                "torch_importable": True,
+                "torch_cuda_available": True,
+                "torch_cuda_device_count": 1,
+                "torch_cuda_device_name": "NVIDIA GeForce RTX 3070",
+                "configured_project_exists": False,
+                "configured_python_exists": False,
+            }
+
+            with patch(
+                "seju_face_lab.workers.subprocess.run",
+                return_value=subprocess.CompletedProcess(
+                    args=["ssh"],
+                    returncode=0,
+                    stdout=json.dumps(probe) + "\n",
+                    stderr="",
+                ),
+            ):
+                report = write_worker_diagnostics(out, workers=[worker])
+
+            self.assertFalse(report["workers"][0]["ok"])
+            self.assertFalse(report["workers"][0]["probe"]["configured_python_exists"])
+
+    def test_cli_worker_diagnostics_writes_outputs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "worker_diag"
+            probe = {
+                "hostname": "ultra2025",
+                "seju_face_lab_importable": True,
+                "torch_importable": True,
+                "torch_cuda_available": True,
+                "torch_cuda_device_count": 1,
+                "torch_cuda_device_name": "NVIDIA GeForce RTX 4090",
+                "configured_project_exists": True,
+                "configured_python_exists": True,
+            }
+
+            with patch(
+                "seju_face_lab.workers.subprocess.run",
+                return_value=subprocess.CompletedProcess(
+                    args=["python"],
+                    returncode=0,
+                    stdout=json.dumps(probe) + "\n",
+                    stderr="",
+                ),
+            ):
+                self.assertEqual(main(["worker-diagnostics", "--out", str(out)]), 0)
+
+            report = json.loads((out / "worker_diagnostics.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["worker_count"], 1)
+            self.assertTrue(report["workers"][0]["ok"])
 
     def test_distribute_vectorize_rejects_remote_workers_until_sync_exists(self) -> None:
         with self.assertRaisesRegex(NotImplementedError, "remote worker subset evaluation"):

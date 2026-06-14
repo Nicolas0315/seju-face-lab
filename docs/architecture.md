@@ -100,13 +100,14 @@ identity recognition, attractiveness scoring, ethnicity classification, or an ob
 
 ## GPU / Generation Plan
 
-- RTX 4090 / RTX 5060 Ti nodes should run optional neural backends and generation batches only.
+- RTX 4090 / SSH remote-GPU nodes should run optional neural backends and generation batches only.
 - Keep raw image sets and generated candidates Git-ignored.
 - Use `insightface`, `deepface`, or `deepface-retinaface` for face-embedding cross-checks after deterministic results are stable.
 - Use Diffusers or ComfyUI to generate candidates from `generation_manifest.json`, then score them with `evaluate` and `style-evaluate`.
 - Run `qa-images` before trusting generated-image scores; a collage can score well if one crop matches the centroid.
 - Keep generated-image prompts aggregate-only; avoid copying a specific real person.
-- `seju_face_lab.workers` contains local/SSH worker helpers; treat remote writes as explicit ops steps, not default CLI behavior.
+- `worker-diagnostics` writes local/SSH Python, CUDA, torch, and package readiness reports before split-run planning.
+- `seju_face_lab.workers` contains local/SSH worker helpers; treat remote writes and distributed remote evaluation as explicit ops steps, not default CLI behavior.
 
 Dry-run planning:
 
