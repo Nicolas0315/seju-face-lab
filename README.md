@@ -52,6 +52,14 @@ After generating candidate images with any image generator, place them in `outpu
 python -m seju_face_lab evaluate --model outputs/seju_model --images outputs/generated --out outputs/evaluation
 ```
 
+Compare evaluated generation runs:
+
+```powershell
+python -m seju_face_lab evaluate --model outputs/seju_model --images outputs/generated_a --out outputs/generated_a/evaluation
+python -m seju_face_lab evaluate --model outputs/seju_model --images outputs/generated_b --out outputs/generated_b/evaluation
+python -m seju_face_lab compare-runs --runs outputs/generated_a outputs/generated_b --out outputs/run_reviews
+```
+
 Plan a reproducible generation batch without downloading or running a model:
 
 ```powershell
@@ -147,6 +155,7 @@ See `docs/gpu-generation-log.md` for RTX 4090 generation smoke results.
 - generation `generation_run.json`: prompt, seed, provider, output paths, and evaluation command/argv.
 - evaluation `scores.csv`: similarity of candidate generated images to the centroid vectors.
 - evaluation `summary.json`: best/mean/median generated-image similarity for quick comparisons.
+- generation run reviews: rank evaluated candidate batches by local centroid scores.
 - subject review outputs: per-person approximate similarity rankings.
 
 ## Verification

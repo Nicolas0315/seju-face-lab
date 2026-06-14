@@ -12,6 +12,7 @@ from .generation import build_generation_config, run_diffusers_generation, write
 from .metrics import review_subject_directories, score_generated_images, write_scores, write_subject_reviews
 from .model import build_centroid_model, load_model, save_model
 from .prompting import prompt_from_descriptors
+from .run_reviews import review_generation_runs, write_generation_run_reviews
 from .sources import discover_sources, download_source_images, read_source_manifest, write_source_manifest
 
 
@@ -70,6 +71,13 @@ def main(argv: list[str] | None = None) -> int:
     evaluate_parser.add_argument("--crop", choices=["center", "none"], default="center")
     evaluate_parser.add_argument("--backend", default="deterministic")
 
+    compare_runs_parser = subparsers.add_parser(
+        "compare-runs",
+        help="rank evaluated generation run directories by centroid scores",
+    )
+    compare_runs_parser.add_argument("--runs", type=Path, nargs="+", required=True)
+    compare_runs_parser.add_argument("--out", type=Path, required=True)
+
     review_parser = subparsers.add_parser(
         "review-subjects",
         help="rank per-person image folders against a seju centroid model",
@@ -124,6 +132,8 @@ def main(argv: list[str] | None = None) -> int:
         return _render(args.model, args.kind, args.out)
     if args.command == "evaluate":
         return _evaluate(args.model, args.images, args.out, args.crop, args.backend)
+    if args.command == "compare-runs":
+        return _compare_runs(args.runs, args.out)
     if args.command == "review-subjects":
         return _review_subjects(args.model, args.subjects, args.out, args.crop, args.backend)
     if args.command == "backends":
@@ -237,6 +247,14 @@ def _evaluate(model_dir: Path, images: Path, out: Path, crop: str, backend_name:
     write_scores(scores, out)
     print(f"evaluated images: {len(scores)}")
     print(f"scores: {out / 'scores.csv'}")
+    return 0
+
+
+def _compare_runs(run_dirs: list[Path], out: Path) -> int:
+    reviews = review_generation_runs(run_dirs)
+    write_generation_run_reviews(reviews, out)
+    print(f"compared runs: {len(reviews)}")
+    print(f"reviews: {out / 'generation_run_reviews.csv'}")
     return 0
 
 

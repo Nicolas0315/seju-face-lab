@@ -38,7 +38,8 @@ Create and track these issues:
 4. Run the same review with InsightFace or DeepFace once optional dependencies are installed.
 5. Plan aggregate candidate faces with `generate --provider dry-run`.
 6. Generate with Diffusers/ComfyUI on a GPU worker and score with `evaluate`.
-7. Compare deterministic scores against InsightFace/DeepFace once neural backends are available.
+7. Rank evaluated generated batches with `compare-runs`.
+8. Compare deterministic scores against InsightFace/DeepFace once neural backends are available.
 
 ## GPU Generation Notes
 

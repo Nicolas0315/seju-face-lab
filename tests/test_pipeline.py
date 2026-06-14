@@ -21,13 +21,19 @@ class PipelineTests(unittest.TestCase):
             root = Path(tmp)
             raw = root / "raw"
             generated = root / "generated"
+            generated_alt = root / "generated_alt"
+            generated_empty = root / "generated_empty"
             subjects = root / "subjects"
             model_dir = root / "model space"
             eval_dir = root / "eval"
             generation_dir = root / "generated faces"
+            run_compare_dir = root / "run_compare"
+            empty_run_compare_dir = root / "empty_run_compare"
             review_dir = root / "review"
             raw.mkdir()
             generated.mkdir()
+            generated_alt.mkdir()
+            generated_empty.mkdir()
             (subjects / "near_subject").mkdir(parents=True)
             (subjects / "far_subject").mkdir(parents=True)
 
@@ -35,6 +41,7 @@ class PipelineTests(unittest.TestCase):
             _write_face_like_image(raw / "b.png", (225, 198, 184), eye_offset=2)
             _write_face_like_image(raw / "c.png", (240, 210, 196), eye_offset=-2)
             _write_face_like_image(generated / "candidate.png", (232, 202, 188), eye_offset=1)
+            _write_face_like_image(generated_alt / "candidate_alt.png", (170, 145, 130), eye_offset=7)
             _write_face_like_image(subjects / "near_subject" / "near.png", (232, 202, 188), eye_offset=1)
             _write_face_like_image(subjects / "far_subject" / "far.png", (170, 145, 130), eye_offset=7)
             (subjects / "far_subject" / "broken.jpg").write_text("not an image", encoding="utf-8")
@@ -82,10 +89,52 @@ class PipelineTests(unittest.TestCase):
                 ),
                 0,
             )
+            self.assertEqual(
+                main(
+                    [
+                        "evaluate",
+                        "--model",
+                        str(model_dir),
+                        "--images",
+                        str(generated_empty),
+                        "--out",
+                        str(generated_empty / "evaluation"),
+                    ]
+                ),
+                0,
+            )
             scores = (eval_dir / "scores.csv").read_text(encoding="utf-8-sig")
             self.assertIn("candidate", scores)
             self.assertIn("centroid_score", scores)
             self.assertTrue((eval_dir / "summary.json").exists())
+            self.assertEqual(
+                main(
+                    [
+                        "evaluate",
+                        "--model",
+                        str(model_dir),
+                        "--images",
+                        str(generated),
+                        "--out",
+                        str(generated / "evaluation"),
+                    ]
+                ),
+                0,
+            )
+            self.assertEqual(
+                main(
+                    [
+                        "evaluate",
+                        "--model",
+                        str(model_dir),
+                        "--images",
+                        str(generated_alt),
+                        "--out",
+                        str(generated_alt / "evaluation"),
+                    ]
+                ),
+                0,
+            )
 
             self.assertEqual(
                 main(
@@ -120,6 +169,43 @@ class PipelineTests(unittest.TestCase):
             self.assertIn("evaluate", generation_run["result"]["evaluation_command"])
             self.assertIn('"', generation_run["result"]["evaluation_command"])
             self.assertEqual(generation_run["result"]["evaluation_argv"][5], str(model_dir))
+            self.assertEqual(
+                main(
+                    [
+                        "compare-runs",
+                        "--runs",
+                        str(generated),
+                        str(generated_alt),
+                        "--out",
+                        str(run_compare_dir),
+                    ]
+                ),
+                0,
+            )
+            run_compare = json.loads(
+                (run_compare_dir / "generation_run_reviews.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(run_compare["run_count"], 2)
+            self.assertEqual(run_compare["best_run_dir"], str(generated))
+            self.assertTrue((run_compare_dir / "generation_run_reviews.csv").exists())
+            self.assertEqual(
+                main(
+                    [
+                        "compare-runs",
+                        "--runs",
+                        str(generated_empty),
+                        "--out",
+                        str(empty_run_compare_dir),
+                    ]
+                ),
+                0,
+            )
+            empty_run_compare = json.loads(
+                (empty_run_compare_dir / "generation_run_reviews.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(empty_run_compare["run_count"], 1)
+            self.assertIsNone(empty_run_compare["best_run_dir"])
+            self.assertIsNone(empty_run_compare["best_centroid_score"])
 
             self.assertEqual(
                 main(

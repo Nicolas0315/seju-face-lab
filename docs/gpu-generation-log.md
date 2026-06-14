@@ -16,6 +16,7 @@ Run date: 2026-06-15.
 - Built the official seju centroid model from the ignored local source image set.
 - Generated small GPU batches from `generation_manifest.json`.
 - Evaluated generated candidates with `seju_face_lab evaluate`.
+- Compared evaluated local batches with `seju_face_lab compare-runs`.
 - Confirmed generated images, manifests, and scores stay ignored under `outputs/`.
 - Confirmed the shortened default prompt avoids CLIP prompt truncation in the smoke run.
 
