@@ -18,6 +18,7 @@ face = [
 ]
 deepface = [
   "deepface>=0.0.100",
+  "tf-keras>=2.20",
 ]
 clip = [
   "open-clip-torch>=2.24",
@@ -39,6 +40,7 @@ all = [
   "insightface>=0.7",
   "onnxruntime-gpu>=1.18",
   "deepface>=0.0.100",
+  "tf-keras>=2.20",
   "open-clip-torch>=2.24",
   "diffusers>=0.30",
   "transformers>=4.44",

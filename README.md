@@ -240,6 +240,9 @@ Implemented now:
 On Windows, the InsightFace backend automatically adds torch's bundled CUDA DLL directory
 to the process search path when it exists, so ONNXRuntime-GPU can use `CUDAExecutionProvider`
 without hand-editing `PATH`.
+The DeepFace extra includes `tf-keras` for TensorFlow/Keras 3 compatibility and the
+backend switches Windows console streams to UTF-8 before importing DeepFace, avoiding
+Unicode logging failures during first-time weight downloads.
 
 Use the OpenCV face-crop backend after installing the optional vision dependencies:
 

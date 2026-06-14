@@ -56,7 +56,7 @@ def _backend_status(name: str) -> dict[str, Any]:
             "implemented": True,
             "state": "implemented",
             "extra": "deepface",
-            "dependencies": _dependencies("deepface", "tensorflow", "cv2"),
+            "dependencies": _dependencies("deepface", "tensorflow", "tf_keras", "cv2"),
             "model_name": backend.model_name,
             "detector_backend": backend.detector_backend,
         }

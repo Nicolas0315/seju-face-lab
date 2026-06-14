@@ -29,11 +29,11 @@ Retrieval/design date: 2026-06-14.
 
 Create and track these issues:
 
-- `P1 GPU face embeddings`: expand multi-candidate InsightFace/ONNXRuntime-GPU comparisons beyond the current 6-image batch and add DeepFace once runtime is verified.
+- `P1 GPU face embeddings`: expand multi-candidate InsightFace/ONNXRuntime-GPU comparisons beyond the current 6-image batch and investigate DeepFace ranking divergence.
 - `P1 Celebrity subject review workflow`: collect reviewed subject folders and run `review-subjects`.
 - `P1 Generation loop`: connect `generation_manifest.json` to Diffusers or ComfyUI batches.
 - `P1 SNS correlation workflow`: run handle extraction, engagement manifesting, and correlation reports.
-- `P2 DeepFace adapter`: verify optional DeepFace install on local GPU/CPU and compare embeddings with `compare-backends`.
+- `P2 DeepFace adapter`: compare detector choices after the default DeepFace/OpenCV detector accepted only `139/259` official references.
 - `P2 CLIP style axis`: verify optional OpenCLIP install and use `style-evaluate` alongside face geometry scores.
 - `P2 Remote worker playbook`: document RTX 4090 and RTX 5060 Ti split-run commands.
 
@@ -75,5 +75,8 @@ Create and track these issues:
 - Current ONNXRuntime reports `TensorrtExecutionProvider`, `CUDAExecutionProvider`, and `CPUExecutionProvider`; the full-set comparison log confirms applied providers `CUDAExecutionProvider, CPUExecutionProvider`.
 - v7 RTX 4090 detector-friendly batch generated 6 candidates and reviewed them in one pass: deterministic evaluated `6/6`, QA pass `3/6`, best QA image `candidate_0003_seed_260702`, best deterministic score `0.408002`.
 - v7 full-set InsightFace comparison used ONNXRuntime `CUDAExecutionProvider`: deterministic refs `259/259`, InsightFace refs `224/259`, InsightFace generated images `5/6`, failed generated image `candidate_0001_seed_260700`, best image matched deterministic at `candidate_0003_seed_260702`, best InsightFace score `0.105692`, deterministic-vs-InsightFace Spearman rank `0.300000` over 5 common images.
+- DeepFace runtime is verified locally after adding `tf-keras` to the optional extra and preparing UTF-8 console output on Windows; sample comparison produced 512D embeddings for 2 reference images and 1 generated image.
+- v7 all-backend comparison completed: deterministic refs `259/259`, OpenCV refs `173/259`, InsightFace refs `224/259`, DeepFace refs `139/259`; deterministic/OpenCV/InsightFace all picked `candidate_0003_seed_260702`, while DeepFace picked `candidate_0005_seed_260704`.
+- v7 pairwise rank agreement over 5 common generated images: deterministic-vs-OpenCV `0.900000`, deterministic-vs-InsightFace `0.300000`, InsightFace-vs-OpenCV `0.400000`, DeepFace-vs-deterministic `-0.700000`, DeepFace-vs-InsightFace `-0.200000`, DeepFace-vs-OpenCV `-0.400000`.
 - `compare-backends` is now the committed review path for checking whether deterministic/OpenCV and neural embeddings rank the same generated or subject images.
 - Full committed workflow notes are in `docs/gpu-generation-log.md`.

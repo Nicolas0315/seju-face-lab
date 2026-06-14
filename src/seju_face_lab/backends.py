@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
@@ -329,6 +330,7 @@ def _import_cv2() -> Any:
 
 
 def _import_deepface() -> Any:
+    _prepare_utf8_console_for_deepface()
     try:
         from deepface import DeepFace
     except ImportError as exc:
@@ -337,6 +339,20 @@ def _import_deepface() -> Any:
             "backend=deepface."
         ) from exc
     return DeepFace
+
+
+def _prepare_utf8_console_for_deepface() -> None:
+    if os.name != "nt":
+        return
+    os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+    for stream_name in ("stdout", "stderr"):
+        stream = getattr(sys, stream_name, None)
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            try:
+                reconfigure(encoding="utf-8", errors="replace")
+            except (OSError, ValueError):
+                pass
 
 
 def _prepare_windows_torch_cuda_dlls() -> Path | None:

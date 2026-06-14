@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import tempfile
 import unittest
 import urllib.error
@@ -1204,6 +1205,21 @@ class AnalysisModuleTests(unittest.TestCase):
         ):
             self.assertIsNone(backends_module._prepare_windows_torch_cuda_dlls())  # noqa: SLF001
 
+    def test_prepare_utf8_console_for_deepface_reconfigures_windows_streams(self) -> None:
+        fake_stdout = _FakeReconfigurableStream()
+        fake_stderr = _FakeReconfigurableStream()
+        with (
+            patch("seju_face_lab.backends.os.name", "nt"),
+            patch.object(sys, "stdout", fake_stdout),
+            patch.object(sys, "stderr", fake_stderr),
+            patch.dict(os.environ, {}, clear=True),
+        ):
+            backends_module._prepare_utf8_console_for_deepface()  # noqa: SLF001
+            self.assertEqual(os.environ["PYTHONIOENCODING"], "utf-8")
+
+        self.assertEqual(fake_stdout.calls, [{"encoding": "utf-8", "errors": "replace"}])
+        self.assertEqual(fake_stderr.calls, [{"encoding": "utf-8", "errors": "replace"}])
+
     def test_deepface_backend_vectorizes_largest_detected_face(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             image_path = Path(tmp) / "face.png"
@@ -1353,6 +1369,14 @@ class _FakeCV2:
     @staticmethod
     def imread(_path: str) -> np.ndarray:
         return np.zeros((32, 32, 3), dtype=np.uint8)
+
+
+class _FakeReconfigurableStream:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, str]] = []
+
+    def reconfigure(self, **kwargs: str) -> None:
+        self.calls.append(kwargs)
 
 
 class _FakeDeepFace:
