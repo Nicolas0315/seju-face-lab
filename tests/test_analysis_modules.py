@@ -237,17 +237,19 @@ class AnalysisModuleTests(unittest.TestCase):
             raw.mkdir()
             _write_image(raw / "a.png", (230, 210, 200))
             bad = root / "bad.png"
+            bad2 = root / "bad2.png"
             bad.write_text("not an image", encoding="utf-8")
+            bad2.write_text("not an image either", encoding="utf-8")
 
             model = root / "model"
             out = root / "worker_out"
             self.assertEqual(main(["build", "--images", str(raw), "--out", str(model)]), 0)
-            scores = run_local_evaluate([bad], model, out, backend="deterministic")
+            scores = run_local_evaluate([bad, bad2], model, out, backend="deterministic")
             summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
 
             self.assertEqual(scores, [])
-            self.assertEqual(summary["failed_count"], 1)
-            self.assertEqual(summary["failed_paths"], [str(bad)])
+            self.assertEqual(summary["failed_count"], 2)
+            self.assertEqual(summary["failed_paths"], [str(bad), str(bad2)])
 
     def test_distribute_vectorize_rejects_remote_workers_until_sync_exists(self) -> None:
         with self.assertRaisesRegex(NotImplementedError, "remote worker subset evaluation"):
