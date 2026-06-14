@@ -593,6 +593,48 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(precision["generation"]["best_centroid_score"], 0.25)
             self.assertEqual(precision["generation"]["best_image_id"], "planned_candidate")
 
+    def test_run_pipeline_plans_nested_subject_backend_subjects(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "raw"
+            subjects = root / "nested_subjects"
+            model_dir = root / "model"
+            subject_backend_compare_dir = root / "subject_backend_compare"
+            pipeline_dir = root / "pipeline_run"
+            config_path = root / "pipeline.json"
+            raw.mkdir()
+            (subjects / "near_subject").mkdir(parents=True)
+            _write_face_like_image(raw / "a.png", (235, 205, 190), eye_offset=0)
+            _write_face_like_image(raw / "b.png", (225, 198, 184), eye_offset=2)
+            _write_face_like_image(subjects / "near_subject" / "near.png", (232, 202, 188), eye_offset=1)
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "name": "nested_subject_backend_pipeline",
+                        "reference_images": str(raw),
+                        "model_out": str(model_dir),
+                        "subject_backend_comparison": {
+                            "subjects": str(subjects),
+                            "out": str(subject_backend_compare_dir),
+                            "backends": ["deterministic"],
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                main(["run-pipeline", "--config", str(config_path), "--out", str(pipeline_dir)]),
+                0,
+            )
+
+            pipeline_run = json.loads((pipeline_dir / "pipeline_run.json").read_text(encoding="utf-8"))
+            self.assertEqual(
+                [step["name"] for step in pipeline_run["steps"]],
+                ["build", "compare-subject-backends"],
+            )
+            self.assertTrue((subject_backend_compare_dir / "subject_backend_comparison.json").exists())
+
     def test_backends_command_lists_planned_backends(self) -> None:
         self.assertEqual(main(["backends"]), 0)
 
