@@ -1,0 +1,19 @@
+{
+  "model": "outputs/seju_model_official",
+  "out": "outputs/generated",
+  "provider": "diffusers",
+  "hf_model": "runwayml/stable-diffusion-v1-5",
+  "count": 8,
+  "seed": 150315,
+  "steps": 30,
+  "guidance_scale": 7.0,
+  "width": 512,
+  "height": 512,
+  "device": "cuda",
+  "dtype": "float16",
+  "notes": [
+    "Run dry-run first to write generation_run.json without loading a model.",
+    "Keep outputs/generated Git-ignored.",
+    "Evaluate generated images with python -m seju_face_lab evaluate."
+  ]
+}

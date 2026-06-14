@@ -8,7 +8,8 @@ Retrieval/design date: 2026-06-14.
 - Reviewed eligible image staging is implemented through `sources download`.
 - Deterministic centroid build/evaluate is implemented and tested.
 - Per-subject similarity review is implemented through `review-subjects`.
-- Neural backends, DeepFace cross-checking, and image-generation loops are planned.
+- Neural backends and DeepFace cross-checking are planned.
+- Image-generation dry-run planning is implemented; full Diffusers execution is optional.
 
 ## GitHub Issue Plan
 
@@ -35,4 +36,5 @@ Create and track these issues:
 2. Place comparison celebrity/public-figure image folders under `data/subjects/`.
 3. Run `review-subjects` with the deterministic backend.
 4. Run the same review with InsightFace or DeepFace once optional dependencies are installed.
-5. Generate aggregate candidate faces with Diffusers/ComfyUI and score with `evaluate`.
+5. Plan aggregate candidate faces with `generate --provider dry-run`.
+6. Generate with Diffusers/ComfyUI on a GPU worker and score with `evaluate`.

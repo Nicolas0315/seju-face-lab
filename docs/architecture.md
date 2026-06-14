@@ -17,7 +17,9 @@ Retrieval/design date: 2026-06-14.
    - mean and median centroids are saved
    - mean/median appearance images are rendered
 4. generation
-   - `prompt.txt` and `generation_manifest.json` feed ComfyUI or another generator
+   - `prompt.txt` and `generation_manifest.json` feed `generate`
+   - `generate --provider dry-run` writes a reproducible run plan
+   - `generate --provider diffusers` runs an optional local Diffusers batch
 5. `evaluate`
    - generated candidates are scored against mean and median vectors
 6. `review-subjects`
@@ -59,6 +61,18 @@ identity recognition, attractiveness scoring, ethnicity classification, or an ob
 - Use `insightface` or `deepface` for face-embedding cross-checks after deterministic results are stable.
 - Use Diffusers or ComfyUI to generate candidates from `generation_manifest.json`, then score them with `evaluate`.
 - Keep generated-image prompts aggregate-only; avoid copying a specific real person.
+
+Dry-run planning:
+
+```powershell
+python -m seju_face_lab generate --model outputs/seju_model --out outputs/generated --provider dry-run --count 8
+```
+
+Diffusers execution:
+
+```powershell
+python -m seju_face_lab generate --model outputs/seju_model --out outputs/generated --provider diffusers --hf-model runwayml/stable-diffusion-v1-5 --count 8 --device cuda
+```
 
 ## Folder Contract
 

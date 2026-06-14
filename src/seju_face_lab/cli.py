@@ -8,6 +8,7 @@ import numpy as np
 
 from .backends import backend_help, get_vector_backend
 from .embeddings import iter_image_paths, render_appearance
+from .generation import build_generation_config, run_diffusers_generation, write_generation_plan
 from .metrics import review_subject_directories, score_generated_images, write_scores, write_subject_reviews
 from .model import build_centroid_model, load_model, save_model
 from .prompting import prompt_from_descriptors
@@ -31,6 +32,25 @@ def main(argv: list[str] | None = None) -> int:
     prompt_parser = subparsers.add_parser("prompt", help="print a generation prompt from a built model")
     prompt_parser.add_argument("--model", type=Path, required=True)
     prompt_parser.add_argument("--kind", choices=["mean", "median"], default="median")
+
+    generate_parser = subparsers.add_parser(
+        "generate",
+        help="plan or run aggregate image generation from a centroid prompt",
+    )
+    generate_parser.add_argument("--model", type=Path, required=True)
+    generate_parser.add_argument("--out", type=Path, required=True)
+    generate_parser.add_argument("--provider", choices=["dry-run", "diffusers"], default="dry-run")
+    generate_parser.add_argument("--hf-model", default="runwayml/stable-diffusion-v1-5")
+    generate_parser.add_argument("--count", type=int, default=4)
+    generate_parser.add_argument("--seed", type=int, default=150315)
+    generate_parser.add_argument("--steps", type=int, default=30)
+    generate_parser.add_argument("--guidance-scale", type=float, default=7.0)
+    generate_parser.add_argument("--width", type=int, default=512)
+    generate_parser.add_argument("--height", type=int, default=512)
+    generate_parser.add_argument("--device", default="cuda")
+    generate_parser.add_argument("--dtype", choices=["float16", "bfloat16", "float32"], default="float16")
+    generate_parser.add_argument("--prompt", default=None)
+    generate_parser.add_argument("--dry-run", action="store_true")
 
     render_parser = subparsers.add_parser("render", help="render mean or median face image again")
     render_parser.add_argument("--model", type=Path, required=True)
@@ -92,6 +112,8 @@ def main(argv: list[str] | None = None) -> int:
         return _build(args.images, args.out, args.crop, args.backend)
     if args.command == "prompt":
         return _prompt(args.model, args.kind)
+    if args.command == "generate":
+        return _generate(args)
     if args.command == "render":
         return _render(args.model, args.kind, args.out)
     if args.command == "evaluate":
@@ -152,6 +174,33 @@ def _build(images: Path, out: Path, crop: str, backend_name: str) -> int:
 def _prompt(model_dir: Path, kind: str) -> int:
     model = load_model(model_dir)
     print(prompt_from_descriptors(model.descriptors[kind]))
+    return 0
+
+
+def _generate(args: argparse.Namespace) -> int:
+    if args.count <= 0:
+        raise SystemExit("--count must be positive")
+    config = build_generation_config(
+        model_dir=args.model,
+        provider=args.provider,
+        model_id=args.hf_model,
+        count=args.count,
+        seed=args.seed,
+        steps=args.steps,
+        guidance_scale=args.guidance_scale,
+        width=args.width,
+        height=args.height,
+        device=args.device,
+        dtype=args.dtype,
+        prompt_override=args.prompt,
+    )
+    if args.dry_run or args.provider == "dry-run":
+        result = write_generation_plan(config, args.model, args.out)
+    else:
+        result = run_diffusers_generation(config, args.model, args.out)
+    print(f"generation status: {result.status}")
+    print(f"run manifest: {args.out / 'generation_run.json'}")
+    print(f"evaluate: {result.evaluation_command}")
     return 0
 
 

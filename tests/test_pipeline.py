@@ -24,6 +24,7 @@ class PipelineTests(unittest.TestCase):
             subjects = root / "subjects"
             model_dir = root / "model"
             eval_dir = root / "eval"
+            generation_dir = root / "generation"
             review_dir = root / "review"
             raw.mkdir()
             generated.mkdir()
@@ -77,6 +78,29 @@ class PipelineTests(unittest.TestCase):
             self.assertIn("candidate", scores)
             self.assertIn("centroid_score", scores)
             self.assertTrue((eval_dir / "summary.json").exists())
+
+            self.assertEqual(
+                main(
+                    [
+                        "generate",
+                        "--model",
+                        str(model_dir),
+                        "--out",
+                        str(generation_dir),
+                        "--provider",
+                        "dry-run",
+                        "--count",
+                        "2",
+                        "--seed",
+                        "42",
+                    ]
+                ),
+                0,
+            )
+            generation_run = json.loads((generation_dir / "generation_run.json").read_text(encoding="utf-8"))
+            self.assertEqual(generation_run["result"]["status"], "planned")
+            self.assertEqual(generation_run["config"]["count"], 2)
+            self.assertIn("evaluate", generation_run["result"]["evaluation_command"])
 
             self.assertEqual(
                 main(
