@@ -197,8 +197,8 @@ def download_source_images(
     fetcher = _ThrottledFetcher(user_agent=user_agent, delay_seconds=delay_seconds)
     robots_check = check_robots or _assert_robots_allowed
     results: list[DownloadResult] = []
-    for index, candidate in enumerate(selected, start=1):
-        target = out_dir / _download_filename(candidate, index)
+    for candidate in selected:
+        target = out_dir / _download_filename(candidate)
         if dry_run:
             results.append(
                 DownloadResult(
@@ -213,16 +213,17 @@ def download_source_images(
                 )
             )
             continue
-        if target.exists():
+        existing_target = _existing_download_path(out_dir, candidate, target)
+        if existing_target is not None:
             results.append(
                 DownloadResult(
                     profile_url=candidate.profile_url,
                     talent_slug=candidate.talent_slug,
                     image_url=candidate.image_url,
                     status="skipped",
-                    path=str(target),
-                    sha256=_sha256_file(target),
-                    bytes=target.stat().st_size,
+                    path=str(existing_target),
+                    sha256=_sha256_file(existing_target),
+                    bytes=existing_target.stat().st_size,
                     reason="exists",
                 )
             )
@@ -448,11 +449,20 @@ def _select_download_candidates(
     return selected
 
 
-def _download_filename(candidate: SourceCandidate, index: int) -> str:
+def _download_filename(candidate: SourceCandidate) -> str:
     extension = _extension_from_url(candidate.image_url)
     slug = re.sub(r"[^a-zA-Z0-9_-]+", "-", candidate.talent_slug).strip("-") or "talent"
     digest = hashlib.sha1(candidate.image_url.encode("utf-8")).hexdigest()[:10]
-    return f"{index:04d}_{slug}_{digest}{extension}"
+    return f"{slug}_{digest}{extension}"
+
+
+def _existing_download_path(out_dir: Path, candidate: SourceCandidate, target: Path) -> Path | None:
+    if target.exists():
+        return target
+    extension = _extension_from_url(candidate.image_url)
+    digest = hashlib.sha1(candidate.image_url.encode("utf-8")).hexdigest()[:10]
+    legacy_matches = sorted(out_dir.glob(f"*_{digest}{extension}"))
+    return legacy_matches[0] if legacy_matches else None
 
 
 def _extension_from_url(url: str) -> str:

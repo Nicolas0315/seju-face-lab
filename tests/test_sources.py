@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 
@@ -136,6 +137,47 @@ class SourceParsingTests(unittest.TestCase):
             )
             self.assertEqual(too_large[0].status, "failed")
             self.assertIn("image exceeds max bytes", too_large[0].reason or "")
+
+    def test_download_source_images_uses_stable_url_digest_filenames(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            first = SourceCandidate(
+                profile_url="https://seju.tokyo/talents/example/",
+                talent_slug="example",
+                name="Example",
+                birthdate="2000-01-01",
+                age_as_of=24,
+                image_url="https://seju.tokyo/wp-content/uploads/example_01.jpg",
+                image_kind="img",
+                alt=None,
+                eligible_for_analysis=True,
+                exclusion_reason=None,
+                retrieved_at=date(2026, 6, 14).isoformat(),
+                source_policy="manifest_only_review_before_download",
+            )
+            second = replace(first, image_url="https://seju.tokyo/wp-content/uploads/example_02.jpg")
+            fetched: list[str] = []
+
+            def fake_fetch(url: str) -> tuple[bytes, str | None]:
+                fetched.append(url)
+                return b"fake-jpeg-bytes", "image/jpeg"
+
+            first_run = download_source_images(
+                [first, second],
+                root / "stable",
+                fetch_bytes=fake_fetch,
+                check_robots=lambda _url, _agent: None,
+            )
+            self.assertEqual([result.status for result in first_run], ["downloaded", "downloaded"])
+
+            second_run = download_source_images(
+                [second],
+                root / "stable",
+                fetch_bytes=fake_fetch,
+                check_robots=lambda _url, _agent: None,
+            )
+            self.assertEqual(second_run[0].status, "skipped")
+            self.assertEqual(fetched.count(second.image_url), 1)
 
     def test_quote_url_preserves_ascii_and_encodes_japanese_path(self) -> None:
         quoted = _quote_url("https://seju.tokyo/wp-content/uploads/2023/07/秋葉聡さん撮影.jpg")
