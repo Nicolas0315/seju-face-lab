@@ -38,6 +38,7 @@ def compare_vector_backends(
     backend_names: list[str],
     crop: str = "center",
 ) -> dict[str, Any]:
+    _validate_backend_names(backend_names)
     out_dir.mkdir(parents=True, exist_ok=True)
     runs = [_run_backend(reference_images, images, out_dir, name, crop) for name in backend_names]
     tables = {
@@ -59,6 +60,13 @@ def compare_vector_backends(
     (out_dir / "backend_comparison.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     (out_dir / "backend_comparison.md").write_text(_render(report), encoding="utf-8")
     return report
+
+
+def _validate_backend_names(backend_names: list[str]) -> None:
+    unknown = sorted({name for name in backend_names if name not in backends.BACKENDS})
+    if unknown:
+        choices = ", ".join(sorted(backends.BACKENDS))
+        raise ValueError(f"Unknown backend(s): {', '.join(unknown)}. Choices: {choices}")
 
 
 def _run_backend(reference_images: Path, images: Path, out_dir: Path, backend_name: str, crop: str) -> BackendRun:

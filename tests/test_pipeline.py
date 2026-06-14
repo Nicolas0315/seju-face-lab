@@ -554,6 +554,32 @@ class PipelineTests(unittest.TestCase):
             self.assertTrue((out / "deterministic" / "evaluation" / "scores.csv").exists())
             self.assertTrue((out / "opencv-face" / "model" / "centroids.npz").exists())
 
+    def test_compare_backends_rejects_unknown_backend_name(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "raw"
+            generated = root / "generated"
+            raw.mkdir()
+            generated.mkdir()
+            _write_face_like_image(raw / "a.png", (235, 205, 190), eye_offset=0)
+            _write_face_like_image(generated / "candidate_a.png", (232, 202, 188), eye_offset=1)
+
+            with self.assertRaisesRegex(ValueError, "Unknown backend"):
+                main(
+                    [
+                        "compare-backends",
+                        "--reference-images",
+                        str(raw),
+                        "--images",
+                        str(generated),
+                        "--out",
+                        str(root / "backend_compare"),
+                        "--backends",
+                        "deterministic",
+                        "opencvface",
+                    ]
+                )
+
     def test_review_subjects_reports_missing_directory(self) -> None:
         with self.assertRaisesRegex(SystemExit, "No subject directory found"):
             main(
