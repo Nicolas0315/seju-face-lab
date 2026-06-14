@@ -270,48 +270,58 @@ def fetch_twitter_engagement(handle: str) -> SnsEngagement:
 
 
 def fetch_tiktok_engagement(handle: str) -> SnsEngagement:
-    """Fetch public TikTok profile data via SIGI_STATE JSON extraction."""
+    """Fetch public TikTok profile data via multiple strategies."""
     retrieved_at = datetime.now(timezone.utc).isoformat()
     profile_url = f"https://www.tiktok.com/@{handle}"
     fetcher = _Fetcher(user_agent=_IG_API_UA, delay_seconds=0.5)
 
+    # Strategy 1: undocumented user detail API (no auth, sometimes works)
+    api_url = (
+        f"https://www.tiktok.com/api/user/detail/?uniqueId={handle}"
+        f"&count=0&cursor=0&from_page=user"
+    )
+    try:
+        text = fetcher.fetch_text(api_url, extra_headers={
+            "Referer": "https://www.tiktok.com/",
+            "Accept": "application/json, text/plain, */*",
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "same-origin",
+        })
+        data = json.loads(text)
+        user_info = data.get("userInfo") or {}
+        user = user_info.get("user") or {}
+        stats = user_info.get("stats") or {}
+        if stats and stats.get("followerCount") is not None:
+            followers = _int_or_none(stats.get("followerCount"))
+            hearts = _int_or_none(stats.get("heartCount") or stats.get("diggCount"))
+            return SnsEngagement(
+                platform="tiktok", handle=handle, profile_url=profile_url,
+                followers=followers, following=_int_or_none(stats.get("followingCount")),
+                posts=_int_or_none(stats.get("videoCount")),
+                total_engagement=hearts,
+                engagement_rate=_engagement_rate(hearts, followers, _int_or_none(stats.get("videoCount"))),
+                bio=user.get("signature") or None,
+                display_name=user.get("nickname") or None,
+                fetch_status="ok", fetch_error=None, retrieved_at=retrieved_at,
+            )
+    except Exception:  # noqa: BLE001
+        pass
+
+    # Strategy 2: HTML page with SIGI_STATE / UNIVERSAL_DATA
     try:
         html = fetcher.fetch_text(profile_url)
 
-        # Strategy 1: SIGI_STATE JSON
         m = _SIGI_STATE_RE.search(html)
         if m:
             data = json.loads(m.group(1))
             user_info = (
                 data.get("UserPage", {}).get("userInfo", {})
-                or data.get("userPage", {}).get("userInfo", {})
                 or _deep_find(data, "userInfo")
                 or {}
             )
             user = user_info.get("user") or {}
             stats = user_info.get("stats") or {}
-            if stats or user:
-                followers = _int_or_none(stats.get("followerCount"))
-                following = _int_or_none(stats.get("followingCount"))
-                posts = _int_or_none(stats.get("videoCount"))
-                hearts = _int_or_none(stats.get("heartCount") or stats.get("diggCount"))
-                return SnsEngagement(
-                    platform="tiktok", handle=handle, profile_url=profile_url,
-                    followers=followers, following=following, posts=posts,
-                    total_engagement=hearts,
-                    engagement_rate=_engagement_rate(hearts, followers, posts),
-                    bio=user.get("signature") or None,
-                    display_name=user.get("nickname") or None,
-                    fetch_status="ok", fetch_error=None, retrieved_at=retrieved_at,
-                )
-
-        # Strategy 2: __UNIVERSAL_DATA_FOR_REHYDRATION__
-        m2 = _UNIVERSAL_DATA_RE.search(html)
-        if m2:
-            data = json.loads(m2.group(1))
-            user_info = _deep_find(data, "userInfo") or {}
-            stats = user_info.get("stats") or {}
-            user = user_info.get("user") or {}
             if stats:
                 followers = _int_or_none(stats.get("followerCount"))
                 hearts = _int_or_none(stats.get("heartCount") or stats.get("diggCount"))
@@ -327,7 +337,27 @@ def fetch_tiktok_engagement(handle: str) -> SnsEngagement:
                     fetch_error=None, retrieved_at=retrieved_at,
                 )
 
-        # Strategy 3: meta tags
+        m2 = _UNIVERSAL_DATA_RE.search(html)
+        if m2:
+            data = json.loads(m2.group(1))
+            user_info = _deep_find(data, "userInfo") or {}
+            stats = user_info.get("stats") or {}
+            user = user_info.get("user") or {}
+            if stats and stats.get("followerCount") is not None:
+                followers = _int_or_none(stats.get("followerCount"))
+                hearts = _int_or_none(stats.get("heartCount") or stats.get("diggCount"))
+                return SnsEngagement(
+                    platform="tiktok", handle=handle, profile_url=profile_url,
+                    followers=followers, following=None,
+                    posts=_int_or_none(stats.get("videoCount")),
+                    total_engagement=hearts,
+                    engagement_rate=_engagement_rate(hearts, followers, None),
+                    bio=user.get("signature") or None,
+                    display_name=user.get("nickname") or None,
+                    fetch_status="ok" if followers else "partial",
+                    fetch_error=None, retrieved_at=retrieved_at,
+                )
+
         meta = _parse_meta_tags(html)
         desc = meta.get("og:description") or ""
         followers = _parse_follower_count_from_text(desc)
@@ -415,6 +445,125 @@ def read_engagement_manifest(path: Path) -> list[TalentEngagementRecord]:
             engagements=[SnsEngagement(**e) for e in data.get("engagements", [])],
         ))
     return records
+
+
+def import_engagement_csv(
+    csv_path: Path,
+    out_path: Path,
+    existing_path: Path | None = None,
+    overwrite_platforms: bool = True,
+) -> list[TalentEngagementRecord]:
+    """Import SNS engagement data from a user-supplied CSV and write to a JSONL manifest.
+
+    CSV format (UTF-8 with or without BOM):
+        talent_slug, platform, handle, followers, following, posts,
+        total_engagement, engagement_rate, display_name, bio
+
+    Only talent_slug, platform, and handle are required.
+    Missing numeric columns are stored as null.
+
+    If existing_path is given, its records are loaded first; rows from the CSV
+    then replace any matching (talent_slug, platform) entry when overwrite_platforms=True,
+    or are skipped when False.
+    """
+    import csv
+
+    retrieved_at = datetime.now(timezone.utc).isoformat()
+
+    # Load existing data keyed by (slug, platform)
+    existing: dict[str, TalentEngagementRecord] = {}
+    if existing_path and existing_path.exists():
+        for rec in read_engagement_manifest(existing_path):
+            existing[rec.talent_slug] = rec
+
+    def _csv_int(val: str) -> int | None:
+        v = val.strip()
+        if not v or v.lower() in ("", "null", "none", "n/a", "-"):
+            return None
+        # strip commas and K/M suffixes
+        v = v.replace(",", "")
+        if v[-1].upper() == "K":
+            return int(float(v[:-1]) * 1_000)
+        if v[-1].upper() == "M":
+            return int(float(v[:-1]) * 1_000_000)
+        return int(float(v))
+
+    def _csv_float(val: str) -> float | None:
+        v = val.strip()
+        if not v or v.lower() in ("", "null", "none", "n/a", "-"):
+            return None
+        v = v.rstrip("%")
+        try:
+            f = float(v)
+            return f / 100 if "%" in val else f
+        except ValueError:
+            return None
+
+    raw = csv_path.read_bytes()
+    text = raw.decode("utf-8-sig")  # strips BOM if present
+
+    reader = csv.DictReader(text.splitlines())
+    rows_by_slug: dict[str, list[SnsEngagement]] = {}
+
+    for row in reader:
+        slug = row.get("talent_slug", "").strip()
+        platform = row.get("platform", "").strip().lower()
+        handle = row.get("handle", "").strip().lstrip("@")
+        if not slug or not platform or not handle:
+            continue
+
+        followers = _csv_int(row.get("followers", ""))
+        following = _csv_int(row.get("following", ""))
+        posts = _csv_int(row.get("posts", ""))
+        total_eng = _csv_int(row.get("total_engagement", ""))
+        eng_rate = _csv_float(row.get("engagement_rate", ""))
+        display_name = row.get("display_name", "").strip() or None
+        bio = row.get("bio", "").strip() or None
+
+        if eng_rate is None and total_eng is not None and followers:
+            eng_rate = _engagement_rate(total_eng, followers, posts)
+
+        profile_url = _platform_profile_url(platform, handle)
+        eng = SnsEngagement(
+            platform=platform, handle=handle, profile_url=profile_url,
+            followers=followers, following=following, posts=posts,
+            total_engagement=total_eng, engagement_rate=eng_rate,
+            bio=bio, display_name=display_name,
+            fetch_status="ok" if followers is not None else "partial",
+            fetch_error=None, retrieved_at=retrieved_at,
+        )
+        rows_by_slug.setdefault(slug, []).append(eng)
+
+    # Merge into existing records
+    for slug, new_engs in rows_by_slug.items():
+        if slug not in existing:
+            existing[slug] = TalentEngagementRecord(
+                talent_slug=slug, name=None, engagements=[]
+            )
+        rec = existing[slug]
+        for new_eng in new_engs:
+            if overwrite_platforms:
+                rec.engagements = [
+                    e for e in rec.engagements if e.platform != new_eng.platform
+                ]
+            else:
+                if any(e.platform == new_eng.platform for e in rec.engagements):
+                    continue
+            rec.engagements.append(new_eng)
+
+    result = sorted(existing.values(), key=lambda r: r.talent_slug)
+    write_engagement_manifest(result, out_path)
+    return result
+
+
+def _platform_profile_url(platform: str, handle: str) -> str:
+    if platform == "instagram":
+        return f"https://www.instagram.com/{handle}/"
+    if platform in ("twitter", "x"):
+        return f"https://x.com/{handle}"
+    if platform == "tiktok":
+        return f"https://www.tiktok.com/@{handle}"
+    return f"https://{platform}.com/{handle}"
 
 
 # ─── internal helpers ─────────────────────────────────────────────────────────

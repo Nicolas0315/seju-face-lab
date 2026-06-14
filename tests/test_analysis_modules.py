@@ -24,6 +24,7 @@ from seju_face_lab.sns_metrics import (
     extract_sns_handles_from_links,
     read_engagement_manifest,
     read_handles_manifest,
+    import_engagement_csv,
     write_engagement_manifest,
     write_handles_manifest,
 )
@@ -90,6 +91,24 @@ class AnalysisModuleTests(unittest.TestCase):
             )
             loaded = read_engagement_manifest(engagement_path)
             self.assertEqual(loaded[0].engagements[0].followers, 1000)
+
+    def test_import_engagement_csv_merges_manual_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            csv_path = root / "manual.csv"
+            out_path = root / "engagement.jsonl"
+            csv_path.write_text(
+                "\ufefftalent_slug,platform,handle,followers,following,posts,total_engagement,engagement_rate,display_name,bio\n"
+                "talent_a,instagram,@talent_a,\"1,200\",100,20,240,,Talent A,\n",
+                encoding="utf-8",
+            )
+
+            records = import_engagement_csv(csv_path, out_path)
+
+            self.assertEqual(records[0].talent_slug, "talent_a")
+            self.assertEqual(records[0].engagements[0].followers, 1200)
+            self.assertEqual(records[0].engagements[0].engagement_rate, 0.01)
+            self.assertTrue(out_path.exists())
 
     def test_correlation_report_joins_face_scores_and_engagement(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

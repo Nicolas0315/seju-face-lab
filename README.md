@@ -143,6 +143,13 @@ python -m seju_face_lab sources fetch-engagement --handles data/processed/sns_ha
 
 The SNS fetchers are best-effort public-page readers. Treat blocked/partial rows as expected data quality signals.
 
+When public pages are blocked, create a manual CSV template and import reviewed values:
+
+```powershell
+python scripts/generate_engagement_csv_template.py --handles data/processed/sns_handles.jsonl --out data/processed/sns_engagement_manual.csv
+python -m seju_face_lab sources import-engagement --csv data/processed/sns_engagement_manual.csv --out data/processed/sns_engagement.jsonl
+```
+
 ## Correlation Analysis
 
 After running `review-subjects`, join those face scores to SNS engagement:

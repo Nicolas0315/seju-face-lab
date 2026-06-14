@@ -149,6 +149,19 @@ def main(argv: list[str] | None = None) -> int:
                                    default=["instagram", "twitter", "tiktok"])
     fetch_eng_parser.add_argument("--delay-seconds", type=float, default=2.0)
 
+    import_eng_parser = source_subparsers.add_parser(
+        "import-engagement",
+        help="import SNS engagement data from a hand-curated CSV into the engagement manifest",
+    )
+    import_eng_parser.add_argument("--csv", type=Path, required=True,
+                                    help="CSV with columns: talent_slug,platform,handle,followers,...")
+    import_eng_parser.add_argument("--out", type=Path, required=True,
+                                    help="output .jsonl engagement manifest (will be created or updated)")
+    import_eng_parser.add_argument("--existing", type=Path, default=None,
+                                    help="existing engagement .jsonl to merge into (optional)")
+    import_eng_parser.add_argument("--no-overwrite", action="store_true",
+                                    help="skip rows where (talent_slug, platform) already exists in --existing")
+
     # analyze command group
     analyze_parser = subparsers.add_parser("analyze", help="statistical analysis of face scores and SNS engagement")
     analyze_subparsers = analyze_parser.add_subparsers(dest="analyze_command", required=True)
@@ -190,6 +203,8 @@ def main(argv: list[str] | None = None) -> int:
         return _sources_scrape_handles(args)
     if args.command == "sources" and args.sources_command == "fetch-engagement":
         return _sources_fetch_engagement(args)
+    if args.command == "sources" and args.sources_command == "import-engagement":
+        return _sources_import_engagement(args)
     if args.command == "analyze" and args.analyze_command == "correlation":
         return _analyze_correlation(args)
     parser.error(f"Unknown command: {args.command}")
@@ -427,6 +442,26 @@ def _sources_fetch_engagement(args: argparse.Namespace) -> int:
     print(f"talents processed: {len(records)}")
     print(f"engagements fetched (ok/partial): {ok_count}")
     print(f"blocked: {blocked}")
+    print(f"output: {args.out}")
+    return 0
+
+
+def _sources_import_engagement(args: argparse.Namespace) -> int:
+    from .sns_metrics import import_engagement_csv
+
+    records = import_engagement_csv(
+        csv_path=args.csv,
+        out_path=args.out,
+        existing_path=args.existing,
+        overwrite_platforms=not args.no_overwrite,
+    )
+    total_engs = sum(len(r.engagements) for r in records)
+    with_followers = sum(
+        1 for r in records for e in r.engagements if e.followers is not None
+    )
+    print(f"talents in manifest: {len(records)}")
+    print(f"engagement records: {total_engs}")
+    print(f"records with followers: {with_followers}")
     print(f"output: {args.out}")
     return 0
 
