@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+import urllib.error
 from pathlib import Path
 from unittest.mock import patch
 
@@ -22,7 +23,9 @@ from seju_face_lab.sns_metrics import (
     SnsHandleRecord,
     TalentEngagementRecord,
     extract_sns_handles_from_links,
+    fetch_instagram_engagement,
     fetch_tiktok_engagement,
+    fetch_twitter_engagement,
     read_engagement_manifest,
     read_handles_manifest,
     import_engagement_csv,
@@ -156,6 +159,70 @@ class AnalysisModuleTests(unittest.TestCase):
         self.assertEqual(engagement.following, 25)
         self.assertEqual(engagement.posts, 10)
         self.assertEqual(engagement.engagement_rate, 0.02)
+
+    def test_instagram_falls_back_when_requests_is_missing(self) -> None:
+        html = (
+            '<meta property="og:description" content="1,234 Followers, 50 Following, 10 Posts">'
+            '<meta property="og:title" content="Talent (@talent)">'
+        )
+        with patch.dict("sys.modules", {"requests": None}):
+            with patch(
+                "seju_face_lab.sns_metrics._Fetcher.fetch_text",
+                side_effect=[RuntimeError("api blocked"), html],
+            ):
+                engagement = fetch_instagram_engagement("talent")
+
+        self.assertEqual(engagement.fetch_status, "partial")
+        self.assertEqual(engagement.followers, 1234)
+
+    def test_instagram_api_404_still_allows_page_fallback(self) -> None:
+        html = (
+            '<meta property="og:description" content="2,345 Followers">'
+            '<meta property="og:title" content="Talent (@talent)">'
+        )
+        http_404 = urllib.error.HTTPError(
+            "https://www.instagram.com/api/v1/users/web_profile_info/?username=talent",
+            404,
+            "not found",
+            hdrs=None,
+            fp=None,
+        )
+        with patch.dict("sys.modules", {"requests": None}):
+            with patch(
+                "seju_face_lab.sns_metrics._Fetcher.fetch_text",
+                side_effect=[http_404, html],
+            ):
+                engagement = fetch_instagram_engagement("talent")
+
+        self.assertEqual(engagement.fetch_status, "partial")
+        self.assertEqual(engagement.followers, 2345)
+
+    def test_twitter_falls_back_to_x_meta_after_public_api_failures(self) -> None:
+        html = (
+            '<meta property="og:description" content="1.2K Followers">'
+            '<meta property="og:title" content="Talent (@talent)">'
+        )
+        http_404 = urllib.error.HTTPError(
+            "https://api.fxtwitter.com/talent",
+            404,
+            "not found",
+            hdrs=None,
+            fp=None,
+        )
+        with patch("urllib.request.urlopen", side_effect=http_404):
+            with patch(
+                "seju_face_lab.sns_metrics._Fetcher.fetch_text",
+                side_effect=[
+                    RuntimeError("nitter 1"),
+                    RuntimeError("nitter 2"),
+                    RuntimeError("nitter 3"),
+                    html,
+                ],
+            ):
+                engagement = fetch_twitter_engagement("talent")
+
+        self.assertEqual(engagement.fetch_status, "partial")
+        self.assertEqual(engagement.followers, 1200)
 
     def test_correlation_report_joins_face_scores_and_engagement(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

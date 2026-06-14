@@ -165,13 +165,59 @@ def read_handles_manifest(path: Path) -> list[SnsHandleRecord]:
 # ─── per-platform engagement fetching ────────────────────────────────────────
 
 def fetch_instagram_engagement(handle: str) -> SnsEngagement:
-    """Fetch public Instagram profile data via unofficial JSON endpoint + page fallback."""
+    """Fetch public Instagram profile data via API and page fallbacks."""
     retrieved_at = datetime.now(timezone.utc).isoformat()
     profile_url = f"https://www.instagram.com/{handle}/"
+    api_url = f"https://www.instagram.com/api/v1/users/web_profile_info/?username={handle}"
     fetcher = _Fetcher(user_agent=_IG_API_UA, delay_seconds=0.5)
 
-    # Strategy 1: undocumented profile API (often works for public profiles)
-    api_url = f"https://www.instagram.com/api/v1/users/web_profile_info/?username={handle}"
+    # Strategy 1: warm a requests session when available. Instagram often wants
+    # cookies before the unauthenticated profile endpoint returns JSON.
+    try:
+        import requests as _requests
+
+        session = _requests.Session()
+        session.headers.update({
+            "User-Agent": _IG_API_UA,
+            "X-IG-App-ID": "936619743392459",
+            "Accept": "application/json, text/plain, */*",
+            "Referer": "https://www.instagram.com/",
+            "Accept-Language": "ja-JP,ja;q=0.9,en-US;q=0.8",
+        })
+        try:
+            session.get("https://www.instagram.com/", timeout=10)
+        except Exception:
+            pass
+        session_error: str | None = None
+        resp = session.get(api_url, timeout=15)
+        if resp.status_code == 404:
+            session_error = "api session: 404"
+        elif resp.status_code == 200:
+            data = resp.json()
+            user = data.get("data", {}).get("user") or data.get("user") or {}
+            if user:
+                followers = _int_or_none((user.get("edge_followed_by") or {}).get("count"))
+                following = _int_or_none((user.get("edge_follow") or {}).get("count"))
+                posts = _int_or_none((user.get("edge_owner_to_timeline_media") or {}).get("count"))
+                total_eng = _estimate_ig_engagement(user)
+                return SnsEngagement(
+                    platform="instagram", handle=handle, profile_url=profile_url,
+                    followers=followers, following=following, posts=posts,
+                    total_engagement=total_eng,
+                    engagement_rate=_engagement_rate(total_eng, followers, posts),
+                    bio=user.get("biography") or None,
+                    display_name=user.get("full_name") or None,
+                    fetch_status="ok" if followers is not None else "partial",
+                    fetch_error=None, retrieved_at=retrieved_at,
+                )
+        else:
+            session_error = f"api session: HTTP {resp.status_code}"
+    except ImportError:
+        session_error = None
+    except Exception as exc:  # noqa: BLE001
+        session_error = f"api session: {exc}"
+
+    # Strategy 2: dependency-free direct API call.
     try:
         text = fetcher.fetch_text(api_url, extra_headers={
             "X-IG-App-ID": "936619743392459",
@@ -181,37 +227,41 @@ def fetch_instagram_engagement(handle: str) -> SnsEngagement:
         data = json.loads(text)
         user = data.get("data", {}).get("user") or data.get("user") or {}
         if user:
-            followers = _int_or_none(user.get("edge_followed_by", {}).get("count"))
-            following = _int_or_none(user.get("edge_follow", {}).get("count"))
-            posts = _int_or_none(user.get("edge_owner_to_timeline_media", {}).get("count"))
-            bio = user.get("biography") or None
-            display_name = user.get("full_name") or None
+            followers = _int_or_none((user.get("edge_followed_by") or {}).get("count"))
+            following = _int_or_none((user.get("edge_follow") or {}).get("count"))
+            posts = _int_or_none((user.get("edge_owner_to_timeline_media") or {}).get("count"))
             total_eng = _estimate_ig_engagement(user)
             return SnsEngagement(
                 platform="instagram", handle=handle, profile_url=profile_url,
                 followers=followers, following=following, posts=posts,
                 total_engagement=total_eng,
                 engagement_rate=_engagement_rate(total_eng, followers, posts),
-                bio=bio, display_name=display_name,
-                fetch_status="ok", fetch_error=None, retrieved_at=retrieved_at,
+                bio=user.get("biography") or None,
+                display_name=user.get("full_name") or None,
+                fetch_status="ok" if followers is not None else "partial",
+                fetch_error=None, retrieved_at=retrieved_at,
             )
-    except Exception:  # noqa: BLE001
-        pass
+    except urllib.error.HTTPError as exc:
+        api_error = f"{session_error}; direct api: {exc}" if session_error else f"direct api: {exc}"
+    except Exception as exc:  # noqa: BLE001
+        api_error = f"{session_error}; direct api: {exc}" if session_error else f"direct api: {exc}"
+    else:
+        api_error = f"{session_error}; direct api: empty user data" if session_error else "direct api: empty user data"
 
-    # Strategy 2: parse public page meta tags
+    # Strategy 3: parse public page meta tags.
     try:
         html = fetcher.fetch_text(profile_url)
         meta = _parse_meta_tags(html)
         desc = meta.get("og:description") or meta.get("description") or ""
         followers = _parse_follower_count_from_text(desc)
-        display_name = meta.get("og:title") or None
         return SnsEngagement(
             platform="instagram", handle=handle, profile_url=profile_url,
             followers=followers, following=None, posts=None,
             total_engagement=None, engagement_rate=None,
-            bio=None, display_name=display_name,
-            fetch_status="partial" if followers else "blocked",
-            fetch_error=None, retrieved_at=retrieved_at,
+            bio=None, display_name=meta.get("og:title") or None,
+            fetch_status="partial" if followers is not None else "blocked",
+            fetch_error=None if followers is not None else api_error,
+            retrieved_at=retrieved_at,
         )
     except urllib.error.HTTPError as exc:
         status = "not_found" if exc.code == 404 else "blocked"
@@ -219,50 +269,77 @@ def fetch_instagram_engagement(handle: str) -> SnsEngagement:
     except Exception as exc:  # noqa: BLE001
         return _error_engagement("instagram", handle, profile_url, "error", str(exc), retrieved_at)
 
+    return _error_engagement("instagram", handle, profile_url, "blocked", api_error, retrieved_at)
+
 
 def fetch_twitter_engagement(handle: str) -> SnsEngagement:
-    """Fetch public Twitter/X profile data."""
+    """Fetch public Twitter/X profile data via public fallbacks."""
     retrieved_at = datetime.now(timezone.utc).isoformat()
     profile_url = f"https://x.com/{handle}"
-    fetcher = _Fetcher(user_agent=_IG_API_UA, delay_seconds=0.5)
 
-    # Try Nitter public instance (lighter on anti-bot)
-    nitter_hosts = ["nitter.net", "nitter.privacydev.net", "nitter.poast.org"]
-    for host in nitter_hosts:
-        nitter_url = f"https://{host}/{handle}"
+    # FxTwitter: free public API, no auth required
+    try:
+        req = urllib.request.Request(
+            f"https://api.fxtwitter.com/{handle}",
+            headers={"User-Agent": "seju-face-lab/0.1"},
+        )
+        with urllib.request.urlopen(req, timeout=12) as resp:
+            data = json.loads(resp.read().decode())
+        u = data.get("user") or {}
+        if u:
+            followers = _int_or_none(u.get("followers"))
+            following = _int_or_none(u.get("following"))
+            posts = _int_or_none(u.get("tweets"))
+            return SnsEngagement(
+                platform="twitter", handle=handle, profile_url=profile_url,
+                followers=followers, following=following, posts=posts,
+                total_engagement=None, engagement_rate=None,
+                bio=u.get("description") or None,
+                display_name=u.get("name") or None,
+                fetch_status="ok" if followers is not None else "partial",
+                fetch_error=None, retrieved_at=retrieved_at,
+            )
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            pass
+    except Exception:  # noqa: BLE001
+        pass
+
+    # Strategy 2: Nitter public instances.
+    fetcher = _Fetcher(user_agent=_IG_API_UA, delay_seconds=0.5)
+    for host in ["nitter.net", "nitter.privacydev.net", "nitter.poast.org"]:
         try:
-            html = fetcher.fetch_text(nitter_url)
+            html = fetcher.fetch_text(f"https://{host}/{handle}")
             if "User not found" in html or "page not found" in html.lower():
                 return _error_engagement("twitter", handle, profile_url, "not_found", "nitter: user not found", retrieved_at)
             followers = _parse_nitter_followers(html)
             stats = _parse_nitter_stats(html)
             meta = _parse_meta_tags(html)
-            display_name = meta.get("og:title") or None
             return SnsEngagement(
                 platform="twitter", handle=handle, profile_url=profile_url,
                 followers=followers, following=stats.get("following"),
                 posts=stats.get("tweets"),
                 total_engagement=None, engagement_rate=None,
-                bio=meta.get("og:description") or None, display_name=display_name,
-                fetch_status="ok" if followers else "partial",
+                bio=meta.get("og:description") or None,
+                display_name=meta.get("og:title") or None,
+                fetch_status="ok" if followers is not None else "partial",
                 fetch_error=None, retrieved_at=retrieved_at,
             )
         except Exception:  # noqa: BLE001
             continue
 
-    # Fall back: parse x.com directly
+    # Strategy 3: direct X page metadata.
     try:
         html = fetcher.fetch_text(profile_url)
         meta = _parse_meta_tags(html)
         desc = meta.get("og:description") or ""
         followers = _parse_follower_count_from_text(desc)
-        display_name = meta.get("og:title") or None
         return SnsEngagement(
             platform="twitter", handle=handle, profile_url=profile_url,
             followers=followers, following=None, posts=None,
             total_engagement=None, engagement_rate=None,
-            bio=None, display_name=display_name,
-            fetch_status="partial" if followers else "blocked",
+            bio=None, display_name=meta.get("og:title") or None,
+            fetch_status="partial" if followers is not None else "blocked",
             fetch_error=None, retrieved_at=retrieved_at,
         )
     except Exception as exc:  # noqa: BLE001
