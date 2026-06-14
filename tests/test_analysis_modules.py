@@ -420,6 +420,104 @@ class AnalysisModuleTests(unittest.TestCase):
             self.assertEqual(summary["runs"][0]["best_combined_image_id"], "balanced")
             self.assertEqual(summary["runs"][0]["best_combined_path"], "balanced.png")
 
+    def test_generation_run_reviews_prefer_quality_passed_candidates(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_a = root / "run_a"
+            run_b = root / "run_b"
+            out = root / "compare"
+            for run in [run_a, run_b]:
+                (run / "evaluation").mkdir(parents=True)
+                (run / "quality").mkdir()
+
+            (run_a / "evaluation" / "summary.json").write_text(
+                json.dumps(
+                    {
+                        "image_count": 2,
+                        "failed_count": 0,
+                        "best_image_id": "collage",
+                        "best_centroid_score": 1.0,
+                        "mean_centroid_score": 0.8,
+                        "median_centroid_score": 0.8,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (run_a / "evaluation" / "scores.csv").write_text(
+                "\n".join(
+                    [
+                        "image_id,path,centroid_score",
+                        '"collage","collage.png",1.000000',
+                        '"single_low","single_low.png",0.400000',
+                    ]
+                )
+                + "\n",
+                encoding="utf-8-sig",
+            )
+            (run_a / "quality" / "image_quality.csv").write_text(
+                "\n".join(
+                    [
+                        "image_id,path,qa_pass",
+                        '"collage","collage.png",false',
+                        '"single_low","single_low.png",true',
+                    ]
+                )
+                + "\n",
+                encoding="utf-8-sig",
+            )
+            (run_a / "quality" / "image_quality.json").write_text(
+                json.dumps({"pass_count": 1, "fail_count": 1, "pass_rate": 0.5}),
+                encoding="utf-8",
+            )
+
+            (run_b / "evaluation" / "summary.json").write_text(
+                json.dumps(
+                    {
+                        "image_count": 1,
+                        "failed_count": 0,
+                        "best_image_id": "single_high",
+                        "best_centroid_score": 0.6,
+                        "mean_centroid_score": 0.6,
+                        "median_centroid_score": 0.6,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (run_b / "evaluation" / "scores.csv").write_text(
+                "\n".join(
+                    [
+                        "image_id,path,centroid_score",
+                        '"single_high","single_high.png",0.600000',
+                    ]
+                )
+                + "\n",
+                encoding="utf-8-sig",
+            )
+            (run_b / "quality" / "image_quality.csv").write_text(
+                "\n".join(
+                    [
+                        "image_id,path,qa_pass",
+                        '"single_high","single_high.png",true',
+                    ]
+                )
+                + "\n",
+                encoding="utf-8-sig",
+            )
+            (run_b / "quality" / "image_quality.json").write_text(
+                json.dumps({"pass_count": 1, "fail_count": 0, "pass_rate": 1.0}),
+                encoding="utf-8",
+            )
+
+            reviews = review_generation_runs([run_a, run_b])
+            write_generation_run_reviews(reviews, out)
+            summary = json.loads((out / "generation_run_reviews.json").read_text(encoding="utf-8"))
+
+            self.assertEqual(summary["best_run_dir"], str(run_b))
+            self.assertEqual(summary["best_qa_image_id"], "single_high")
+            self.assertEqual(summary["best_qa_centroid_score"], 0.6)
+            self.assertEqual(summary["runs"][0]["qa_pass_count"], 1)
+            self.assertEqual(summary["runs"][0]["qa_pass_rate"], 1.0)
+
     def test_generation_run_reviews_join_combined_scores_by_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

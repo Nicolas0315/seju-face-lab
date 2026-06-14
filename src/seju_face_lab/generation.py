@@ -102,15 +102,41 @@ def _negative_prompt_for_profile(
 ) -> str:
     if negative_prompt_override is not None:
         return negative_prompt_override
-    parts = [str(manifest.get("negative_prompt", "")).strip()]
     profile_negatives = manifest.get("negative_prompt_profiles", {})
     profile_negative = ""
     if isinstance(profile_negatives, dict):
         profile_negative = str(profile_negatives.get(prompt_profile, "")).strip()
     if not profile_negative:
         profile_negative = negative_prompt_for_profile(prompt_profile)
+    if prompt_profile == "detector-friendly":
+        return _detector_friendly_negative_prompt(profile_negative)
+    parts = [str(manifest.get("negative_prompt", "")).strip()]
     parts.append(profile_negative)
     return ", ".join(part for part in parts if part)
+
+
+def _detector_friendly_negative_prompt(profile_negative: str) -> str:
+    base_terms = [
+        "specific celebrity likeness",
+        "copied identity",
+        "distorted face",
+        "extra eyes",
+        "hair covering face",
+        "obscured eyes",
+        "low detail",
+        "watermark",
+        "text",
+    ]
+    profile_terms = [term.strip() for term in profile_negative.split(",") if term.strip()]
+    compact_terms = []
+    seen = set()
+    for term in [*base_terms, *profile_terms]:
+        key = term.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        compact_terms.append(term)
+    return ", ".join(compact_terms)
 
 
 def write_generation_plan(config: GenerationConfig, model_dir: Path, out_dir: Path) -> GenerationResult:

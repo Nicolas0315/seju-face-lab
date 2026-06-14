@@ -24,6 +24,12 @@ class GenerationRunReview:
     best_combined_image_id: str | None
     best_combined_path: str | None
     best_combined_score: float | None
+    qa_pass_count: int | None
+    qa_fail_count: int | None
+    qa_pass_rate: float | None
+    best_qa_image_id: str | None
+    best_qa_path: str | None
+    best_qa_centroid_score: float | None
     prompt_words: int | None
 
 
@@ -78,6 +84,8 @@ def _review_generation_run(run_dir: Path) -> GenerationRunReview:
     best_centroid = _optional_float(summary.get("best_centroid_score"))
     best_style = _optional_float(style_summary.get("best_style_score"))
     best_combined_image_id, best_combined_path, best_combined = _best_combined_score(run_dir)
+    quality_summary = _quality_summary(run_dir)
+    best_qa_image_id, best_qa_path, best_qa_centroid = _best_quality_centroid_score(run_dir)
     return GenerationRunReview(
         run_dir=str(run_dir),
         provider=str(config.get("provider", "")),
@@ -95,6 +103,12 @@ def _review_generation_run(run_dir: Path) -> GenerationRunReview:
         best_combined_image_id=best_combined_image_id,
         best_combined_path=best_combined_path,
         best_combined_score=best_combined,
+        qa_pass_count=_optional_int(quality_summary.get("pass_count")),
+        qa_fail_count=_optional_int(quality_summary.get("fail_count")),
+        qa_pass_rate=_optional_float(quality_summary.get("pass_rate")),
+        best_qa_image_id=best_qa_image_id,
+        best_qa_path=best_qa_path,
+        best_qa_centroid_score=best_qa_centroid,
         prompt_words=len(prompt.split()) if isinstance(prompt, str) else None,
     )
 
@@ -142,6 +156,28 @@ def _style_scores_csv_path(run_dir: Path) -> Path:
     return run_dir / "style_scores.csv"
 
 
+def _quality_summary_path(run_dir: Path) -> Path:
+    nested = run_dir / "quality" / "image_quality.json"
+    if nested.exists():
+        return nested
+    if _is_evaluation_output_dir(run_dir):
+        sibling = run_dir.parent / "quality" / "image_quality.json"
+        if sibling.exists():
+            return sibling
+    return run_dir / "image_quality.json"
+
+
+def _quality_csv_path(run_dir: Path) -> Path:
+    nested = run_dir / "quality" / "image_quality.csv"
+    if nested.exists():
+        return nested
+    if _is_evaluation_output_dir(run_dir):
+        sibling = run_dir.parent / "quality" / "image_quality.csv"
+        if sibling.exists():
+            return sibling
+    return run_dir / "image_quality.csv"
+
+
 def _is_evaluation_output_dir(run_dir: Path) -> bool:
     return (run_dir / "summary.json").exists() and (run_dir / "scores.csv").exists()
 
@@ -151,7 +187,8 @@ def _render_generation_run_reviews_csv(reviews: list[GenerationRunReview]) -> st
         "rank,run_dir,provider,model_id,status,image_count,best_image_id,"
         "failed_count,best_centroid_score,mean_centroid_score,median_centroid_score,"
         "best_style_score,mean_style_score,median_style_score,best_combined_image_id,"
-        "best_combined_path,best_combined_score,prompt_words"
+        "best_combined_path,best_combined_score,qa_pass_count,qa_fail_count,qa_pass_rate,"
+        "best_qa_image_id,best_qa_path,best_qa_centroid_score,prompt_words"
     ]
     for rank, review in enumerate(reviews, start=1):
         lines.append(
@@ -174,6 +211,12 @@ def _render_generation_run_reviews_csv(reviews: list[GenerationRunReview]) -> st
                     _csv(review.best_combined_image_id or ""),
                     _csv(review.best_combined_path or ""),
                     _format_optional(review.best_combined_score),
+                    "" if review.qa_pass_count is None else str(review.qa_pass_count),
+                    "" if review.qa_fail_count is None else str(review.qa_fail_count),
+                    _format_optional(review.qa_pass_rate),
+                    _csv(review.best_qa_image_id or ""),
+                    _csv(review.best_qa_path or ""),
+                    _format_optional(review.best_qa_centroid_score),
                     "" if review.prompt_words is None else str(review.prompt_words),
                 ]
             )
@@ -187,23 +230,25 @@ def _render_generation_run_reviews_md(reviews: list[GenerationRunReview]) -> str
         lines.extend(["No generation runs provided.", ""])
         return "\n".join(lines)
     lines.append(
-        "| rank | run | images | failed | best_face | best_style | combined | best_image | combined_image | combined_path |"
+        "| rank | run | images | failed | qa_pass | best_face | qa_face | best_style | combined | best_image | qa_image |"
     )
-    lines.append("| --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- | --- |")
+    lines.append("| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |")
     for rank, review in enumerate(reviews, start=1):
         lines.append(
             f"| {rank} | {review.run_dir} | {review.image_count} | {review.failed_count} | "
+            f"{'' if review.qa_pass_count is None else review.qa_pass_count} | "
             f"{_format_optional(review.best_centroid_score)} | "
+            f"{_format_optional(review.best_qa_centroid_score)} | "
             f"{_format_optional(review.best_style_score)} | "
             f"{_format_optional(review.best_combined_score)} | "
             f"{review.best_image_id or ''} | "
-            f"{review.best_combined_image_id or ''} | "
-            f"{review.best_combined_path or ''} |"
+            f"{review.best_qa_image_id or ''} |"
         )
     lines.extend(
         [
             "",
             "Face scores are approximate vector similarity against the local centroid model.",
+            "QA face scores use only generated images that pass the OpenCV single-centered-face quality gate when available.",
             "Style scores are approximate OpenCLIP image-style similarity. Combined score is the best per-image average when both are present.",
             "",
         ]
@@ -221,6 +266,9 @@ def _generation_run_reviews_summary(reviews: list[GenerationRunReview]) -> dict:
         "best_combined_image_id": best.best_combined_image_id if best else None,
         "best_combined_path": best.best_combined_path if best else None,
         "best_combined_score": _round_optional(best.best_combined_score) if best else None,
+        "best_qa_image_id": best.best_qa_image_id if best else None,
+        "best_qa_path": best.best_qa_path if best else None,
+        "best_qa_centroid_score": _round_optional(best.best_qa_centroid_score) if best else None,
         "runs": [
             {
                 **asdict(review),
@@ -233,14 +281,40 @@ def _generation_run_reviews_summary(reviews: list[GenerationRunReview]) -> dict:
                 "best_combined_image_id": review.best_combined_image_id,
                 "best_combined_path": review.best_combined_path,
                 "best_combined_score": _round_optional(review.best_combined_score),
+                "qa_pass_rate": _round_optional(review.qa_pass_rate),
+                "best_qa_image_id": review.best_qa_image_id,
+                "best_qa_path": review.best_qa_path,
+                "best_qa_centroid_score": _round_optional(review.best_qa_centroid_score),
             }
             for review in reviews
         ],
         "boundary": (
             "Approximate local generation-run triage only. Combined score mixes face geometry "
-            "and style axes when both are present."
+            "and style axes when both are present. QA scores are OpenCV detector-gated triage only."
         ),
     }
+
+
+def _quality_summary(run_dir: Path) -> dict:
+    path = _quality_summary_path(run_dir)
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _best_quality_centroid_score(run_dir: Path) -> tuple[str | None, str | None, float | None]:
+    face_scores = _read_score_column(_scores_csv_path(run_dir), "centroid_score")
+    qa_passes = _read_quality_passes(_quality_csv_path(run_dir))
+    best_image_id = None
+    best_path = None
+    best_score = None
+    for image_path in sorted(face_scores.keys() & qa_passes):
+        image_id, raw_path, face_score = face_scores[image_path]
+        if best_score is None or face_score > best_score:
+            best_image_id = image_id
+            best_path = raw_path
+            best_score = face_score
+    return best_image_id, best_path, best_score
 
 
 def _best_combined_score(run_dir: Path) -> tuple[str | None, str | None, float | None]:
@@ -283,9 +357,25 @@ def _read_score_column(path: Path, column: str) -> dict[str, tuple[str, str, flo
         return scores
 
 
+def _read_quality_passes(path: Path) -> set[str]:
+    if not path.exists():
+        return set()
+    with path.open("r", encoding="utf-8-sig", newline="") as handle:
+        rows = csv.DictReader(handle)
+        if not rows.fieldnames or "path" not in rows.fieldnames or "qa_pass" not in rows.fieldnames:
+            return set()
+        passes: set[str] = set()
+        base_dirs = _score_path_base_dirs(path)
+        for row in rows:
+            if str(row.get("qa_pass", "")).lower() != "true" or not row.get("path"):
+                continue
+            passes.update(_path_keys(str(row["path"]), base_dirs))
+        return passes
+
+
 def _score_path_base_dirs(csv_path: Path) -> list[Path]:
     bases = [Path.cwd(), csv_path.parent]
-    if csv_path.parent.name in {"evaluation", "style_evaluation"}:
+    if csv_path.parent.name in {"evaluation", "style_evaluation", "quality"}:
         bases.append(csv_path.parent.parent)
     return bases
 
@@ -302,10 +392,16 @@ def _normal_path(path: Path) -> str:
 
 
 def _has_review_score(review: GenerationRunReview) -> bool:
-    return review.best_combined_score is not None or review.best_centroid_score is not None
+    return (
+        review.best_qa_centroid_score is not None
+        or review.best_combined_score is not None
+        or review.best_centroid_score is not None
+    )
 
 
 def _review_sort_key(review: GenerationRunReview) -> tuple[int, float]:
+    if review.best_qa_centroid_score is not None:
+        return (2, review.best_qa_centroid_score)
     if review.best_combined_score is not None:
         return (1, review.best_combined_score)
     if review.best_centroid_score is not None:
@@ -317,6 +413,12 @@ def _optional_float(value: object) -> float | None:
     if value is None:
         return None
     return float(value)
+
+
+def _optional_int(value: object) -> int | None:
+    if value is None:
+        return None
+    return int(value)
 
 
 def _format_optional(value: float | None) -> str:

@@ -249,6 +249,8 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(detector_run["config"]["prompt_profile"], "detector-friendly")
             self.assertIn("passport headshot", detector_run["config"]["prompt"])
             self.assertIn("side profile", detector_run["config"]["negative_prompt"])
+            self.assertIn("copied identity", detector_run["config"]["negative_prompt"])
+            self.assertNotIn("illustration", detector_run["config"]["negative_prompt"])
             self.assertEqual(
                 main(
                     [
