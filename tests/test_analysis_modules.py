@@ -19,6 +19,7 @@ from seju_face_lab.correlation import (
     compute_correlations,
     write_correlation_report,
 )
+from seju_face_lab.precision import write_precision_report
 from seju_face_lab.quality import ImageQuality, judge_face_quality, review_image_quality
 from seju_face_lab.run_reviews import review_generation_runs, write_generation_run_reviews
 from seju_face_lab.sns_metrics import (
@@ -171,6 +172,250 @@ class AnalysisModuleTests(unittest.TestCase):
                         )
 
             review_generated.assert_not_called()
+
+    def test_precision_report_combines_model_generation_and_subject_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            model = root / "model"
+            generation = root / "generation_review"
+            subjects = root / "subject_review"
+            out = root / "precision"
+            model.mkdir()
+            generation.mkdir()
+            subjects.mkdir()
+            (model / "centroids.npz").write_bytes(b"placeholder")
+            (model / "profile.json").write_text(
+                json.dumps(
+                    {
+                        "image_count": 3,
+                        "embedding_dim": 1073,
+                        "appearance_shape": [64, 64, 3],
+                        "descriptors": {
+                            "mean": {"brightness": 0.5},
+                            "median": {"brightness": 0.6},
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (generation / "generation_run_reviews.json").write_text(
+                json.dumps(
+                    {
+                        "run_count": 1,
+                        "best_run_dir": "outputs/generated",
+                        "best_centroid_score": 0.4,
+                        "best_qa_centroid_score": 0.45,
+                        "best_qa_image_id": "candidate",
+                        "best_qa_path": "candidate.png",
+                        "runs": [
+                            {
+                                "image_count": 2,
+                                "failed_count": 0,
+                                "qa_pass_count": 1,
+                                "qa_fail_count": 1,
+                                "qa_pass_rate": 0.5,
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (subjects / "subject_reviews.json").write_text(
+                json.dumps(
+                    {
+                        "subject_count": 1,
+                        "subjects": [
+                            {
+                                "subject": "near_subject",
+                                "mean_centroid_score": 0.7,
+                                "best_centroid_score": 0.8,
+                                "best_image_path": "near.png",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            report = write_precision_report(
+                model_dir=model,
+                out_dir=out,
+                generation_review=generation,
+                subject_review=subjects,
+            )
+
+            self.assertEqual(report["model"]["image_count"], 3)
+            self.assertEqual(report["generation"]["best_centroid_score"], 0.45)
+            self.assertEqual(report["generation"]["qa_pass_count"], 1)
+            self.assertEqual(report["subjects"]["top_subject"], "near_subject")
+            self.assertTrue((out / "precision_report.json").exists())
+            self.assertIn(
+                "best_centroid_score",
+                (out / "precision_report.md").read_text(encoding="utf-8"),
+            )
+
+    def test_precision_report_keeps_centroid_only_best_image_id(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            model = root / "model"
+            generation = root / "generation_review"
+            out = root / "precision"
+            model.mkdir()
+            generation.mkdir()
+            (model / "profile.json").write_text(
+                json.dumps(
+                    {
+                        "image_count": 2,
+                        "embedding_dim": 8,
+                        "appearance_shape": [2, 2, 1],
+                        "descriptors": {"mean": {}, "median": {}},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (generation / "generation_run_reviews.json").write_text(
+                json.dumps(
+                    {
+                        "run_count": 1,
+                        "best_run_dir": "outputs/generated_centroid_only",
+                        "best_centroid_score": 0.33,
+                        "runs": [
+                            {
+                                "image_count": 1,
+                                "failed_count": 0,
+                                "best_image_id": "candidate_centroid",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            report = write_precision_report(
+                model_dir=model,
+                out_dir=out,
+                generation_review=generation,
+            )
+
+            self.assertEqual(report["generation"]["best_centroid_score"], 0.33)
+            self.assertEqual(report["generation"]["best_image_id"], "candidate_centroid")
+
+    def test_precision_report_keeps_combined_winner_separate_from_centroid_winner(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            model = root / "model"
+            generation = root / "generation_review"
+            out = root / "precision"
+            model.mkdir()
+            generation.mkdir()
+            (model / "profile.json").write_text(
+                json.dumps(
+                    {
+                        "image_count": 2,
+                        "embedding_dim": 8,
+                        "appearance_shape": [2, 2, 1],
+                        "descriptors": {"mean": {}, "median": {}},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (generation / "generation_run_reviews.json").write_text(
+                json.dumps(
+                    {
+                        "run_count": 1,
+                        "best_run_dir": "outputs/generated_style",
+                        "best_centroid_score": 0.5,
+                        "best_combined_image_id": "candidate_combined",
+                        "best_combined_path": "combined.png",
+                        "best_combined_score": 0.6,
+                        "runs": [
+                            {
+                                "image_count": 2,
+                                "failed_count": 0,
+                                "best_image_id": "candidate_centroid",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            report = write_precision_report(
+                model_dir=model,
+                out_dir=out,
+                generation_review=generation,
+            )
+
+            self.assertEqual(report["generation"]["best_image_id"], "candidate_centroid")
+            self.assertEqual(
+                report["generation"]["best_combined_image_id"],
+                "candidate_combined",
+            )
+            self.assertEqual(report["generation"]["best_combined_score"], 0.6)
+
+    def test_precision_report_uses_quality_reviewed_count_for_qa_denominator(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            model = root / "model"
+            quality = root / "quality"
+            out = root / "precision"
+            model.mkdir()
+            quality.mkdir()
+            (model / "profile.json").write_text(
+                json.dumps(
+                    {
+                        "image_count": 2,
+                        "embedding_dim": 8,
+                        "appearance_shape": [2, 2, 1],
+                        "descriptors": {"mean": {}, "median": {}},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (quality / "image_quality.json").write_text(
+                json.dumps(
+                    {
+                        "image_count": 2,
+                        "pass_count": 1,
+                        "fail_count": 1,
+                        "pass_rate": 0.5,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            report = write_precision_report(model_dir=model, out_dir=out, quality=quality)
+
+            self.assertEqual(report["generation"]["qa_pass_count"], 1)
+            self.assertEqual(report["generation"]["qa_fail_count"], 1)
+            self.assertEqual(report["generation"]["qa_reviewed_count"], 2)
+            self.assertIn("qa_pass: 1/2", (out / "precision_report.md").read_text(encoding="utf-8"))
+
+    def test_cli_precision_report_writes_outputs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            model = root / "model"
+            out = root / "precision"
+            model.mkdir()
+            (model / "profile.json").write_text(
+                json.dumps(
+                    {
+                        "image_count": 1,
+                        "embedding_dim": 4,
+                        "appearance_shape": [2, 2, 1],
+                        "descriptors": {"mean": {}, "median": {}},
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                main(["precision-report", "--model", str(model), "--out", str(out)]),
+                0,
+            )
+
+            report = json.loads((out / "precision_report.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["model"]["embedding_dim"], 4)
 
     def test_image_quality_records_per_file_failures(self) -> None:
         with patch("seju_face_lab.quality._import_cv2", return_value=object()):

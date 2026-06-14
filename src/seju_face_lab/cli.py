@@ -12,6 +12,7 @@ from .generation import build_generation_config, run_diffusers_generation, write
 from .metrics import review_subject_directories, score_generated_images, write_scores, write_subject_reviews
 from .model import build_centroid_model, load_model, save_model
 from .prompting import prompt_from_descriptors
+from .precision import write_precision_report
 from .quality import review_image_quality, write_image_quality
 from .run_reviews import review_generation_runs, write_generation_run_reviews
 from .sources import discover_sources, download_source_images, read_source_manifest, write_source_manifest
@@ -100,6 +101,17 @@ def main(argv: list[str] | None = None) -> int:
     )
     compare_runs_parser.add_argument("--runs", type=Path, nargs="+", required=True)
     compare_runs_parser.add_argument("--out", type=Path, required=True)
+
+    precision_parser = subparsers.add_parser(
+        "precision-report",
+        help="summarize centroid, generated-image, QA, and subject-review evidence",
+    )
+    precision_parser.add_argument("--model", type=Path, required=True)
+    precision_parser.add_argument("--out", type=Path, required=True)
+    precision_parser.add_argument("--generation-review", type=Path, default=None)
+    precision_parser.add_argument("--subject-review", type=Path, default=None)
+    precision_parser.add_argument("--evaluation", type=Path, default=None)
+    precision_parser.add_argument("--quality", type=Path, default=None)
 
     qa_parser = subparsers.add_parser(
         "qa-images",
@@ -232,6 +244,8 @@ def main(argv: list[str] | None = None) -> int:
         return _style_evaluate(args)
     if args.command == "compare-runs":
         return _compare_runs(args.runs, args.out)
+    if args.command == "precision-report":
+        return _precision_report(args)
     if args.command == "qa-images":
         return _qa_images(args.images, args.out)
     if args.command == "review-generated":
@@ -408,6 +422,22 @@ def _compare_runs(run_dirs: list[Path], out: Path) -> int:
     write_generation_run_reviews(reviews, out)
     print(f"compared runs: {len(reviews)}")
     print(f"reviews: {out / 'generation_run_reviews.csv'}")
+    return 0
+
+
+def _precision_report(args: argparse.Namespace) -> int:
+    report = write_precision_report(
+        model_dir=args.model,
+        out_dir=args.out,
+        generation_review=args.generation_review,
+        subject_review=args.subject_review,
+        evaluation=args.evaluation,
+        quality=args.quality,
+    )
+    print(f"precision report: {args.out / 'precision_report.md'}")
+    print(f"model images: {report['model']['image_count']}")
+    print(f"best generated score: {report['generation']['best_centroid_score']}")
+    print(f"top subject: {report['subjects']['top_subject']}")
     return 0
 
 

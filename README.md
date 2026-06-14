@@ -121,6 +121,15 @@ python -m seju_face_lab review-generated --model outputs/seju_model --images out
 
 This writes `evaluation/`, `quality/`, and a one-run `generation_run_reviews.*` report.
 
+Summarize the centroid model, generated-image precision review, QA gate, and optional
+subject-review evidence into one reviewable bundle:
+
+```powershell
+python -m seju_face_lab precision-report --model outputs/seju_model --generation-review outputs/generated_detector/review --subject-review outputs/subject_reviews --out outputs/precision_report
+```
+
+This writes `precision_report.json` and `precision_report.md`.
+
 Review other public-figure or celebrity image sets by folder:
 
 ```text
@@ -253,6 +262,7 @@ See `docs/gpu-generation-log.md` for RTX 4090 generation smoke results.
 - evaluation `scores.csv`: similarity of candidate generated images to the centroid vectors.
 - evaluation `summary.json`: best/mean/median generated-image similarity for quick comparisons.
 - generated review `generation_run_reviews.csv`: one-command generated-image evaluation + QA + run review via `review-generated`, or directly after Diffusers generation with `generate --review`.
+- precision report `precision_report.json`: model centroid, generation review, QA, and subject-review summary via `precision-report`.
 - style evaluation `style_scores.csv`: OpenCLIP image-style similarity to mean/median renderings.
 - style evaluation `style_summary.json`: best/mean/median style-axis scores.
 - image quality `image_quality.csv`: OpenCV single-face QA for generated candidates.

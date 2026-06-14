@@ -38,10 +38,12 @@ Retrieval/design date: 2026-06-14.
 9. `review-generated`
    - convenience command that runs `evaluate`, `qa-images`, and one-run `compare-runs` for a generated directory
    - also used by `generate --review` so generated batches can be scored immediately
-10. `review-subjects`
+10. `precision-report`
+   - consolidates centroid metadata, generated-image review, QA, and subject-review summaries for tracking
+11. `review-subjects`
    - per-person image folders are ranked against the local seju centroid
    - output is CSV, Markdown, and JSON for review and tracking
-11. SNS and correlation analysis
+12. SNS and correlation analysis
    - `sources scrape-handles` writes reviewed SNS handle manifests
    - `sources fetch-engagement` writes best-effort public engagement manifests
    - `analyze correlation` joins `subject_reviews.json` to SNS metrics
