@@ -418,6 +418,7 @@ class PipelineTests(unittest.TestCase):
             self.assertTrue((style_eval_dir / "style_summary.json").exists())
             self.assertTrue((generated / "style_evaluation" / "style_summary.json").exists())
             self.assertTrue((review_dir / "generation_run_reviews.json").exists())
+            self.assertTrue((review_dir / "generation_run_reviews.html").exists())
             self.assertTrue((subject_review_dir / "subject_reviews.json").exists())
             self.assertTrue((backend_compare_dir / "backend_comparison.json").exists())
             self.assertTrue((subject_backend_compare_dir / "subject_backend_comparison.json").exists())

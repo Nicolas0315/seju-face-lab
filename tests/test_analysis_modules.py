@@ -1387,9 +1387,55 @@ class AnalysisModuleTests(unittest.TestCase):
             reviews = review_generation_runs([run])
             write_generation_run_reviews(reviews, out)
             summary = json.loads((out / "generation_run_reviews.json").read_text(encoding="utf-8"))
+            html = (out / "generation_run_reviews.html").read_text(encoding="utf-8")
 
             self.assertEqual(summary["best_combined_path"], "candidate.png")
             self.assertEqual(summary["best_combined_score"], 0.8)
+            self.assertIn("candidate", html)
+            self.assertIn("combined: 0.800000", html)
+            self.assertIn("<img", html)
+            self.assertEqual(html.count('<article class="candidate">'), 1)
+            self.assertIn(image_path.resolve(strict=False).as_uri(), html)
+
+    def test_generation_run_review_html_uses_generation_root_for_evaluation_dir(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run = root / "generated"
+            evaluation = run / "evaluation"
+            out = root / "compare"
+            evaluation.mkdir(parents=True)
+            image_path = run / "candidate.png"
+            image_path.write_bytes(b"not a real png for this html-only test")
+            (evaluation / "summary.json").write_text(
+                json.dumps(
+                    {
+                        "image_count": 1,
+                        "failed_count": 0,
+                        "best_image_id": "candidate",
+                        "best_centroid_score": 0.6,
+                        "mean_centroid_score": 0.6,
+                        "median_centroid_score": 0.6,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (evaluation / "scores.csv").write_text(
+                "\n".join(
+                    [
+                        "image_id,path,centroid_score",
+                        '"candidate","candidate.png",0.600000',
+                    ]
+                )
+                + "\n",
+                encoding="utf-8-sig",
+            )
+
+            reviews = review_generation_runs([evaluation])
+            write_generation_run_reviews(reviews, out)
+            html = (out / "generation_run_reviews.html").read_text(encoding="utf-8")
+
+            self.assertIn(image_path.resolve(strict=False).as_uri(), html)
+            self.assertNotIn((evaluation / "candidate.png").resolve(strict=False).as_uri(), html)
 
     def test_generation_run_reviews_do_not_share_parent_style_between_runs(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

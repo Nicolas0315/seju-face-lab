@@ -18,6 +18,7 @@ Retrieval/design date: 2026-06-14.
 - SNS handle/engagement manifests and face-score correlation reports are implemented.
 - OpenCLIP style-axis scoring is implemented through `style-evaluate`.
 - `compare-runs` reports style and same-image combined scores when style outputs are present.
+- `compare-runs` writes a local HTML thumbnail review so generated candidates can be visually checked beside face/style/QA evidence.
 - Image-generation dry-run planning and local RTX 4090 Diffusers smoke runs are implemented.
 - `generate --prompt-profile detector-friendly` records detector-oriented prompt settings for frontal, unobscured candidate batches.
 - `qa-images` flags generated candidates that are collages, extreme crops, off-center faces, or missing a frontal OpenCV face.

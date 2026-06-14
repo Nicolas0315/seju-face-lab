@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 from dataclasses import asdict, dataclass
+from html import escape
 import json
 from pathlib import Path
 
@@ -33,6 +34,17 @@ class GenerationRunReview:
     prompt_words: int | None
 
 
+@dataclass(frozen=True)
+class CandidateReview:
+    image_id: str
+    path: str
+    centroid_score: float | None
+    style_score: float | None
+    combined_score: float | None
+    qa_pass: bool | None
+    qa_reason: str | None
+
+
 def review_generation_runs(run_dirs: list[Path]) -> list[GenerationRunReview]:
     reviews = [_review_generation_run(run_dir) for run_dir in run_dirs]
     return sorted(
@@ -50,6 +62,10 @@ def write_generation_run_reviews(reviews: list[GenerationRunReview], out_dir: Pa
     )
     (out_dir / "generation_run_reviews.md").write_text(
         _render_generation_run_reviews_md(reviews),
+        encoding="utf-8",
+    )
+    (out_dir / "generation_run_reviews.html").write_text(
+        _render_generation_run_reviews_html(reviews),
         encoding="utf-8",
     )
     (out_dir / "generation_run_reviews.json").write_text(
@@ -256,6 +272,153 @@ def _render_generation_run_reviews_md(reviews: list[GenerationRunReview]) -> str
     return "\n".join(lines)
 
 
+def _render_generation_run_reviews_html(reviews: list[GenerationRunReview]) -> str:
+    cards = "\n".join(_render_run_card(rank, review) for rank, review in enumerate(reviews, start=1))
+    return "\n".join(
+        [
+            "<!doctype html>",
+            '<html lang="en">',
+            "<head>",
+            '<meta charset="utf-8">',
+            '<meta name="viewport" content="width=device-width, initial-scale=1">',
+            "<title>generation run comparison</title>",
+            "<style>",
+            "body{font-family:Arial,sans-serif;margin:24px;background:#f7f7f4;color:#1f2933}",
+            "h1{font-size:24px;margin:0 0 16px}",
+            ".run{background:#fff;border:1px solid #d7d7d0;border-radius:8px;margin:0 0 18px;padding:14px}",
+            ".meta{display:flex;flex-wrap:wrap;gap:10px;margin:8px 0 12px;color:#4b5563;font-size:13px}",
+            ".pill{background:#eef2f7;border-radius:999px;padding:3px 8px}",
+            ".grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}",
+            ".candidate{border:1px solid #e2e2dc;border-radius:8px;padding:8px;background:#fbfbf9}",
+            ".candidate img{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:6px;background:#e7e5dc}",
+            ".scores{font-size:12px;line-height:1.45;margin-top:6px}",
+            ".path{overflow-wrap:anywhere;color:#59636e}",
+            ".boundary{font-size:12px;color:#667085;margin-top:18px}",
+            "</style>",
+            "</head>",
+            "<body>",
+            "<h1>generation run comparison</h1>",
+            cards or "<p>No generation runs provided.</p>",
+            '<p class="boundary">Scores are approximate local triage against this centroid model. '
+            "They are not identity, attractiveness, ethnicity, or objective face-type labels.</p>",
+            "</body>",
+            "</html>",
+            "",
+        ]
+    )
+
+
+def _render_run_card(rank: int, review: GenerationRunReview) -> str:
+    run_dir = Path(review.run_dir)
+    candidates = _candidate_reviews(run_dir)[:12]
+    image_base_dir = _image_base_dir(run_dir)
+    candidate_html = "\n".join(
+        _render_candidate_card(candidate, image_base_dir) for candidate in candidates
+    )
+    if not candidate_html:
+        candidate_html = "<p>No scored candidate rows found.</p>"
+    title = f"#{rank} {escape(review.run_dir)}"
+    return "\n".join(
+        [
+            '<section class="run">',
+            f"<h2>{title}</h2>",
+            '<div class="meta">',
+            f'<span class="pill">images {review.image_count}</span>',
+            f'<span class="pill">failed {review.failed_count}</span>',
+            f'<span class="pill">best face {_format_optional(review.best_centroid_score)}</span>',
+            f'<span class="pill">QA face {_format_optional(review.best_qa_centroid_score)}</span>',
+            f'<span class="pill">style {_format_optional(review.best_style_score)}</span>',
+            f'<span class="pill">combined {_format_optional(review.best_combined_score)}</span>',
+            "</div>",
+            f'<div class="grid">{candidate_html}</div>',
+            "</section>",
+        ]
+    )
+
+
+def _render_candidate_card(candidate: CandidateReview, run_dir: Path) -> str:
+    image_src = _image_src(candidate.path, run_dir)
+    qa = "unknown" if candidate.qa_pass is None else ("pass" if candidate.qa_pass else "fail")
+    reason = f"<div>qa_reason: {escape(candidate.qa_reason)}</div>" if candidate.qa_reason else ""
+    return "\n".join(
+        [
+            '<article class="candidate">',
+            f'<img src="{escape(image_src)}" alt="{escape(candidate.image_id)}">',
+            '<div class="scores">',
+            f"<strong>{escape(candidate.image_id)}</strong>",
+            f"<div>face: {_format_optional(candidate.centroid_score)}</div>",
+            f"<div>style: {_format_optional(candidate.style_score)}</div>",
+            f"<div>combined: {_format_optional(candidate.combined_score)}</div>",
+            f"<div>qa: {qa}</div>",
+            reason,
+            f'<div class="path">{escape(candidate.path)}</div>',
+            "</div>",
+            "</article>",
+        ]
+    )
+
+
+def _candidate_reviews(run_dir: Path) -> list[CandidateReview]:
+    face_rows = _read_score_rows(_scores_csv_path(run_dir), "centroid_score")
+    style_rows = _read_score_rows(_style_scores_csv_path(run_dir), "style_score")
+    style_scores = _read_score_column(_style_scores_csv_path(run_dir), "style_score")
+    quality = _read_quality_rows(_quality_csv_path(run_dir))
+    candidates: list[CandidateReview] = []
+    consumed_style_keys: set[str] = set()
+    for image_id, path, face_score, keys in face_rows:
+        style = _first_lookup(style_scores, keys)
+        qa_pass, qa_reason = _first_lookup(quality, keys) or (None, None)
+        style_score = style[2] if style else None
+        if style:
+            consumed_style_keys.update(keys)
+        candidates.append(_candidate_review(image_id, path, face_score, style_score, qa_pass, qa_reason))
+    for image_id, path, style_score, keys in style_rows:
+        if consumed_style_keys & keys:
+            continue
+        qa_pass, qa_reason = _first_lookup(quality, keys) or (None, None)
+        candidates.append(_candidate_review(image_id, path, None, style_score, qa_pass, qa_reason))
+    return sorted(candidates, key=_candidate_sort_key, reverse=True)
+
+
+def _candidate_review(
+    image_id: str,
+    path: str,
+    face_score: float | None,
+    style_score: float | None,
+    qa_pass: bool | None,
+    qa_reason: str | None,
+) -> CandidateReview:
+    combined = (face_score + style_score) / 2.0 if face_score is not None and style_score is not None else None
+    return CandidateReview(
+        image_id=image_id,
+        path=path,
+        centroid_score=face_score,
+        style_score=style_score,
+        combined_score=combined,
+        qa_pass=qa_pass,
+        qa_reason=qa_reason,
+    )
+
+
+def _first_lookup(mapping: dict[str, object], keys: set[str]) -> object | None:
+    for key in sorted(keys):
+        if key in mapping:
+            return mapping[key]
+    return None
+
+
+def _candidate_sort_key(candidate: CandidateReview) -> tuple[int, float]:
+    if candidate.qa_pass and candidate.centroid_score is not None:
+        return (3, candidate.centroid_score)
+    if candidate.combined_score is not None:
+        return (2, candidate.combined_score)
+    if candidate.centroid_score is not None:
+        return (1, candidate.centroid_score)
+    if candidate.style_score is not None:
+        return (1, candidate.style_score)
+    return (0, 0.0)
+
+
 def _generation_run_reviews_summary(reviews: list[GenerationRunReview]) -> dict:
     best = next((review for review in reviews if _has_review_score(review)), None)
     return {
@@ -357,6 +520,35 @@ def _read_score_column(path: Path, column: str) -> dict[str, tuple[str, str, flo
         return scores
 
 
+def _read_score_rows(path: Path, column: str) -> list[tuple[str, str, float, set[str]]]:
+    if not path.exists():
+        return []
+    with path.open("r", encoding="utf-8-sig", newline="") as handle:
+        rows = csv.DictReader(handle)
+        if (
+            not rows.fieldnames
+            or "image_id" not in rows.fieldnames
+            or "path" not in rows.fieldnames
+            or column not in rows.fieldnames
+        ):
+            return []
+        base_dirs = _score_path_base_dirs(path)
+        score_rows = []
+        for row in rows:
+            if not row.get("image_id") or not row.get("path") or not row.get(column):
+                continue
+            raw_path = str(row["path"])
+            score_rows.append(
+                (
+                    str(row["image_id"]),
+                    raw_path,
+                    float(row[column]),
+                    _path_keys(raw_path, base_dirs),
+                )
+            )
+        return score_rows
+
+
 def _read_quality_passes(path: Path) -> set[str]:
     if not path.exists():
         return set()
@@ -371,6 +563,25 @@ def _read_quality_passes(path: Path) -> set[str]:
                 continue
             passes.update(_path_keys(str(row["path"]), base_dirs))
         return passes
+
+
+def _read_quality_rows(path: Path) -> dict[str, tuple[bool, str | None]]:
+    if not path.exists():
+        return {}
+    with path.open("r", encoding="utf-8-sig", newline="") as handle:
+        rows = csv.DictReader(handle)
+        if not rows.fieldnames or "path" not in rows.fieldnames or "qa_pass" not in rows.fieldnames:
+            return {}
+        quality: dict[str, tuple[bool, str | None]] = {}
+        base_dirs = _score_path_base_dirs(path)
+        for row in rows:
+            if not row.get("path"):
+                continue
+            qa_pass = str(row.get("qa_pass", "")).lower() == "true"
+            reason = row.get("reason")
+            for key in _path_keys(str(row["path"]), base_dirs):
+                quality[key] = (qa_pass, reason)
+        return quality
 
 
 def _score_path_base_dirs(csv_path: Path) -> list[Path]:
@@ -389,6 +600,24 @@ def _path_keys(value: str, base_dirs: list[Path]) -> set[str]:
 
 def _normal_path(path: Path) -> str:
     return str(path.resolve(strict=False)).casefold()
+
+
+def _image_src(value: str, run_dir: Path) -> str:
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        cwd_path = (Path.cwd() / path).resolve(strict=False)
+        run_path = (run_dir / path).resolve(strict=False)
+        path = cwd_path if cwd_path.exists() else run_path
+    try:
+        return path.as_uri()
+    except ValueError:
+        return value
+
+
+def _image_base_dir(run_dir: Path) -> Path:
+    if _is_evaluation_output_dir(run_dir):
+        return run_dir.parent
+    return run_dir
 
 
 def _has_review_score(review: GenerationRunReview) -> bool:

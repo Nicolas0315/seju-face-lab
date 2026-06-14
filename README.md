@@ -331,6 +331,7 @@ See `docs/gpu-generation-log.md` for RTX 4090 generation smoke results.
 - style evaluation `style_summary.json`: best/mean/median style-axis scores.
 - image quality `image_quality.csv`: OpenCV single-face QA for generated candidates.
 - generation run reviews: rank evaluated candidate batches by local centroid scores.
+- generation run review `generation_run_reviews.html`: local thumbnail review cards with face/style/combined/QA evidence.
 - generation run reviews include QA-gated face scores, style scores, and per-image combined scores when those outputs exist.
 - subject review outputs: per-person approximate similarity rankings.
 
