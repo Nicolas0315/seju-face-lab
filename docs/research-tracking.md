@@ -86,4 +86,5 @@ Create and track these issues:
 - v7 `deepface-skip` accepted refs `259/259` and generated images `6/6`, best image `candidate_0006_seed_260705`, best score `0.986008`, and Spearman rank vs `deepface-opencv` was `0.600000` over 5 common images. Treat `skip` as a detector-rejection pressure check only, not as a replacement for face-validated scoring.
 - A 25-reference/6-generated `mtcnn` smoke audit is now possible through `--max-reference-images` / `--max-images`: same first-25 refs gave OpenCV `18/25`, MTCNN `22/25`, both generated `5/6`, bests diverged, and Spearman was `0.100000`.
 - The same first-25 smoke audit with `retinaface` matched MTCNN on acceptance (`22/25`) and generated best image (`candidate_0006_seed_260705`); MTCNN-vs-RetinaFace Spearman was `1.000000`, while OpenCV-vs-neural detector Spearman stayed `0.100000`.
+- Full v7 `retinaface` audit accepted refs `221/259` and generated images `5/6`, best image `candidate_0005_seed_260704`, best score `0.574721`; it improved on DeepFace/OpenCV's `139/259` refs while keeping Spearman `0.800000` vs OpenCV over 5 common generated images.
 - Full committed workflow notes are in `docs/gpu-generation-log.md`.

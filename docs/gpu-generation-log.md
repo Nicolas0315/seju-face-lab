@@ -59,6 +59,7 @@ Observed local results:
 - Resumed the v7 detector audit with `skip`: `deepface-skip` accepted official refs `259/259` and generated images `6/6`, best image `candidate_0006_seed_260705`, best score `0.986008`, and Spearman rank vs `deepface-opencv` was `0.600000` over 5 common generated images. Boundary: `skip` bypasses face detection, so it is useful for testing detector rejection pressure but should not replace detector-validated face scoring.
 - Added detector smoke limits and ran a 25-reference/6-generated `mtcnn` audit. On the same first-25 official references, `deepface-opencv` accepted `18/25`, `deepface-mtcnn` accepted `22/25`; both scored `5/6` generated images, but best images diverged (`opencv`: `candidate_0004_seed_260703`, `mtcnn`: `candidate_0006_seed_260705`) and Spearman rank was `0.100000` over 5 common generated images.
 - Ran the same 25-reference/6-generated smoke audit with `retinaface`: `deepface-retinaface` accepted `22/25` refs and `5/6` generated images, best image `candidate_0006_seed_260705`, best score `0.569670`. In the combined smoke report, `mtcnn` and `retinaface` had Spearman `1.000000`, while `opencv` vs either neural detector was `0.100000`.
+- Full v7 `retinaface` detector audit completed in the reusable detector report: `deepface-retinaface` accepted `221/259` official refs and `5/6` generated images, best image `candidate_0005_seed_260704`, best score `0.574721`. Compared with `deepface-opencv`, RetinaFace improved reference acceptance from `139/259` to `221/259` and kept high rank agreement (`0.800000` over 5 common generated images); compared with `skip`, rank agreement was `0.900000` while preserving face detection.
 
 Current best local generated candidate by deterministic QA-gated score is:
 
@@ -85,6 +86,6 @@ python -m seju_face_lab generate --model outputs/seju_model_official --out outpu
 
 - Run larger ignored GPU batches and keep only summarized findings in committed docs.
 - Run larger detector-friendly batches beyond 6 images to reduce the noise in backend rank agreement.
-- Use `--max-reference-images` / `--max-images` for slow detector smoke audits before full runs. The next long-run candidate is full `retinaface` or full `mtcnn`; the first-25 smoke suggests both improve acceptance over OpenCV and agree with each other, while OpenCV ranking remains a low-correlation outlier.
+- Use `--max-reference-images` / `--max-images` for slow detector smoke audits before full runs. RetinaFace is currently the best DeepFace detector candidate because the full run improves acceptance while retaining detector validation; full `mtcnn` remains a long-run comparison candidate.
 - Treat ONNXRuntime CUDA provider visibility as environment evidence only; record backend vectorization results separately for each image set.
 - Compare deterministic, neural face-embedding, and visual-review rankings before closing the generation-loop issue.
