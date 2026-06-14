@@ -203,4 +203,4 @@ def _sources_download(args: argparse.Namespace) -> int:
     print(f"skipped: {skipped}")
     print(f"failed: {failed}")
     print(f"out: {args.out}")
-    return 0
+    return 1 if failed else 0

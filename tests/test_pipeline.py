@@ -2,13 +2,16 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from argparse import Namespace
 from pathlib import Path
+from unittest.mock import patch
 
 from PIL import Image, ImageDraw
 
 import bootstrap  # noqa: F401
-from seju_face_lab.cli import main
+from seju_face_lab.cli import _sources_download, main
 from seju_face_lab.model import load_model
+from seju_face_lab.sources import DownloadResult
 
 
 class PipelineTests(unittest.TestCase):
@@ -69,6 +72,33 @@ class PipelineTests(unittest.TestCase):
 
     def test_backends_command_lists_planned_backends(self) -> None:
         self.assertEqual(main(["backends"]), 0)
+
+    def test_sources_download_returns_nonzero_on_failed_rows(self) -> None:
+        failed = DownloadResult(
+            profile_url="https://seju.tokyo/talents/example/",
+            talent_slug="example",
+            image_url="https://seju.tokyo/wp-content/uploads/example.jpg",
+            status="failed",
+            path=None,
+            sha256=None,
+            bytes=0,
+            reason="network error",
+        )
+        args = Namespace(
+            manifest=Path("manifest.jsonl"),
+            out=Path("data/raw/example"),
+            max_count=None,
+            dry_run=False,
+            include_ineligible=False,
+            delay_seconds=0.0,
+            max_bytes=20_000_000,
+            user_agent="test-agent",
+        )
+        with (
+            patch("seju_face_lab.cli.read_source_manifest", return_value=[]),
+            patch("seju_face_lab.cli.download_source_images", return_value=[failed]),
+        ):
+            self.assertEqual(_sources_download(args), 1)
 
 
 def _write_face_like_image(path: Path, skin: tuple[int, int, int], eye_offset: int) -> None:

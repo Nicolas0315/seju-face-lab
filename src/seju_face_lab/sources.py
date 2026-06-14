@@ -187,6 +187,7 @@ def download_source_images(
     max_bytes: int = 20_000_000,
     user_agent: str = "seju-face-lab/0.1 (+local research; contact: local)",
     fetch_bytes: Callable[[str], tuple[bytes, str | None]] | None = None,
+    check_robots: Callable[[str, str], None] | None = None,
 ) -> list[DownloadResult]:
     out_dir.mkdir(parents=True, exist_ok=True)
     selected = _select_download_candidates(candidates, include_ineligible=include_ineligible)
@@ -194,6 +195,7 @@ def download_source_images(
         selected = selected[:max_count]
 
     fetcher = _ThrottledFetcher(user_agent=user_agent, delay_seconds=delay_seconds)
+    robots_check = check_robots or _assert_robots_allowed
     results: list[DownloadResult] = []
     for index, candidate in enumerate(selected, start=1):
         target = out_dir / _download_filename(candidate, index)
@@ -226,6 +228,7 @@ def download_source_images(
             )
             continue
         try:
+            robots_check(candidate.image_url, user_agent)
             if fetch_bytes is None:
                 payload, content_type = fetcher.fetch_bytes(candidate.image_url, max_bytes=max_bytes)
             else:
@@ -262,7 +265,8 @@ def download_source_images(
                 )
             )
 
-    _write_download_manifest(results, out_dir)
+    if not dry_run:
+        _write_download_manifest(results, out_dir)
     return results
 
 

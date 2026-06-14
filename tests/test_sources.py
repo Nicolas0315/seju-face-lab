@@ -97,21 +97,33 @@ class SourceParsingTests(unittest.TestCase):
             )
             dry_run = download_source_images([candidate], root / "dry", dry_run=True)
             self.assertEqual(dry_run[0].status, "planned")
+            self.assertFalse((root / "dry" / "download_manifest.jsonl").exists())
 
+            existing_manifest = root / "raw" / "download_manifest.jsonl"
+            existing_manifest.parent.mkdir()
+            existing_manifest.write_text("real manifest\n", encoding="utf-8")
+            dry_run_existing = download_source_images([candidate], root / "raw", dry_run=True)
+            self.assertEqual(dry_run_existing[0].status, "planned")
+            self.assertEqual(existing_manifest.read_text(encoding="utf-8"), "real manifest\n")
+
+            checked_urls: list[str] = []
             downloaded = download_source_images(
                 [candidate],
                 root / "raw",
                 fetch_bytes=lambda _url: (b"fake-jpeg-bytes", "image/jpeg"),
+                check_robots=lambda url, _agent: checked_urls.append(url),
             )
             self.assertEqual(downloaded[0].status, "downloaded")
             self.assertEqual(downloaded[0].bytes, len(b"fake-jpeg-bytes"))
             self.assertTrue(Path(downloaded[0].path or "").exists())
             self.assertTrue((root / "raw" / "download_manifest.jsonl").exists())
+            self.assertEqual(checked_urls, [candidate.image_url])
 
             extension_fallback = download_source_images(
                 [candidate],
                 root / "fallback",
                 fetch_bytes=lambda _url: (b"fake-jpeg-bytes", None),
+                check_robots=lambda _url, _agent: None,
             )
             self.assertEqual(extension_fallback[0].status, "downloaded")
 
@@ -120,6 +132,7 @@ class SourceParsingTests(unittest.TestCase):
                 root / "too-large",
                 max_bytes=4,
                 fetch_bytes=lambda _url: (b"fake-jpeg-bytes", "image/jpeg"),
+                check_robots=lambda _url, _agent: None,
             )
             self.assertEqual(too_large[0].status, "failed")
             self.assertIn("image exceeds max bytes", too_large[0].reason or "")
