@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
-import json
 from argparse import Namespace
 from pathlib import Path
 from unittest.mock import patch
@@ -22,9 +22,9 @@ class PipelineTests(unittest.TestCase):
             raw = root / "raw"
             generated = root / "generated"
             subjects = root / "subjects"
-            model_dir = root / "model"
+            model_dir = root / "model space"
             eval_dir = root / "eval"
-            generation_dir = root / "generation"
+            generation_dir = root / "generated faces"
             review_dir = root / "review"
             raw.mkdir()
             generated.mkdir()
@@ -88,19 +88,27 @@ class PipelineTests(unittest.TestCase):
                         "--out",
                         str(generation_dir),
                         "--provider",
-                        "dry-run",
+                        "diffusers",
+                        "--dry-run",
                         "--count",
                         "2",
                         "--seed",
                         "42",
+                        "--negative-prompt",
+                        "copied identity",
                     ]
                 ),
                 0,
             )
             generation_run = json.loads((generation_dir / "generation_run.json").read_text(encoding="utf-8"))
             self.assertEqual(generation_run["result"]["status"], "planned")
+            self.assertEqual(generation_run["config"]["provider"], "dry-run")
             self.assertEqual(generation_run["config"]["count"], 2)
+            self.assertEqual(generation_run["config"]["variant"], "fp16")
+            self.assertEqual(generation_run["config"]["negative_prompt"], "copied identity")
             self.assertIn("evaluate", generation_run["result"]["evaluation_command"])
+            self.assertIn('"', generation_run["result"]["evaluation_command"])
+            self.assertEqual(generation_run["result"]["evaluation_argv"][5], str(model_dir))
 
             self.assertEqual(
                 main(

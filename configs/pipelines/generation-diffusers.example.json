@@ -11,6 +11,8 @@
   "height": 512,
   "device": "cuda",
   "dtype": "float16",
+  "variant": "auto",
+  "negative_prompt": "copied identity, named celebrity, duplicate face",
   "notes": [
     "Run dry-run first to write generation_run.json without loading a model.",
     "Keep outputs/generated Git-ignored.",

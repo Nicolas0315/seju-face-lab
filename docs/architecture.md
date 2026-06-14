@@ -20,6 +20,8 @@ Retrieval/design date: 2026-06-14.
    - `prompt.txt` and `generation_manifest.json` feed `generate`
    - `generate --provider dry-run` writes a reproducible run plan
    - `generate --provider diffusers` runs an optional local Diffusers batch
+   - `--dry-run` always records `provider: dry-run`, even if the requested provider was diffusers
+   - `--variant auto` maps `--dtype float16` to the Diffusers `fp16` variant
 5. `evaluate`
    - generated candidates are scored against mean and median vectors
 6. `review-subjects`
@@ -71,7 +73,7 @@ python -m seju_face_lab generate --model outputs/seju_model --out outputs/genera
 Diffusers execution:
 
 ```powershell
-python -m seju_face_lab generate --model outputs/seju_model --out outputs/generated --provider diffusers --hf-model runwayml/stable-diffusion-v1-5 --count 8 --device cuda
+python -m seju_face_lab generate --model outputs/seju_model --out outputs/generated --provider diffusers --hf-model runwayml/stable-diffusion-v1-5 --count 8 --device cuda --negative-prompt "copied identity"
 ```
 
 ## Folder Contract

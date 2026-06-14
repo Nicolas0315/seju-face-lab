@@ -49,7 +49,13 @@ def main(argv: list[str] | None = None) -> int:
     generate_parser.add_argument("--height", type=int, default=512)
     generate_parser.add_argument("--device", default="cuda")
     generate_parser.add_argument("--dtype", choices=["float16", "bfloat16", "float32"], default="float16")
+    generate_parser.add_argument(
+        "--variant",
+        default="auto",
+        help="Diffusers model variant; auto uses fp16 with float16, none disables it",
+    )
     generate_parser.add_argument("--prompt", default=None)
+    generate_parser.add_argument("--negative-prompt", default=None)
     generate_parser.add_argument("--dry-run", action="store_true")
 
     render_parser = subparsers.add_parser("render", help="render mean or median face image again")
@@ -180,9 +186,11 @@ def _prompt(model_dir: Path, kind: str) -> int:
 def _generate(args: argparse.Namespace) -> int:
     if args.count <= 0:
         raise SystemExit("--count must be positive")
+    provider = "dry-run" if args.dry_run else args.provider
+    variant = _resolve_generation_variant(args.variant, args.dtype)
     config = build_generation_config(
         model_dir=args.model,
-        provider=args.provider,
+        provider=provider,
         model_id=args.hf_model,
         count=args.count,
         seed=args.seed,
@@ -192,9 +200,11 @@ def _generate(args: argparse.Namespace) -> int:
         height=args.height,
         device=args.device,
         dtype=args.dtype,
+        variant=variant,
         prompt_override=args.prompt,
+        negative_prompt_override=args.negative_prompt,
     )
-    if args.dry_run or args.provider == "dry-run":
+    if provider == "dry-run":
         result = write_generation_plan(config, args.model, args.out)
     else:
         result = run_diffusers_generation(config, args.model, args.out)
@@ -202,6 +212,14 @@ def _generate(args: argparse.Namespace) -> int:
     print(f"run manifest: {args.out / 'generation_run.json'}")
     print(f"evaluate: {result.evaluation_command}")
     return 0
+
+
+def _resolve_generation_variant(variant: str, dtype: str) -> str | None:
+    if variant == "none":
+        return None
+    if variant == "auto":
+        return "fp16" if dtype == "float16" else None
+    return variant
 
 
 def _render(model_dir: Path, kind: str, out: Path) -> int:

@@ -58,10 +58,11 @@ Plan a reproducible generation batch without downloading or running a model:
 python -m seju_face_lab generate --model outputs/seju_model --out outputs/generated --provider dry-run --count 8
 ```
 
-Run a Diffusers batch after installing a CUDA-enabled PyTorch build and `.[generation]`:
+Run a Diffusers batch after installing a CUDA-enabled PyTorch build and `.[generation]`.
+`--variant auto` uses the `fp16` model variant when `--dtype float16` is selected:
 
 ```powershell
-python -m seju_face_lab generate --model outputs/seju_model --out outputs/generated --provider diffusers --hf-model runwayml/stable-diffusion-v1-5 --count 8
+python -m seju_face_lab generate --model outputs/seju_model --out outputs/generated --provider diffusers --hf-model runwayml/stable-diffusion-v1-5 --count 8 --negative-prompt "copied identity"
 ```
 
 Review other public-figure or celebrity image sets by folder:
@@ -142,7 +143,7 @@ See `docs/research-tracking.md` for the current GitHub Issue / ToDo breakdown.
 - `median_face.png`: pixel-wise median, often more robust to outliers.
 - `profile.json`: compact descriptor values and vector metadata.
 - `prompt.txt`: a generation prompt based on observed centroid descriptors.
-- generation `generation_run.json`: prompt, seed, provider, output paths, and evaluation command.
+- generation `generation_run.json`: prompt, seed, provider, output paths, and evaluation command/argv.
 - evaluation `scores.csv`: similarity of candidate generated images to the centroid vectors.
 - evaluation `summary.json`: best/mean/median generated-image similarity for quick comparisons.
 - subject review outputs: per-person approximate similarity rankings.

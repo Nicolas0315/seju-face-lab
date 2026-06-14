@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,7 @@ class GenerationConfig:
     height: int
     device: str
     dtype: str
+    variant: str | None
 
 
 @dataclass(frozen=True)
@@ -30,6 +32,7 @@ class GenerationResult:
     planned_count: int
     generated_images: list[str]
     evaluation_command: str
+    evaluation_argv: list[str]
 
 
 def build_generation_config(
@@ -44,14 +47,20 @@ def build_generation_config(
     height: int,
     device: str,
     dtype: str,
+    variant: str | None,
     prompt_override: str | None = None,
+    negative_prompt_override: str | None = None,
 ) -> GenerationConfig:
     manifest = json.loads((model_dir / "generation_manifest.json").read_text(encoding="utf-8"))
     return GenerationConfig(
         provider=provider,
         model_id=model_id,
         prompt=prompt_override or manifest["prompt"],
-        negative_prompt=manifest.get("negative_prompt", ""),
+        negative_prompt=(
+            negative_prompt_override
+            if negative_prompt_override is not None
+            else manifest.get("negative_prompt", "")
+        ),
         count=count,
         seed=seed,
         steps=steps,
@@ -60,6 +69,7 @@ def build_generation_config(
         height=height,
         device=device,
         dtype=dtype,
+        variant=variant,
     )
 
 
@@ -72,6 +82,7 @@ def write_generation_plan(config: GenerationConfig, model_dir: Path, out_dir: Pa
         planned_count=config.count,
         generated_images=[],
         evaluation_command=_evaluation_command(model_dir, out_dir),
+        evaluation_argv=_evaluation_argv(model_dir, out_dir),
     )
     _write_generation_artifacts(config, result, out_dir)
     return result
@@ -86,11 +97,13 @@ def run_diffusers_generation(config: GenerationConfig, model_dir: Path, out_dir:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     dtype = _torch_dtype(torch, config.dtype)
-    pipe = diffusion_pipeline.from_pretrained(
-        config.model_id,
-        torch_dtype=dtype,
-        use_safetensors=True,
-    )
+    load_kwargs = {
+        "torch_dtype": dtype,
+        "use_safetensors": True,
+    }
+    if config.variant:
+        load_kwargs["variant"] = config.variant
+    pipe = diffusion_pipeline.from_pretrained(config.model_id, **load_kwargs)
     pipe = pipe.to(config.device)
 
     generated: list[str] = []
@@ -118,6 +131,7 @@ def run_diffusers_generation(config: GenerationConfig, model_dir: Path, out_dir:
         planned_count=config.count,
         generated_images=generated,
         evaluation_command=_evaluation_command(model_dir, out_dir),
+        evaluation_argv=_evaluation_argv(model_dir, out_dir),
     )
     _write_generation_artifacts(config, result, out_dir)
     return result
@@ -153,6 +167,8 @@ def _render_generation_run(config: GenerationConfig, result: GenerationResult) -
         f"- guidance_scale: {config.guidance_scale}",
         f"- size: {config.width}x{config.height}",
         f"- device: {config.device}",
+        f"- dtype: {config.dtype}",
+        f"- variant: {config.variant or 'none'}",
         "",
         "## Prompt",
         "",
@@ -175,7 +191,22 @@ def _render_generation_run(config: GenerationConfig, result: GenerationResult) -
 
 
 def _evaluation_command(model_dir: Path, out_dir: Path) -> str:
-    return f"python -m seju_face_lab evaluate --model {model_dir} --images {out_dir} --out {out_dir / 'evaluation'}"
+    return subprocess.list2cmdline(_evaluation_argv(model_dir, out_dir))
+
+
+def _evaluation_argv(model_dir: Path, out_dir: Path) -> list[str]:
+    return [
+        "python",
+        "-m",
+        "seju_face_lab",
+        "evaluate",
+        "--model",
+        str(model_dir),
+        "--images",
+        str(out_dir),
+        "--out",
+        str(out_dir / "evaluation"),
+    ]
 
 
 def _import_diffusion_pipeline() -> Any:
