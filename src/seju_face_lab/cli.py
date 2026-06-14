@@ -11,7 +11,7 @@ from .embeddings import iter_image_paths, render_appearance
 from .metrics import score_generated_images, write_scores
 from .model import build_centroid_model, load_model, save_model
 from .prompting import prompt_from_descriptors
-from .sources import discover_sources, write_source_manifest
+from .sources import discover_sources, download_source_images, read_source_manifest, write_source_manifest
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -61,6 +61,21 @@ def main(argv: list[str] | None = None) -> int:
         "--user-agent",
         default="seju-face-lab/0.1 (+local research; contact: local)",
     )
+    download_parser = source_subparsers.add_parser(
+        "download",
+        help="download reviewed eligible source images from a manifest",
+    )
+    download_parser.add_argument("--manifest", type=Path, required=True)
+    download_parser.add_argument("--out", type=Path, default=Path("data/raw/seju_official"))
+    download_parser.add_argument("--max-count", type=int, default=None)
+    download_parser.add_argument("--dry-run", action="store_true")
+    download_parser.add_argument("--include-ineligible", action="store_true")
+    download_parser.add_argument("--delay-seconds", type=float, default=0.5)
+    download_parser.add_argument("--max-bytes", type=int, default=20_000_000)
+    download_parser.add_argument(
+        "--user-agent",
+        default="seju-face-lab/0.1 (+local research; contact: local)",
+    )
 
     args = parser.parse_args(argv)
     if args.command == "build":
@@ -76,6 +91,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "sources" and args.sources_command == "discover":
         return _sources_discover(args)
+    if args.command == "sources" and args.sources_command == "download":
+        return _sources_download(args)
     parser.error(f"Unknown command: {args.command}")
     return 2
 
@@ -162,4 +179,28 @@ def _sources_discover(args: argparse.Namespace) -> int:
     print(f"eligible candidates: {eligible}")
     print(f"manifest: {args.out}")
     print(f"audit: {args.out.with_suffix('.audit.md')}")
+    return 0
+
+
+def _sources_download(args: argparse.Namespace) -> int:
+    candidates = read_source_manifest(args.manifest)
+    results = download_source_images(
+        candidates=candidates,
+        out_dir=args.out,
+        max_count=args.max_count,
+        dry_run=args.dry_run,
+        include_ineligible=args.include_ineligible,
+        delay_seconds=args.delay_seconds,
+        max_bytes=args.max_bytes,
+        user_agent=args.user_agent,
+    )
+    downloaded = sum(1 for result in results if result.status == "downloaded")
+    skipped = sum(1 for result in results if result.status == "skipped")
+    failed = sum(1 for result in results if result.status == "failed")
+    planned = sum(1 for result in results if result.status == "planned")
+    print(f"downloaded: {downloaded}")
+    print(f"planned: {planned}")
+    print(f"skipped: {skipped}")
+    print(f"failed: {failed}")
+    print(f"out: {args.out}")
     return 0

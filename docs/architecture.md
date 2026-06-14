@@ -11,6 +11,7 @@ Retrieval/design date: 2026-06-14.
 2. reviewed image staging
    - operator places consent-cleared crops in `data/raw/`
    - raw images stay Git-ignored
+   - `sources download` can materialize reviewed manifest rows into `data/raw/seju_official/`
 3. `build`
    - vector backend extracts per-image vectors
    - mean and median centroids are saved

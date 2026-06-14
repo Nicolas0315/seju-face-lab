@@ -78,6 +78,14 @@ Use this as a review queue. Download/analyze only images you have rights and con
 
 See `docs/web-source-strategy.md` for the current site-structure analysis and extraction boundaries.
 
+After reviewing the manifest, stage eligible images locally:
+
+```powershell
+python -m seju_face_lab sources download --manifest data/processed/seju_sources.jsonl --out data/raw/seju_official --max-count 50
+```
+
+Use `--dry-run` first to inspect planned local file names without downloading.
+
 ## Analysis Backends
 
 ```powershell
@@ -103,6 +111,7 @@ See `docs/architecture.md` for the folder contract and backend plan.
 - `profile.json`: compact descriptor values and vector metadata.
 - `prompt.txt`: a generation prompt based on observed centroid descriptors.
 - evaluation `scores.csv`: similarity of candidate generated images to the centroid vectors.
+- evaluation `summary.json`: best/mean/median generated-image similarity for quick comparisons.
 
 ## Verification
 

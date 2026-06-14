@@ -28,6 +28,7 @@ Observed facts:
 6. Keep only `wp-content/uploads` image URLs and reject logos/favicons/theme assets.
 7. Write a JSONL manifest. Do not download images in the discovery step.
 8. Mark `eligible_for_analysis=false` when age is unknown or below `--min-age` unless explicitly overridden.
+9. Download only after manifest review, with `sources download`; raw images remain Git-ignored.
 
 ## Current Full Discovery Result
 

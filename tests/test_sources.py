@@ -8,9 +8,12 @@ from pathlib import Path
 import bootstrap  # noqa: F401
 from seju_face_lab.sources import (
     SourceCandidate,
+    download_source_images,
     parse_profile,
     parse_talent_links,
+    read_source_manifest,
     write_source_manifest,
+    _quote_url,
 )
 
 
@@ -72,6 +75,42 @@ class SourceParsingTests(unittest.TestCase):
             write_source_manifest([candidate], out)
             self.assertIn("example.jpg", out.read_text(encoding="utf-8"))
             self.assertIn("Manifest-only", out.with_suffix(".audit.md").read_text(encoding="utf-8"))
+            self.assertEqual(read_source_manifest(out)[0].talent_slug, "example")
+
+    def test_download_source_images_dry_run_and_fixture_fetch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            candidate = SourceCandidate(
+                profile_url="https://seju.tokyo/talents/example/",
+                talent_slug="example",
+                name="Example",
+                birthdate="2000-01-01",
+                age_as_of=24,
+                image_url="https://seju.tokyo/wp-content/uploads/example.jpg",
+                image_kind="og:image",
+                alt=None,
+                eligible_for_analysis=True,
+                exclusion_reason=None,
+                retrieved_at=date(2026, 6, 14).isoformat(),
+                source_policy="manifest_only_review_before_download",
+            )
+            dry_run = download_source_images([candidate], root / "dry", dry_run=True)
+            self.assertEqual(dry_run[0].status, "planned")
+
+            downloaded = download_source_images(
+                [candidate],
+                root / "raw",
+                fetch_bytes=lambda _url: (b"fake-jpeg-bytes", "image/jpeg"),
+            )
+            self.assertEqual(downloaded[0].status, "downloaded")
+            self.assertEqual(downloaded[0].bytes, len(b"fake-jpeg-bytes"))
+            self.assertTrue(Path(downloaded[0].path or "").exists())
+            self.assertTrue((root / "raw" / "download_manifest.jsonl").exists())
+
+    def test_quote_url_preserves_ascii_and_encodes_japanese_path(self) -> None:
+        quoted = _quote_url("https://seju.tokyo/wp-content/uploads/2023/07/秋葉聡さん撮影.jpg")
+        self.assertIn("%E7%A7%8B", quoted)
+        self.assertTrue(quoted.endswith(".jpg"))
 
 
 if __name__ == "__main__":
