@@ -119,13 +119,22 @@ def run_local_evaluate(
     backend_obj = get_vector_backend(backend)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    vectors = []
+    vectors_by_index = {}
     failed_paths = []
-    for path in image_paths:
-        try:
-            vectors.append(backend_obj.vectorize(path, crop="center"))
-        except Exception:  # noqa: BLE001 - record per-path worker failures in the summary.
-            failed_paths.append(str(path))
+    max_workers = max(1, min(4, len(image_paths)))
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_index = {
+            executor.submit(backend_obj.vectorize, path, "center"): index
+            for index, path in enumerate(image_paths)
+        }
+        for future in as_completed(future_to_index):
+            index = future_to_index[future]
+            path = image_paths[index]
+            try:
+                vectors_by_index[index] = future.result()
+            except Exception:  # noqa: BLE001 - record per-path worker failures in the summary.
+                failed_paths.append(str(path))
+    vectors = [vectors_by_index[index] for index in sorted(vectors_by_index)]
     scores = sorted(
         [_score_vector(model, vector) for vector in vectors],
         key=lambda item: item.centroid_score,
