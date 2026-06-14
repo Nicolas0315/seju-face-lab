@@ -171,6 +171,7 @@ Implemented now:
 - `deterministic`: no neural dependency, good for local smoke tests and rough visual centroids
 - `opencv-face`: optional `.[vision]` backend for OpenCV face crop normalization
 - `insightface`: optional `.[face]` backend; shown as ready only when `insightface` and `onnxruntime-gpu` are installed
+- `deepface`: optional `.[deepface]` backend using `DeepFace.represent`, defaulting to ArcFace
 
 Use the OpenCV face-crop backend after installing the optional vision dependencies:
 
@@ -180,9 +181,16 @@ python -m seju_face_lab build --images data/raw --out outputs/seju_model_facecro
 python -m seju_face_lab evaluate --model outputs/seju_model_facecrop --images outputs/generated --out outputs/evaluation_facecrop --backend opencv-face
 ```
 
+Use the DeepFace backend as a neural cross-check after installing its optional dependencies:
+
+```powershell
+python -m pip install -e ".[deepface]"
+python -m seju_face_lab build --images data/raw --out outputs/seju_model_deepface --backend deepface
+python -m seju_face_lab evaluate --model outputs/seju_model_deepface --images outputs/generated --out outputs/evaluation_deepface --backend deepface
+```
+
 Designed next:
 
-- `deepface`: OSS face-model cross-checking and QA
 - `clip-style`: secondary style similarity scoring
 - `diffusion-generation`: Diffusers/ComfyUI candidate generation loop
 

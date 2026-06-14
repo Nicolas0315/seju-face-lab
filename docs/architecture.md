@@ -37,11 +37,11 @@ Retrieval/design date: 2026-06-14.
 - `deterministic`: implemented. Uses local image statistics and needs only `numpy` + `Pillow`.
 - `opencv-face`: implemented optional `vision` extra. Uses OpenCV Haar face boxes before deterministic vectors.
 - `insightface`: implemented dependency-gated adapter with `insightface` + `onnxruntime-gpu`; listed as planned when optional dependencies are absent.
-- `deepface`: planned. OSS face-model adapter for cross-checking and dataset QA.
+- `deepface`: implemented dependency-gated adapter with `DeepFace.represent`; defaults to ArcFace and reports no-face images as vectorization failures.
 - `clip-style`: planned. Secondary style similarity with `open-clip-torch`.
 - `diffusion-generation`: planned. Diffusers/ComfyUI generation loop for prompt batches.
 
-Keep geometry and style axes separate. A generated image can match the style prompt while missing face geometry, so evaluation should report both once neural backends are implemented.
+Keep geometry and style axes separate. A generated image can match the style prompt while missing face geometry, so evaluation should report neural face-embedding scores and style scores separately.
 
 ## Subject Review Contract
 

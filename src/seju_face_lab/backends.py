@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
@@ -137,6 +138,60 @@ class InsightFaceBackend:
         )
 
 
+class DeepFaceBackend:
+    """DeepFace-family face embeddings through the DeepFace.represent API."""
+
+    name: str = "deepface"
+    description: str = (
+        "DeepFace-family OSS embeddings via DeepFace.represent; defaults to ArcFace. "
+        "Requires: pip install 'seju-face-lab[deepface]'"
+    )
+
+    def __init__(
+        self,
+        model_name: str = "ArcFace",
+        detector_backend: str = "opencv",
+        enforce_detection: bool = True,
+        align: bool = True,
+    ) -> None:
+        self.model_name = model_name
+        self.detector_backend = detector_backend
+        self.enforce_detection = enforce_detection
+        self.align = align
+
+    def vectorize(self, path: Path, crop: str = "center") -> ImageVector:
+        deepface = _import_deepface()
+        reps = deepface.represent(
+            img_path=str(path),
+            model_name=self.model_name,
+            detector_backend=self.detector_backend,
+            enforce_detection=self.enforce_detection,
+            align=self.align,
+        )
+        if isinstance(reps, dict):
+            reps = [reps]
+        if not reps:
+            raise ValueError(f"No face detected in {path}")
+
+        rep = max(reps, key=_deepface_area_size)
+        raw_embedding = rep.get("embedding")
+        if raw_embedding is None:
+            raise ValueError(f"DeepFace did not return an embedding for {path}")
+        embedding = np.asarray(raw_embedding, dtype=np.float32)
+        if embedding.ndim != 1 or embedding.size == 0:
+            raise ValueError(f"DeepFace returned an invalid embedding for {path}")
+        embedding = _l2_normalize(embedding)
+
+        appearance = _deepface_appearance(path, rep, crop)
+        return ImageVector(
+            image_id=path.stem,
+            path=path,
+            embedding=embedding,
+            appearance=appearance,
+            descriptors={},
+        )
+
+
 @dataclass(frozen=True)
 class PlannedBackend:
     name: str
@@ -166,16 +221,23 @@ def _make_insightface_backend() -> InsightFaceBackend | PlannedBackend:
         )
 
 
-BACKENDS: dict[str, VectorBackend] = {
-    "deterministic": DeterministicBackend(),
-    "opencv-face": OpenCVFaceBackend(),
-    "insightface": _make_insightface_backend(),
-    "deepface": PlannedBackend(
+def _make_deepface_backend() -> DeepFaceBackend | PlannedBackend:
+    """Return DeepFaceBackend if the optional package is installed."""
+    if importlib.util.find_spec("deepface") is not None:
+        return DeepFaceBackend()
+    return PlannedBackend(
         name="deepface",
         extra="deepface",
         description="DeepFace-family OSS adapters for model comparison and face QA.",
         notes="Use for cross-checking embeddings; keep it optional because dependencies are heavy.",
-    ),
+    )
+
+
+BACKENDS: dict[str, VectorBackend] = {
+    "deterministic": DeterministicBackend(),
+    "opencv-face": OpenCVFaceBackend(),
+    "insightface": _make_insightface_backend(),
+    "deepface": _make_deepface_backend(),
     "clip-style": PlannedBackend(
         name="clip-style",
         extra="clip",
@@ -210,6 +272,21 @@ def get_insightface_backend(gpu_id: int = 0, model_pack: str = "buffalo_l") -> I
     return InsightFaceBackend(gpu_id=gpu_id, model_pack=model_pack)
 
 
+def get_deepface_backend(
+    model_name: str = "ArcFace",
+    detector_backend: str = "opencv",
+    enforce_detection: bool = True,
+    align: bool = True,
+) -> DeepFaceBackend:
+    """Create a configured DeepFaceBackend instance (not from the shared registry)."""
+    return DeepFaceBackend(
+        model_name=model_name,
+        detector_backend=detector_backend,
+        enforce_detection=enforce_detection,
+        align=align,
+    )
+
+
 def backend_help() -> str:
     lines = ["Available vector backends:", ""]
     for name in sorted(BACKENDS):
@@ -218,6 +295,8 @@ def backend_help() -> str:
             state = f"planned extra={backend.extra}"
         elif isinstance(backend, InsightFaceBackend):
             state = "implemented extra=face"
+        elif isinstance(backend, DeepFaceBackend):
+            state = "implemented extra=deepface"
         elif isinstance(backend, OpenCVFaceBackend):
             state = f"implemented extra={backend.extra}"
         else:
@@ -238,6 +317,52 @@ def _import_cv2() -> Any:
             "backend=opencv-face."
         ) from exc
     return cv2
+
+
+def _import_deepface() -> Any:
+    try:
+        from deepface import DeepFace
+    except ImportError as exc:
+        raise RuntimeError(
+            "DeepFace is not installed. Install the optional deepface extra before using "
+            "backend=deepface."
+        ) from exc
+    return DeepFace
+
+
+def _l2_normalize(vector: np.ndarray) -> np.ndarray:
+    norm = float(np.linalg.norm(vector))
+    if norm == 0.0:
+        return vector.astype(np.float32)
+    return (vector / norm).astype(np.float32)
+
+
+def _deepface_area_size(rep: dict[str, Any]) -> int:
+    area = rep.get("facial_area") or {}
+    width = area.get("w") or area.get("width") or 0
+    height = area.get("h") or area.get("height") or 0
+    try:
+        return int(width) * int(height)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _deepface_appearance(path: Path, rep: dict[str, Any], crop: str) -> np.ndarray:
+    image = Image.open(path)
+    image = ImageOps.exif_transpose(image).convert("RGB")
+    area = rep.get("facial_area") or {}
+    try:
+        x = int(area["x"])
+        y = int(area["y"])
+        width = int(area["w"])
+        height = int(area["h"])
+    except (KeyError, TypeError, ValueError):
+        normalized = normalize_image(image, crop=crop)
+        return np.asarray(normalized, dtype=np.float32) / 255.0
+
+    face_crop = image.crop(_square_bounds(x, y, width, height, image.width, image.height))
+    face_crop = face_crop.resize((64, 64), Image.Resampling.LANCZOS)
+    return np.asarray(face_crop, dtype=np.float32) / 255.0
 
 
 def _opencv_face_crop(cv2: Any, image: Image.Image, path: Path) -> Image.Image:

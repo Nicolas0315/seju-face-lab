@@ -17,7 +17,7 @@ face = [
   "onnxruntime-gpu>=1.18",
 ]
 deepface = [
-  "deepface>=0.0.92",
+  "deepface>=0.0.100",
 ]
 clip = [
   "open-clip-torch>=2.24",
@@ -38,7 +38,7 @@ all = [
   "opencv-python>=4.10",
   "insightface>=0.7",
   "onnxruntime-gpu>=1.18",
-  "deepface>=0.0.92",
+  "deepface>=0.0.100",
   "open-clip-torch>=2.24",
   "diffusers>=0.30",
   "transformers>=4.44",

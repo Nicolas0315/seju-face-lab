@@ -11,7 +11,7 @@ import bootstrap  # noqa: F401
 import numpy as np
 from PIL import Image
 from scripts.organize_by_talent import _talent_slug_from_filename
-from seju_face_lab.backends import InsightFaceBackend
+from seju_face_lab.backends import DeepFaceBackend, InsightFaceBackend
 from seju_face_lab.cli import main
 from seju_face_lab.correlation import (
     build_correlation_dataset,
@@ -272,6 +272,45 @@ class AnalysisModuleTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "No face detected"):
                 backend.vectorize(Path("missing-face.jpg"))
 
+    def test_deepface_backend_vectorizes_largest_detected_face(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            image_path = Path(tmp) / "face.png"
+            Image.new("RGB", (96, 64), (220, 200, 190)).save(image_path)
+            backend = DeepFaceBackend()
+
+            with patch(
+                "seju_face_lab.backends._import_deepface",
+                return_value=_FakeDeepFace(
+                    [
+                        {
+                            "embedding": [1.0, 0.0, 0.0],
+                            "facial_area": {"x": 0, "y": 0, "w": 8, "h": 8},
+                        },
+                        {
+                            "embedding": [2.0, 2.0, 0.0],
+                            "facial_area": {"x": 20, "y": 10, "w": 32, "h": 32},
+                        },
+                    ]
+                ),
+            ):
+                vector = backend.vectorize(image_path)
+
+        self.assertEqual(vector.image_id, "face")
+        self.assertEqual(vector.embedding.shape, (3,))
+        self.assertAlmostEqual(float(np.linalg.norm(vector.embedding)), 1.0, places=6)
+        self.assertTrue(np.allclose(vector.embedding, np.asarray([0.70710677, 0.70710677, 0.0])))
+        self.assertEqual(vector.appearance.shape, (64, 64, 3))
+
+    def test_deepface_backend_raises_when_no_faces_are_returned(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            image_path = Path(tmp) / "blank.png"
+            Image.new("RGB", (32, 32), (0, 0, 0)).save(image_path)
+            backend = DeepFaceBackend()
+
+            with patch("seju_face_lab.backends._import_deepface", return_value=_FakeDeepFace([])):
+                with self.assertRaisesRegex(ValueError, "No face detected"):
+                    backend.vectorize(image_path)
+
     def test_distribute_vectorize_scores_only_assigned_local_paths(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -382,6 +421,14 @@ class _FakeCV2:
     @staticmethod
     def imread(_path: str) -> np.ndarray:
         return np.zeros((32, 32, 3), dtype=np.uint8)
+
+
+class _FakeDeepFace:
+    def __init__(self, representations: list[dict]) -> None:
+        self.representations = representations
+
+    def represent(self, **_kwargs: object) -> list[dict]:
+        return self.representations
 
 
 if __name__ == "__main__":

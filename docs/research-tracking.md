@@ -9,9 +9,9 @@ Retrieval/design date: 2026-06-14.
 - Deterministic centroid build/evaluate is implemented and tested.
 - OpenCV face-crop normalization is implemented as optional backend `opencv-face`.
 - InsightFace adapter code is dependency-gated and reports ready only when `insightface` and `onnxruntime-gpu` are installed.
+- DeepFace adapter code is dependency-gated and uses `DeepFace.represent` for neural cross-checking.
 - Per-subject similarity review is implemented through `review-subjects`.
 - SNS handle/engagement manifests and face-score correlation reports are implemented.
-- DeepFace cross-checking is planned.
 - Image-generation dry-run planning and local RTX 4090 Diffusers smoke runs are implemented.
 
 ## GitHub Issue Plan
@@ -22,7 +22,7 @@ Create and track these issues:
 - `P1 Celebrity subject review workflow`: collect reviewed subject folders and run `review-subjects`.
 - `P1 Generation loop`: connect `generation_manifest.json` to Diffusers or ComfyUI batches.
 - `P1 SNS correlation workflow`: run handle extraction, engagement manifesting, and correlation reports.
-- `P2 DeepFace adapter`: compare DeepFace-family embeddings against InsightFace/deterministic scores.
+- `P2 DeepFace adapter`: verify optional DeepFace install on local GPU/CPU and compare embeddings against InsightFace/deterministic scores.
 - `P2 CLIP style axis`: add OpenCLIP style scoring as a separate axis from face geometry.
 - `P2 Remote worker playbook`: document RTX 4090 and RTX 5060 Ti split-run commands.
 
@@ -44,7 +44,7 @@ Create and track these issues:
 6. Generate with Diffusers/ComfyUI on a GPU worker and score with `evaluate`.
 7. Rank evaluated generated batches with `compare-runs`.
 8. Run SNS handle/engagement manifests and `analyze correlation` for reviewable metric joins.
-9. Compare deterministic scores against InsightFace/DeepFace once neural backends are available.
+9. Compare deterministic scores against InsightFace/DeepFace on the same ignored image sets.
 
 ## GPU Generation Notes
 
