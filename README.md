@@ -75,6 +75,8 @@ python -m seju_face_lab compare-runs --runs outputs/generated_a outputs/generate
 `compare-runs` also accepts evaluation output directories that contain `summary.json`. When a run has
 `style_evaluation/style_summary.json` and `style_evaluation/style_scores.csv`, the report includes
 face, style, and per-image combined scores with the matched image path.
+When a run has `quality/image_quality.json` and `quality/image_quality.csv`, the report also includes
+QA pass counts and the best centroid score among QA-passing generated images.
 
 Plan a reproducible generation batch without downloading or running a model:
 
@@ -239,7 +241,7 @@ See `docs/gpu-generation-log.md` for RTX 4090 generation smoke results.
 - style evaluation `style_summary.json`: best/mean/median style-axis scores.
 - image quality `image_quality.csv`: OpenCV single-face QA for generated candidates.
 - generation run reviews: rank evaluated candidate batches by local centroid scores.
-- generation run reviews include style and per-image combined scores with matched paths when style outputs exist.
+- generation run reviews include QA-gated face scores, style scores, and per-image combined scores when those outputs exist.
 - subject review outputs: per-person approximate similarity rankings.
 
 ## Verification

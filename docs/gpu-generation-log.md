@@ -22,7 +22,7 @@ Run date: 2026-06-15.
 - Added dependency-gated InsightFace backend code for later RTX neural embedding verification.
 - Confirmed generated images, manifests, and scores stay ignored under `outputs/`.
 - Confirmed the shortened default prompt avoids CLIP prompt truncation in the smoke run.
-- The detector-friendly profile still emitted a CLIP token-length warning in Diffusers v1.5 runs; generation continued, but future prompt/negative compaction should target this.
+- The detector-friendly profile initially emitted a CLIP token-length warning in Diffusers v1.5 runs; v5 compacted the detector-friendly negative prompt and removed that warning in a one-image RTX 4090 run.
 
 ## 2026-06-15 Detector-Friendly RTX 4090 Pass
 
@@ -42,6 +42,8 @@ Observed local results:
 - v2 QA rejected `candidate_0001_seed_260617` because OpenCV detected 4 faces, matching the visible grid/collage failure.
 - v3 shorter ID-headshot prompt: deterministic `image_count=2`, OpenCV `image_count=2`, QA pass `0/2`; failures were extreme crop and off-center/small face.
 - v4 v2-style prompt plus stronger collage negatives: deterministic `image_count=2`, OpenCV `image_count=1`, QA pass `0/2`; failures were 4-face collage and no detected frontal face.
+- v5 compact detector-friendly negative prompt: no CLIP token-length warning, deterministic best `0.168881`, OpenCV best `0.487359`, QA pass `1/1`.
+- QA-gated `compare-runs` over v2-v5 still ranks v2 first: deterministic QA best `0.363268`; OpenCV QA best `0.641401`.
 
 Current best local candidate for review remains:
 

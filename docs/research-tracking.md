@@ -17,6 +17,7 @@ Retrieval/design date: 2026-06-14.
 - Image-generation dry-run planning and local RTX 4090 Diffusers smoke runs are implemented.
 - `generate --prompt-profile detector-friendly` records detector-oriented prompt settings for frontal, unobscured candidate batches.
 - `qa-images` flags generated candidates that are collages, extreme crops, off-center faces, or missing a frontal OpenCV face.
+- `compare-runs` now reads `quality/` outputs and reports QA-gated best centroid scores.
 
 ## GitHub Issue Plan
 
@@ -59,7 +60,7 @@ Create and track these issues:
 - Small generated batches were evaluated locally; generated images and per-run scores remain ignored under `outputs/`.
 - OpenCV face-crop build succeeded on the local official image set with 173 usable face crops from 259 source images.
 - Detector-friendly RTX 4090 v2 produced one QA-passing candidate out of two; v3/v4 showed why QA is needed by producing extreme crops, off-center faces, and collages.
-- The current committed route is detector-friendly generation, deterministic/OpenCV evaluation, then `qa-images` filtering before any visual interpretation.
+- The current committed route is detector-friendly generation, deterministic/OpenCV evaluation, `qa-images`, then `compare-runs` with QA-gated ranking before any visual interpretation.
 - InsightFace sample build/evaluate succeeded on `data/raw/seju_official_sample` with 2 usable images and 512D embeddings.
 - Current ONNXRuntime reports CUDA provider availability, but InsightFace execution fell back to CPU because `cublasLt64_12.dll` is missing.
 - Full committed workflow notes are in `docs/gpu-generation-log.md`.

@@ -32,7 +32,8 @@ Retrieval/design date: 2026-06-14.
    - generated candidates are checked for exactly one centered frontal OpenCV face
    - this catches collages, extreme crops, off-center faces, and no-face detector failures before review
 8. `compare-runs`
-   - generation batches are ranked by face score, or by best per-image combined face/style score when style outputs are present
+   - generation batches are ranked by QA-gated face score when quality outputs are present
+   - otherwise batches are ranked by face score, or by best per-image combined face/style score when style outputs are present
 9. `review-subjects`
    - per-person image folders are ranked against the local seju centroid
    - output is CSV, Markdown, and JSON for review and tracking
@@ -114,6 +115,9 @@ Combined run review:
 ```powershell
 python -m seju_face_lab compare-runs --runs outputs/generated_a outputs/generated_b --out outputs/run_reviews
 ```
+
+If `outputs/generated_a/quality/image_quality.csv` exists, the run review includes
+`qa_pass_count`, `qa_pass_rate`, and `best_qa_centroid_score`.
 
 ## Folder Contract
 
