@@ -554,6 +554,41 @@ class PipelineTests(unittest.TestCase):
             self.assertTrue((out / "deterministic" / "evaluation" / "scores.csv").exists())
             self.assertTrue((out / "opencv-face" / "model" / "centroids.npz").exists())
 
+    def test_compare_backends_rank_agreement_uses_unique_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "raw"
+            generated = root / "generated"
+            out = root / "backend_compare"
+            raw.mkdir()
+            (generated / "a").mkdir(parents=True)
+            (generated / "b").mkdir(parents=True)
+            _write_face_like_image(raw / "reference.png", (235, 205, 190), eye_offset=0)
+            _write_face_like_image(generated / "a" / "same.png", (232, 202, 188), eye_offset=1)
+            _write_face_like_image(generated / "b" / "same.png", (170, 145, 130), eye_offset=7)
+
+            with patch("seju_face_lab.backends._import_cv2", return_value=_FakeCV2()):
+                self.assertEqual(
+                    main(
+                        [
+                            "compare-backends",
+                            "--reference-images",
+                            str(raw),
+                            "--images",
+                            str(generated),
+                            "--out",
+                            str(out),
+                            "--backends",
+                            "deterministic",
+                            "opencv-face",
+                        ]
+                    ),
+                    0,
+                )
+
+            report = json.loads((out / "backend_comparison.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["rank_agreement"][0]["common_image_count"], 2)
+
     def test_compare_backends_rejects_unknown_backend_name(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

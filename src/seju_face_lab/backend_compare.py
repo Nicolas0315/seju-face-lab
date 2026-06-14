@@ -149,9 +149,9 @@ def _read_scores(path: Path) -> dict[str, float]:
         return {}
     with path.open("r", encoding="utf-8-sig", newline="") as handle:
         return {
-            row["image_id"]: float(row["centroid_score"])
+            row["path"]: float(row["centroid_score"])
             for row in csv.DictReader(handle)
-            if row.get("image_id") and row.get("centroid_score")
+            if row.get("path") and row.get("centroid_score")
         }
 
 
