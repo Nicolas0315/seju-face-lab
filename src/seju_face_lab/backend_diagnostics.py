@@ -81,8 +81,11 @@ def _backend_status(name: str) -> dict[str, Any]:
 
 def _generation_provider_status(name: str) -> dict[str, Any]:
     provider = GENERATION_PROVIDERS[name]
-    dependencies = _dependencies("diffusers", "transformers", "accelerate", "safetensors", "torch")
-    if provider.name == "dry-run":
+    if provider.name == "diffusers":
+        dependencies = _dependencies("diffusers", "transformers", "accelerate", "safetensors", "torch")
+    elif provider.name == "openai-image":
+        dependencies = _dependencies("openai")
+    else:
         dependencies = {}
     return {
         "name": provider.name,

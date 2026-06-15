@@ -11,7 +11,12 @@ from .backends import backend_help, get_vector_backend
 from .backend_compare import compare_deepface_detectors, compare_subject_backends, compare_vector_backends
 from .backend_diagnostics import write_backend_diagnostics
 from .embeddings import iter_image_paths, render_appearance
-from .generation import build_generation_config, run_diffusers_generation, write_generation_plan
+from .generation import (
+    build_generation_config,
+    run_diffusers_generation,
+    run_openai_image_generation,
+    write_generation_plan,
+)
 from .metrics import review_subject_directories, score_generated_images, write_scores, write_subject_reviews
 from .model import build_centroid_model, load_model, save_model
 from .model_audit import write_model_audit
@@ -50,8 +55,21 @@ def main(argv: list[str] | None = None) -> int:
     )
     generate_parser.add_argument("--model", type=Path, required=True)
     generate_parser.add_argument("--out", type=Path, required=True)
-    generate_parser.add_argument("--provider", choices=["dry-run", "diffusers"], default="dry-run")
-    generate_parser.add_argument("--hf-model", default="runwayml/stable-diffusion-v1-5")
+    generate_parser.add_argument(
+        "--provider",
+        choices=["dry-run", "diffusers", "openai-image"],
+        default="dry-run",
+    )
+    generate_parser.add_argument(
+        "--hf-model",
+        default="runwayml/stable-diffusion-v1-5",
+        help="Diffusers model id; kept for existing configs",
+    )
+    generate_parser.add_argument(
+        "--image-model",
+        default=None,
+        help="image generation model id for provider=openai-image",
+    )
     generate_parser.add_argument("--count", type=int, default=4)
     generate_parser.add_argument("--seed", type=int, default=150315)
     generate_parser.add_argument("--steps", type=int, default=30)
@@ -60,6 +78,8 @@ def main(argv: list[str] | None = None) -> int:
     generate_parser.add_argument("--height", type=int, default=512)
     generate_parser.add_argument("--device", default="cuda")
     generate_parser.add_argument("--dtype", choices=["float16", "bfloat16", "float32"], default="float16")
+    generate_parser.add_argument("--output-format", choices=["png", "jpeg", "webp"], default="png")
+    generate_parser.add_argument("--quality", choices=["low", "medium", "high"], default="medium")
     generate_parser.add_argument(
         "--variant",
         default="auto",
@@ -538,27 +558,34 @@ def _generate(args: argparse.Namespace) -> int:
         raise SystemExit("--count must be positive")
     provider = "dry-run" if args.dry_run else args.provider
     variant = _resolve_generation_variant(args.variant, args.dtype)
+    width, height = _generation_dimensions(provider, args.width, args.height)
     config = build_generation_config(
         model_dir=args.model,
         provider=provider,
-        model_id=args.hf_model,
+        model_id=_generation_model_id(args),
         count=args.count,
         seed=args.seed,
         steps=args.steps,
         guidance_scale=args.guidance_scale,
-        width=args.width,
-        height=args.height,
+        width=width,
+        height=height,
         device=args.device,
         dtype=args.dtype,
         variant=variant,
+        output_format=args.output_format,
+        quality=args.quality,
         prompt_profile=args.prompt_profile,
         prompt_override=args.prompt,
         negative_prompt_override=args.negative_prompt,
     )
     if provider == "dry-run":
         result = write_generation_plan(config, args.model, args.out)
-    else:
+    elif provider == "diffusers":
         result = run_diffusers_generation(config, args.model, args.out)
+    elif provider == "openai-image":
+        result = run_openai_image_generation(config, args.model, args.out)
+    else:
+        raise SystemExit(f"Unsupported generation provider: {provider}")
     print(f"generation status: {result.status}")
     print(f"run manifest: {args.out / 'generation_run.json'}")
     print(f"evaluate: {result.evaluation_command}")
@@ -581,6 +608,18 @@ def _resolve_generation_variant(variant: str, dtype: str) -> str | None:
     if variant == "auto":
         return "fp16" if dtype == "float16" else None
     return variant
+
+
+def _generation_model_id(args: argparse.Namespace) -> str:
+    if args.provider == "openai-image":
+        return args.image_model or "gpt-image-2"
+    return args.hf_model
+
+
+def _generation_dimensions(provider: str, width: int, height: int) -> tuple[int, int]:
+    if provider == "openai-image" and (width, height) == (512, 512):
+        return 1024, 1024
+    return width, height
 
 
 def _render(model_dir: Path, kind: str, out: Path) -> int:
@@ -942,6 +981,7 @@ def _generation_namespace(config: dict, generation: dict, out: Path) -> argparse
         out=out,
         provider=str(generation.get("provider", "dry-run")),
         hf_model=str(generation.get("hf_model", "runwayml/stable-diffusion-v1-5")),
+        image_model=str(generation.get("image_model", "")) or None,
         count=int(generation.get("count", 4)),
         seed=int(generation.get("seed", 150315)),
         steps=int(generation.get("steps", 30)),
@@ -950,6 +990,8 @@ def _generation_namespace(config: dict, generation: dict, out: Path) -> argparse
         height=int(generation.get("height", 512)),
         device=str(generation.get("device", "cuda")),
         dtype=str(generation.get("dtype", "float16")),
+        output_format=str(generation.get("output_format", "png")),
+        quality=str(generation.get("quality", "medium")),
         variant=str(generation.get("variant", "auto")),
         prompt_profile=str(generation.get("prompt_profile", "balanced")),
         prompt=generation.get("prompt"),

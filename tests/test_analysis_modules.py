@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import base64
 import json
 import os
 import subprocess
@@ -24,6 +25,7 @@ from seju_face_lab.correlation import (
     compute_correlations,
     write_correlation_report,
 )
+from seju_face_lab.generation import build_generation_config, run_openai_image_generation
 from seju_face_lab.precision import write_precision_report
 from seju_face_lab.model_audit import write_model_audit
 from seju_face_lab.quality import ImageQuality, judge_face_quality, review_image_quality
@@ -151,6 +153,98 @@ class AnalysisModuleTests(unittest.TestCase):
             self.assertEqual(review_args.images, out)
             self.assertEqual(review_args.out, review_out)
             self.assertEqual(review_args.backend, "deterministic")
+
+    def test_cli_generate_review_runs_after_openai_image_generation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            model = root / "model"
+            out = root / "generated"
+            review_out = root / "review"
+            config = SimpleNamespace(provider="openai-image")
+            result = SimpleNamespace(
+                status="generated",
+                evaluation_command="python -m seju_face_lab evaluate",
+                generated_images=[str(out / "candidate.png")],
+            )
+
+            with patch("seju_face_lab.cli.build_generation_config", return_value=config) as build_config:
+                with patch("seju_face_lab.cli.run_openai_image_generation", return_value=result):
+                    with patch("seju_face_lab.cli._review_generated") as review_generated:
+                        self.assertEqual(
+                            main(
+                                [
+                                    "generate",
+                                    "--model",
+                                    str(model),
+                                    "--out",
+                                    str(out),
+                                    "--provider",
+                                    "openai-image",
+                                    "--review",
+                                    "--review-out",
+                                    str(review_out),
+                                ]
+                            ),
+                            0,
+                        )
+
+            review_generated.assert_called_once()
+            review_args = review_generated.call_args.args[0]
+            self.assertEqual(review_args.model, model)
+            self.assertEqual(review_args.images, out)
+            self.assertEqual(review_args.out, review_out)
+            config_kwargs = build_config.call_args.kwargs
+            self.assertEqual(config_kwargs["model_id"], "gpt-image-2")
+            self.assertEqual(config_kwargs["width"], 1024)
+            self.assertEqual(config_kwargs["height"], 1024)
+
+    def test_openai_image_generation_writes_b64_images_and_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            model = root / "model"
+            out = root / "generated"
+            model.mkdir()
+            (model / "generation_manifest.json").write_text(
+                json.dumps(
+                    {
+                        "prompt": "aggregate face prompt",
+                        "negative_prompt": "copied identity",
+                        "prompt_profiles": {},
+                        "negative_prompt_profiles": {},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            image_bytes = base64.b64encode(b"fake-png-bytes").decode("ascii")
+            response = SimpleNamespace(data=[SimpleNamespace(b64_json=image_bytes)])
+            client = SimpleNamespace(images=SimpleNamespace(generate=lambda **_kwargs: response))
+            config = build_generation_config(
+                model_dir=model,
+                provider="openai-image",
+                model_id="gpt-image-2",
+                count=1,
+                seed=42,
+                steps=1,
+                guidance_scale=1.0,
+                width=1024,
+                height=1024,
+                device="api",
+                dtype="api",
+                variant=None,
+                output_format="png",
+                quality="low",
+            )
+
+            with patch("seju_face_lab.generation._openai_client", return_value=client):
+                result = run_openai_image_generation(config, model, out)
+
+            self.assertEqual(result.status, "generated")
+            self.assertEqual(result.provider, "openai-image")
+            self.assertEqual((out / "candidate_0001_openai.png").read_bytes(), b"fake-png-bytes")
+            run = json.loads((out / "generation_run.json").read_text(encoding="utf-8"))
+            self.assertEqual(run["config"]["model_id"], "gpt-image-2")
+            self.assertEqual(run["config"]["output_format"], "png")
+            self.assertEqual(run["config"]["quality"], "low")
 
     def test_cli_generate_review_does_not_run_for_dry_run_plan(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

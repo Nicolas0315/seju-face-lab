@@ -104,6 +104,13 @@ Run a Diffusers batch after installing a CUDA-enabled PyTorch build and `.[gener
 python -m seju_face_lab generate --model outputs/seju_model --out outputs/generated --provider diffusers --hf-model runwayml/stable-diffusion-v1-5 --count 8 --negative-prompt "copied identity"
 ```
 
+Run a GPT Image batch through the OpenAI Images API after installing `.[openai]` and exporting
+`OPENAI_API_KEY`:
+
+```powershell
+python -m seju_face_lab generate --model outputs/seju_model --out outputs/generated_openai --provider openai-image --image-model gpt-image-2 --width 1024 --height 1024 --quality medium --count 4 --review
+```
+
 For batches meant to pass face detectors before scoring, use the detector-friendly prompt profile:
 
 ```powershell
@@ -363,6 +370,8 @@ Implemented generation providers:
 
 - `dry-run`: writes prompt, seed, and evaluation plan without running an image model.
 - `diffusers`: runs local image generation through `generate --provider diffusers` with `.[generation]`.
+- `openai-image`: runs GPT Image generation through `generate --provider openai-image` with `.[openai]`
+  and `OPENAI_API_KEY`; generated images remain local outputs and are not committed.
 
 See `docs/architecture.md` for the folder contract and backend plan.
 See `docs/research-tracking.md` for the current GitHub Issue / ToDo breakdown.

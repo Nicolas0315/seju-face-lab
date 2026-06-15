@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import base64
 import subprocess
+import urllib.request
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -25,6 +27,8 @@ class GenerationConfig:
     device: str
     dtype: str
     variant: str | None
+    output_format: str
+    quality: str
 
 
 @dataclass(frozen=True)
@@ -51,6 +55,8 @@ def build_generation_config(
     device: str,
     dtype: str,
     variant: str | None,
+    output_format: str = "png",
+    quality: str = "medium",
     prompt_profile: str = "balanced",
     prompt_override: str | None = None,
     negative_prompt_override: str | None = None,
@@ -75,6 +81,8 @@ def build_generation_config(
         device=device,
         dtype=dtype,
         variant=variant,
+        output_format=output_format,
+        quality=quality,
     )
 
 
@@ -203,6 +211,44 @@ def run_diffusers_generation(config: GenerationConfig, model_dir: Path, out_dir:
     return result
 
 
+def run_openai_image_generation(config: GenerationConfig, model_dir: Path, out_dir: Path) -> GenerationResult:
+    if config.provider != "openai-image":
+        raise ValueError(f"Unsupported generation provider: {config.provider}")
+    if config.negative_prompt:
+        prompt = f"{config.prompt}\n\nAvoid: {config.negative_prompt}"
+    else:
+        prompt = config.prompt
+
+    client = _openai_client()
+    response = client.images.generate(
+        model=config.model_id,
+        prompt=prompt,
+        n=config.count,
+        size=f"{config.width}x{config.height}",
+        quality=config.quality,
+        output_format=config.output_format,
+    )
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    generated: list[str] = []
+    for index, item in enumerate(getattr(response, "data", []) or [], start=1):
+        image_path = out_dir / f"candidate_{index:04d}_openai.{config.output_format}"
+        _write_openai_image_item(item, image_path)
+        generated.append(str(image_path))
+
+    result = GenerationResult(
+        status="generated",
+        provider=config.provider,
+        output_dir=str(out_dir),
+        planned_count=config.count,
+        generated_images=generated,
+        evaluation_command=_evaluation_command(model_dir, out_dir),
+        evaluation_argv=_evaluation_argv(model_dir, out_dir),
+    )
+    _write_generation_artifacts(config, result, out_dir)
+    return result
+
+
 def _write_generation_artifacts(
     config: GenerationConfig,
     result: GenerationResult,
@@ -236,6 +282,8 @@ def _render_generation_run(config: GenerationConfig, result: GenerationResult) -
         f"- device: {config.device}",
         f"- dtype: {config.dtype}",
         f"- variant: {config.variant or 'none'}",
+        f"- output_format: {config.output_format}",
+        f"- quality: {config.quality}",
         "",
         "## Prompt",
         "",
@@ -296,6 +344,30 @@ def _import_torch() -> Any:
             "provider=diffusers."
         ) from exc
     return torch
+
+
+def _openai_client() -> Any:
+    try:
+        from openai import OpenAI
+    except ImportError as exc:
+        raise RuntimeError(
+            "OpenAI Python SDK is not installed. Install the optional openai extra before running "
+            "provider=openai-image."
+        ) from exc
+    return OpenAI()
+
+
+def _write_openai_image_item(item: Any, image_path: Path) -> None:
+    b64_json = getattr(item, "b64_json", None)
+    if b64_json:
+        image_path.write_bytes(base64.b64decode(b64_json))
+        return
+    url = getattr(item, "url", None)
+    if url:
+        with urllib.request.urlopen(url, timeout=60) as response:
+            image_path.write_bytes(response.read())
+        return
+    raise RuntimeError("OpenAI image response did not include b64_json or url data.")
 
 
 def _torch_dtype(torch: Any, dtype: str) -> Any:

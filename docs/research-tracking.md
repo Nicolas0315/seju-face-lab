@@ -21,16 +21,19 @@ Retrieval/design date: 2026-06-14.
 - `compare-runs` reports style and same-image combined scores when style outputs are present.
 - `compare-runs` writes a local HTML thumbnail review so generated candidates can be visually checked beside face/style/QA evidence.
 - Image-generation dry-run planning and local RTX 4090 Diffusers smoke runs are implemented.
+- OpenAI GPT Image generation is implemented as `generate --provider openai-image` with optional `.[openai]`.
 - `generate --prompt-profile detector-friendly` records detector-oriented prompt settings for frontal, unobscured candidate batches.
 - `qa-images` flags generated candidates that are collages, extreme crops, off-center faces, or missing a frontal OpenCV face.
 - `compare-runs` now reads `quality/` outputs and reports QA-gated best centroid scores.
 - `review-generated` runs generated-image evaluation, QA, and one-run comparison as the standard precision-review shortcut.
 - `generate --review` now chains real Diffusers generation into the same generated-image review shortcut.
+- `generate --review` also chains OpenAI Image API generation into the same generated-image review shortcut.
 - `precision-report` consolidates a workflow readiness checklist, centroid, optional `model_audit.json` mean/median vector distance metadata, generated-image mean/median score components, QA, subject-review, backend-comparison, subject-backend-comparison, and optional correlation evidence into a review bundle.
 - `audit-model` writes standalone mean/median vector hashes, norms, distance metrics, and descriptor deltas for centroid-model review.
 - `export-vectors` writes full mean/median centroid embedding values as JSON or CSV for external analysis and generation tooling.
 - `run-pipeline` executes JSON-configured build/audit-model/export-vectors/evaluate/style-evaluate/review/backend-comparison/subject-backend-comparison/SNS-engagement/correlation/precision steps and records a pipeline run manifest.
 - `generation_sweep` pipeline configs execute repeatable multi-seed/multi-profile generation experiments with per-run manifests and optional shared generated-run comparison.
+- `configs/pipelines/generation-openai-image.example.json` captures the GPT Image API generation + generated-review + precision-report workflow.
 - `configs/pipelines/sns-correlation.example.json` captures the repeatable subject-review + cached SNS exploration + face-score/SNS correlation + precision-report workflow.
 - `configs/pipelines/full-retinaface-review.example.json` captures the current full review path with deterministic continuity plus `deepface-retinaface` backend rank agreement.
 - `worker-diagnostics` records local RTX 4090 and optional SSH remote-GPU Python/CUDA/torch/package readiness without remote writes.
@@ -64,7 +67,7 @@ Create and track these issues:
 4. Run the same review with InsightFace or DeepFace once optional dependencies are installed.
 5. Plan aggregate candidate faces with `generate --provider dry-run`.
 6. For detector-visible scoring batches, use `generate --prompt-profile detector-friendly`.
-7. Generate with Diffusers/ComfyUI on a GPU worker and score with `generate --review` or `review-generated`.
+7. Generate with Diffusers/ComfyUI on a GPU worker, or `openai-image` through the OpenAI Images API, and score with `generate --review` or `review-generated`.
 8. For seed/profile iteration, run `configs/pipelines/generation-sweep.example.json` so all candidate settings have per-run manifests and a shared run comparison.
 9. Run `style-evaluate` so generated candidates have both face-geometry and style-axis scores.
 10. Run `qa-images` or `review-generated` before visual review so collages/extreme crops do not win on score alone.

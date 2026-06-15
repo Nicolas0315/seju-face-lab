@@ -1,6 +1,7 @@
 # Architecture
 
 Retrieval/design date: 2026-06-14.
+OpenAI Image API check: 2026-06-15, official docs at https://developers.openai.com/api/docs/guides/image-generation.
 
 ## Pipeline
 
@@ -23,6 +24,7 @@ Retrieval/design date: 2026-06-14.
    - `prompt.txt` and `generation_manifest.json` feed `generate`
    - `generate --provider dry-run` writes a reproducible run plan
    - `generate --provider diffusers` runs an optional local Diffusers batch
+   - `generate --provider openai-image` runs an optional GPT Image batch through the OpenAI Images API
    - `generation_sweep` pipeline configs expand multiple seed/profile runs into per-run directories
    - `--dry-run` always records `provider: dry-run`, even if the requested provider was diffusers
    - `--variant auto` maps `--dtype float16` to the Diffusers `fp16` variant
@@ -69,6 +71,7 @@ Retrieval/design date: 2026-06-14.
 - `deepface-retinaface`: implemented dependency-gated adapter using DeepFace ArcFace embeddings with RetinaFace detection.
 - `clip-style`: implemented as `style-evaluate`. Uses optional `open-clip-torch` image embeddings as a secondary style axis.
 - `generate --provider diffusers`: implemented optional `generation` extra for local Diffusers prompt batches.
+- `generate --provider openai-image`: implemented optional `openai` extra for GPT Image API batches.
 
 Keep geometry and style axes separate. A generated image can match the style prompt while missing face geometry, so evaluation should report neural face-embedding scores and style scores separately.
 
@@ -115,7 +118,7 @@ identity recognition, attractiveness scoring, ethnicity classification, or an ob
 - RTX 4090 / SSH remote-GPU nodes should run optional neural backends and generation batches only.
 - Keep raw image sets and generated candidates Git-ignored.
 - Use `insightface`, `deepface`, or `deepface-retinaface` for face-embedding cross-checks after deterministic results are stable.
-- Use Diffusers or ComfyUI to generate candidates from `generation_manifest.json`, then score them with `evaluate` and `style-evaluate`.
+- Use Diffusers, ComfyUI, or `openai-image` to generate candidates from `generation_manifest.json`, then score them with `evaluate` and `style-evaluate`.
 - Run `qa-images` before trusting generated-image scores; a collage can score well if one crop matches the centroid.
 - Keep generated-image prompts aggregate-only; avoid copying a specific real person.
 - `worker-diagnostics` writes local/SSH Python, CUDA, torch, and package readiness reports before split-run planning.
@@ -132,6 +135,13 @@ Diffusers execution:
 
 ```powershell
 python -m seju_face_lab generate --model outputs/seju_model --out outputs/generated --provider diffusers --hf-model runwayml/stable-diffusion-v1-5 --count 8 --device cuda --negative-prompt "copied identity"
+```
+
+OpenAI Image API execution:
+
+```powershell
+python -m seju_face_lab generate --model outputs/seju_model --out outputs/generated_openai --provider openai-image --image-model gpt-image-2 --width 1024 --height 1024 --quality medium --count 4 --review
+python -m seju_face_lab run-pipeline --config configs/pipelines/generation-openai-image.example.json --out outputs/openai_image_pipeline
 ```
 
 Detector-friendly generation pass:

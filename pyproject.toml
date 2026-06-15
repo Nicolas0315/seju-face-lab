@@ -29,6 +29,9 @@ generation = [
   "accelerate>=0.33",
   "safetensors>=0.4",
 ]
+openai = [
+  "openai>=2.0",
+]
 analysis = [
   "pandas>=2.2",
   "scikit-learn>=1.5",
@@ -46,6 +49,7 @@ all = [
   "transformers>=4.44",
   "accelerate>=0.33",
   "safetensors>=0.4",
+  "openai>=2.0",
   "pandas>=2.2",
   "scikit-learn>=1.5",
   "matplotlib>=3.9",

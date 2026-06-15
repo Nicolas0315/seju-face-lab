@@ -287,6 +287,15 @@ GENERATION_PROVIDERS: dict[str, GenerationProvider] = {
             "install seju-face-lab[generation] and a CUDA-enabled PyTorch build for GPU runs."
         ),
     ),
+    "openai-image": GenerationProvider(
+        name="openai-image",
+        state="implemented",
+        extra="openai",
+        description=(
+            "Runs GPT Image generation through the OpenAI Images API via generate "
+            "--provider openai-image; requires OPENAI_API_KEY and seju-face-lab[openai]."
+        ),
+    ),
 }
 
 
