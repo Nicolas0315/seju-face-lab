@@ -31,6 +31,7 @@ class PipelineTests(unittest.TestCase):
             [
                 "build",
                 "audit-model",
+                "export-vectors",
                 "evaluate",
                 "review-generated",
                 "review-subjects",
@@ -357,6 +358,7 @@ class PipelineTests(unittest.TestCase):
             model_dir = root / "model"
             eval_dir = root / "evaluation"
             audit_dir = root / "model_audit"
+            vector_export = root / "vectors.json"
             style_eval_dir = root / "style_eval_custom"
             review_dir = generated / "review"
             subject_review_dir = root / "subject_review"
@@ -379,6 +381,7 @@ class PipelineTests(unittest.TestCase):
                         "reference_images": str(raw),
                         "model_out": str(model_dir),
                         "model_audit_out": str(audit_dir),
+                        "vector_export_out": str(vector_export),
                         "generated_images": str(generated),
                         "evaluation_out": str(eval_dir),
                         "style_evaluation": {
@@ -410,12 +413,13 @@ class PipelineTests(unittest.TestCase):
                 )
 
             pipeline_run = json.loads((pipeline_dir / "pipeline_run.json").read_text(encoding="utf-8"))
-            self.assertEqual([step["status"] for step in pipeline_run["steps"]], ["completed"] * 9)
+            self.assertEqual([step["status"] for step in pipeline_run["steps"]], ["completed"] * 10)
             self.assertEqual(
                 [step["name"] for step in pipeline_run["steps"]],
                 [
                     "build",
                     "audit-model",
+                    "export-vectors",
                     "evaluate",
                     "style-evaluate",
                     "review-generated",
@@ -427,6 +431,7 @@ class PipelineTests(unittest.TestCase):
             )
             self.assertTrue((model_dir / "centroids.npz").exists())
             self.assertTrue((audit_dir / "model_audit.json").exists())
+            self.assertTrue(vector_export.exists())
             self.assertTrue((eval_dir / "summary.json").exists())
             self.assertTrue((style_eval_dir / "style_summary.json").exists())
             self.assertTrue((generated / "style_evaluation" / "style_summary.json").exists())
@@ -439,6 +444,8 @@ class PipelineTests(unittest.TestCase):
             precision = json.loads((precision_dir / "precision_report.json").read_text(encoding="utf-8"))
             self.assertEqual(precision["model"]["image_count"], 2)
             self.assertTrue(precision["model"]["model_audit"]["available"])
+            self.assertTrue(precision["model"]["vector_export"]["available"])
+            self.assertEqual(precision["model"]["vector_export"]["vectors"]["mean_embedding"]["shape"], [1073])
             self.assertIsNotNone(
                 precision["model"]["model_audit"]["mean_median_embedding"]["cosine"]
             )

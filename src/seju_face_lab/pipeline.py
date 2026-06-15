@@ -56,6 +56,10 @@ def build_pipeline_plan(config: dict[str, Any], config_path: Path) -> PipelinePl
     if model_out and model_audit:
         steps.append(PipelineStep("audit-model", "planned", str(model_audit["out"])))
 
+    vector_export = _vector_export_config(config, model_out)
+    if model_out and vector_export:
+        steps.append(PipelineStep("export-vectors", "planned", str(vector_export["out"])))
+
     generation = _generation_config(config)
     generation_out = _path_value(generation, "out") or _path_value(config, "generated_images")
     generation_sweep = _generation_sweep_config(config)
@@ -191,6 +195,19 @@ def _model_audit_config(config: dict[str, Any], model_out: Path | None) -> dict[
     out = out or _path_value(config, "model_audit_out") or _path_value(config, "audit_out")
     if out is None and isinstance(audit, dict) and model_out:
         out = model_out / "audit"
+    if not out:
+        return None
+    return {"out": out}
+
+
+def _vector_export_config(config: dict[str, Any], model_out: Path | None) -> dict[str, Path] | None:
+    export = config.get("vector_export")
+    out = None
+    if isinstance(export, dict):
+        out = _path_value(export, "out")
+    out = out or _path_value(config, "vector_export_out")
+    if out is None and isinstance(export, dict) and model_out:
+        out = model_out / "vectors.json"
     if not out:
         return None
     return {"out": out}

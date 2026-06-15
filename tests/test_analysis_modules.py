@@ -195,6 +195,7 @@ class AnalysisModuleTests(unittest.TestCase):
             backend_comparison = root / "backend_compare"
             subject_backend_comparison = root / "subject_backend_compare"
             model_audit = root / "model_audit"
+            vector_export = root / "vectors.json"
             out = root / "precision"
             model.mkdir()
             generation.mkdir()
@@ -371,6 +372,33 @@ class AnalysisModuleTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            (vector_export).write_text(
+                json.dumps(
+                    {
+                        "model_dir": str(model),
+                        "image_count": 3,
+                        "embedding_dim": 2,
+                        "include_appearance": False,
+                        "vectors": {
+                            "mean_embedding": {
+                                "shape": [2],
+                                "dtype": "float32",
+                                "l2_norm": 1.0,
+                                "sha256": "a" * 64,
+                                "values": [0.6, 0.8],
+                            },
+                            "median_embedding": {
+                                "shape": [2],
+                                "dtype": "float32",
+                                "l2_norm": 1.0,
+                                "sha256": "b" * 64,
+                                "values": [1.0, 0.0],
+                            },
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
 
             report = write_precision_report(
                 model_dir=model,
@@ -381,6 +409,7 @@ class AnalysisModuleTests(unittest.TestCase):
                 backend_comparison=backend_comparison,
                 subject_backend_comparison=subject_backend_comparison,
                 model_audit=model_audit,
+                vector_export=vector_export,
             )
 
             self.assertEqual(report["model"]["image_count"], 3)
@@ -388,6 +417,9 @@ class AnalysisModuleTests(unittest.TestCase):
             self.assertEqual(report["model"]["centroid_vectors"]["mean_embedding"]["l2_norm"], 1.0)
             self.assertEqual(len(report["model"]["centroid_vectors"]["mean_embedding"]["sha256"]), 64)
             self.assertTrue(report["model"]["model_audit"]["available"])
+            self.assertTrue(report["model"]["vector_export"]["available"])
+            self.assertEqual(report["model"]["vector_export"]["vectors"]["mean_embedding"]["sha256"], "a" * 64)
+            self.assertEqual(report["model"]["vector_export"]["vectors"]["mean_embedding"]["values_count"], 2)
             self.assertEqual(report["model"]["model_audit"]["mean_median_embedding"]["cosine"], 0.6)
             self.assertEqual(report["model"]["model_audit"]["mean_median_appearance"]["euclidean"], 1.1)
             self.assertEqual(report["model"]["model_audit"]["descriptor_delta"]["brightness"], 0.1)
@@ -427,6 +459,10 @@ class AnalysisModuleTests(unittest.TestCase):
             )
             self.assertIn(
                 "Subject Backend Comparison",
+                (out / "precision_report.md").read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                "vector_export_mean_sha256: " + "a" * 64,
                 (out / "precision_report.md").read_text(encoding="utf-8"),
             )
             self.assertIn(

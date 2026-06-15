@@ -142,6 +142,7 @@ def main(argv: list[str] | None = None) -> int:
     precision_parser.add_argument("--backend-comparison", type=Path, default=None)
     precision_parser.add_argument("--subject-backend-comparison", type=Path, default=None)
     precision_parser.add_argument("--model-audit", type=Path, default=None)
+    precision_parser.add_argument("--vector-export", type=Path, default=None)
 
     run_pipeline_parser = subparsers.add_parser(
         "run-pipeline",
@@ -595,6 +596,7 @@ def _precision_report(args: argparse.Namespace) -> int:
         backend_comparison=args.backend_comparison,
         subject_backend_comparison=args.subject_backend_comparison,
         model_audit=args.model_audit,
+        vector_export=args.vector_export,
     )
     print(f"precision report: {args.out / 'precision_report.md'}")
     print(f"model images: {report['model']['image_count']}")
@@ -607,6 +609,7 @@ def _run_pipeline(args: argparse.Namespace) -> int:
     handlers = {
         "build": _run_pipeline_build,
         "audit-model": _run_pipeline_audit_model,
+        "export-vectors": _run_pipeline_export_vectors,
         "generate": _run_pipeline_generate,
         "generation-sweep": _run_pipeline_generation_sweep,
         "evaluate": _run_pipeline_evaluate,
@@ -636,6 +639,16 @@ def _run_pipeline_build(config: dict) -> int:
 
 def _run_pipeline_audit_model(config: dict) -> int:
     return _audit_model(_pipeline_model(config), _pipeline_model_audit_out(config))
+
+
+def _run_pipeline_export_vectors(config: dict) -> int:
+    export = _pipeline_vector_export_config(config)
+    return _export_vectors(
+        _pipeline_model(config),
+        Path(export["out"]),
+        str(export.get("format", "json")),
+        bool(export.get("include_appearance", False)),
+    )
 
 
 def _run_pipeline_generate(config: dict) -> int:
@@ -768,6 +781,7 @@ def _run_pipeline_precision_report(config: dict) -> int:
             backend_comparison=_pipeline_backend_comparison_out(config),
             subject_backend_comparison=_pipeline_subject_backend_comparison_out(config),
             model_audit=_pipeline_model_audit_out_or_none(config),
+            vector_export=_pipeline_vector_export_out(config),
         )
     )
 
@@ -871,6 +885,27 @@ def _pipeline_model_audit_out_or_none(config: dict) -> Path | None:
     audit = config.get("model_audit")
     if isinstance(audit, dict) or config.get("model_audit_out") or config.get("audit_out"):
         return _pipeline_model_audit_out(config)
+    return None
+
+
+def _pipeline_vector_export_config(config: dict) -> dict:
+    export = config.get("vector_export")
+    if isinstance(export, dict):
+        merged = dict(export)
+        if "out" not in merged and config.get("vector_export_out"):
+            merged["out"] = config["vector_export_out"]
+        if "out" not in merged:
+            merged["out"] = str(_pipeline_model(config) / "vectors.json")
+        return merged
+    if config.get("vector_export_out"):
+        return {"out": config["vector_export_out"]}
+    return {}
+
+
+def _pipeline_vector_export_out(config: dict) -> Path | None:
+    export = _pipeline_vector_export_config(config)
+    if export.get("out"):
+        return Path(export["out"])
     return None
 
 

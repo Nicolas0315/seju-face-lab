@@ -5,6 +5,7 @@
   "source_manifest": "data/processed/seju_sources_official_2026-06-14.jsonl",
   "reference_images": "data/raw",
   "model_out": "outputs/seju_model",
+  "vector_export_out": "outputs/seju_model/vectors.json",
   "generated_images": "outputs/generated",
   "evaluation_out": "outputs/evaluation",
   "notes": [

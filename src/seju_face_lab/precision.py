@@ -20,6 +20,7 @@ def write_precision_report(
     backend_comparison: Path | None = None,
     subject_backend_comparison: Path | None = None,
     model_audit: Path | None = None,
+    vector_export: Path | None = None,
 ) -> dict[str, Any]:
     """Write a compact review bundle for centroid, generation, QA, and subject evidence."""
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -32,6 +33,7 @@ def write_precision_report(
         backend_comparison=backend_comparison,
         subject_backend_comparison=subject_backend_comparison,
         model_audit=model_audit,
+        vector_export=vector_export,
     )
     (out_dir / "precision_report.json").write_text(
         json.dumps(report, ensure_ascii=False, indent=2),
@@ -50,9 +52,11 @@ def build_precision_report(
     backend_comparison: Path | None = None,
     subject_backend_comparison: Path | None = None,
     model_audit: Path | None = None,
+    vector_export: Path | None = None,
 ) -> dict[str, Any]:
     profile = _load_optional_json(model_dir / "profile.json")
     model_audit_summary = _load_optional_json(_resolve_model_audit_path(model_audit))
+    vector_export_summary = _load_optional_json(_resolve_vector_export_path(vector_export))
     generation = _load_optional_json(_resolve_generation_review_path(generation_review))
     subjects = _load_optional_json(_resolve_subject_review_path(subject_review))
     evaluation_summary = _load_optional_json(_resolve_evaluation_path(evaluation))
@@ -63,7 +67,7 @@ def build_precision_report(
         _resolve_subject_backend_comparison_path(subject_backend_comparison)
     )
     return {
-        "model": _model_summary(model_dir, profile, model_audit_summary),
+        "model": _model_summary(model_dir, profile, model_audit_summary, vector_export_summary),
         "generation": _generation_summary(
             generation,
             evaluation_summary,
@@ -84,6 +88,7 @@ def build_precision_report(
                 str(subject_backend_comparison) if subject_backend_comparison else None
             ),
             "model_audit": str(model_audit) if model_audit else None,
+            "vector_export": str(vector_export) if vector_export else None,
         },
         "boundary": (
             "Approximate local precision review only. Scores are model-relative vector "
@@ -92,7 +97,12 @@ def build_precision_report(
     }
 
 
-def _model_summary(model_dir: Path, profile: dict[str, Any], model_audit: dict[str, Any]) -> dict[str, Any]:
+def _model_summary(
+    model_dir: Path,
+    profile: dict[str, Any],
+    model_audit: dict[str, Any],
+    vector_export: dict[str, Any],
+) -> dict[str, Any]:
     descriptors = profile.get("descriptors", {})
     centroid_path = model_dir / "centroids.npz"
     return {
@@ -103,6 +113,7 @@ def _model_summary(model_dir: Path, profile: dict[str, Any], model_audit: dict[s
         "has_centroid_vectors": centroid_path.exists(),
         "centroid_vectors": _centroid_vector_summary(centroid_path),
         "model_audit": _model_audit_summary(model_audit),
+        "vector_export": _vector_export_summary(vector_export),
         "mean_descriptor": descriptors.get("mean", {}),
         "median_descriptor": descriptors.get("median", {}),
         "reference_outputs": {
@@ -128,6 +139,38 @@ def _model_audit_summary(audit: dict[str, Any]) -> dict[str, Any]:
         "mean_median_embedding": _audit_pair_summary(centroids.get("mean_median_embedding")),
         "mean_median_appearance": _audit_pair_summary(centroids.get("mean_median_appearance")),
         "descriptor_delta": audit.get("descriptor_delta", {}),
+    }
+
+
+def _vector_export_summary(export: dict[str, Any]) -> dict[str, Any]:
+    if not export:
+        return {"available": False}
+    vectors = export.get("vectors")
+    if not isinstance(vectors, dict):
+        vectors = {}
+    return {
+        "available": True,
+        "model_dir": export.get("model_dir"),
+        "image_count": export.get("image_count"),
+        "embedding_dim": export.get("embedding_dim"),
+        "include_appearance": export.get("include_appearance"),
+        "vectors": {
+            name: _exported_vector_summary(vector)
+            for name, vector in vectors.items()
+            if isinstance(vector, dict)
+        },
+    }
+
+
+def _exported_vector_summary(vector: dict[str, Any]) -> dict[str, Any]:
+    values = vector.get("values")
+    values_count = len(values) if isinstance(values, list) else None
+    return {
+        "shape": vector.get("shape"),
+        "dtype": vector.get("dtype"),
+        "l2_norm": vector.get("l2_norm"),
+        "sha256": vector.get("sha256"),
+        "values_count": values_count,
     }
 
 
@@ -318,6 +361,9 @@ def _render_precision_report(report: dict[str, Any]) -> str:
         f"- mean_embedding_sha256: {_value(_vector_field(model, 'mean_embedding', 'sha256'))}",
         f"- median_embedding_sha256: {_value(_vector_field(model, 'median_embedding', 'sha256'))}",
         f"- model_audit_available: {model['model_audit']['available']}",
+        f"- vector_export_available: {model['vector_export']['available']}",
+        f"- vector_export_mean_sha256: {_value(_export_field(model, 'mean_embedding', 'sha256'))}",
+        f"- vector_export_median_sha256: {_value(_export_field(model, 'median_embedding', 'sha256'))}",
         f"- mean_median_embedding_cosine: {_value(_audit_field(model, 'mean_median_embedding', 'cosine'))}",
         f"- mean_median_embedding_euclidean: {_value(_audit_field(model, 'mean_median_embedding', 'euclidean'))}",
         f"- mean_median_appearance_cosine: {_value(_audit_field(model, 'mean_median_appearance', 'cosine'))}",
@@ -467,6 +513,14 @@ def _resolve_model_audit_path(path: Path | None) -> Path | None:
     return path
 
 
+def _resolve_vector_export_path(path: Path | None) -> Path | None:
+    if path is None:
+        return None
+    if path.is_dir():
+        return path / "vectors.json"
+    return path
+
+
 def _load_optional_json(path: Path | None) -> dict[str, Any]:
     if path is None or not path.exists():
         return {}
@@ -561,3 +615,16 @@ def _audit_field(model: dict[str, Any], pair_name: str, field: str) -> Any:
     if not isinstance(pair, dict):
         return None
     return pair.get(field)
+
+
+def _export_field(model: dict[str, Any], vector_name: str, field: str) -> Any:
+    export = model.get("vector_export")
+    if not isinstance(export, dict):
+        return None
+    vectors = export.get("vectors")
+    if not isinstance(vectors, dict):
+        return None
+    vector = vectors.get(vector_name)
+    if not isinstance(vector, dict):
+        return None
+    return vector.get(field)
