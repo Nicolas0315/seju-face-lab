@@ -56,7 +56,7 @@ def build_precision_report(
 ) -> dict[str, Any]:
     profile = _load_optional_json(model_dir / "profile.json")
     model_audit_summary = _load_optional_json(_resolve_model_audit_path(model_audit))
-    vector_export_summary = _load_optional_json(_resolve_vector_export_path(vector_export))
+    vector_export_summary = _load_optional_vector_export(_resolve_vector_export_path(vector_export))
     generation = _load_optional_json(_resolve_generation_review_path(generation_review))
     subjects = _load_optional_json(_resolve_subject_review_path(subject_review))
     evaluation_summary = _load_optional_json(_resolve_evaluation_path(evaluation))
@@ -164,7 +164,7 @@ def _vector_export_summary(export: dict[str, Any]) -> dict[str, Any]:
 
 def _exported_vector_summary(vector: dict[str, Any]) -> dict[str, Any]:
     values = vector.get("values")
-    values_count = len(values) if isinstance(values, list) else None
+    values_count = len(values) if isinstance(values, list) else vector.get("values_count")
     return {
         "shape": vector.get("shape"),
         "dtype": vector.get("dtype"),
@@ -517,8 +517,56 @@ def _resolve_vector_export_path(path: Path | None) -> Path | None:
     if path is None:
         return None
     if path.is_dir():
-        return path / "vectors.json"
+        json_path = path / "vectors.json"
+        if json_path.exists():
+            return json_path
+        csv_path = path / "vectors.csv"
+        if csv_path.exists():
+            return csv_path
+        return json_path
     return path
+
+
+def _load_optional_vector_export(path: Path | None) -> dict[str, Any]:
+    if path is None or not path.exists():
+        return {}
+    if path.suffix.lower() == ".csv":
+        return _load_vector_export_csv(path)
+    return _load_optional_json(path)
+
+
+def _load_vector_export_csv(path: Path) -> dict[str, Any]:
+    vectors: dict[str, dict[str, Any]] = {}
+    with path.open("r", encoding="utf-8-sig", newline="") as handle:
+        for row in csv.DictReader(handle):
+            name = row.get("vector")
+            if not name:
+                continue
+            vector = vectors.setdefault(
+                name,
+                {
+                    "shape": _parse_shape(row.get("shape")),
+                    "dtype": row.get("dtype") or None,
+                    "l2_norm": _optional_csv_float(row.get("l2_norm")),
+                    "sha256": row.get("sha256") or None,
+                    "values_count": 0,
+                },
+            )
+            vector["values_count"] += 1
+    return {
+        "format": "csv",
+        "path": str(path),
+        "vectors": vectors,
+    }
+
+
+def _parse_shape(value: str | None) -> list[int] | None:
+    if not value:
+        return None
+    try:
+        return [int(part) for part in value.split("x") if part]
+    except ValueError:
+        return None
 
 
 def _load_optional_json(path: Path | None) -> dict[str, Any]:

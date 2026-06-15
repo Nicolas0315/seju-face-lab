@@ -207,10 +207,16 @@ def _vector_export_config(config: dict[str, Any], model_out: Path | None) -> dic
         out = _path_value(export, "out")
     out = out or _path_value(config, "vector_export_out")
     if out is None and isinstance(export, dict) and model_out:
-        out = model_out / "vectors.json"
+        out = _default_vector_export_path(model_out, export)
     if not out:
         return None
     return {"out": out}
+
+
+def _default_vector_export_path(model_out: Path, export: dict[str, Any]) -> Path:
+    output_format = str(export.get("format", "json")).lower()
+    suffix = "csv" if output_format == "csv" else "json"
+    return model_out / f"vectors.{suffix}"
 
 
 def _backend_comparison_config(config: dict[str, Any]) -> dict[str, Path] | None:

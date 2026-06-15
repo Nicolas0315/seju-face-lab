@@ -358,7 +358,7 @@ class PipelineTests(unittest.TestCase):
             model_dir = root / "model"
             eval_dir = root / "evaluation"
             audit_dir = root / "model_audit"
-            vector_export = root / "vectors.json"
+            vector_export = root / "vectors.csv"
             style_eval_dir = root / "style_eval_custom"
             review_dir = generated / "review"
             subject_review_dir = root / "subject_review"

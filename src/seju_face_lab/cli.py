@@ -895,10 +895,13 @@ def _pipeline_vector_export_config(config: dict) -> dict:
         if "out" not in merged and config.get("vector_export_out"):
             merged["out"] = config["vector_export_out"]
         if "out" not in merged:
-            merged["out"] = str(_pipeline_model(config) / "vectors.json")
+            merged["out"] = str(_pipeline_default_vector_export_path(config, merged))
+        _fill_vector_export_format_from_path(merged)
         return merged
     if config.get("vector_export_out"):
-        return {"out": config["vector_export_out"]}
+        merged = {"out": config["vector_export_out"]}
+        _fill_vector_export_format_from_path(merged)
+        return merged
     return {}
 
 
@@ -907,6 +910,19 @@ def _pipeline_vector_export_out(config: dict) -> Path | None:
     if export.get("out"):
         return Path(export["out"])
     return None
+
+
+def _pipeline_default_vector_export_path(config: dict, export: dict) -> Path:
+    output_format = str(export.get("format", "json")).lower()
+    suffix = "csv" if output_format == "csv" else "json"
+    return _pipeline_model(config) / f"vectors.{suffix}"
+
+
+def _fill_vector_export_format_from_path(export: dict) -> None:
+    if export.get("format") or not export.get("out"):
+        return
+    if Path(str(export["out"])).suffix.lower() == ".csv":
+        export["format"] = "csv"
 
 
 def _pipeline_style_evaluation_config(config: dict) -> dict:

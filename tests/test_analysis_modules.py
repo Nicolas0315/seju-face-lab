@@ -482,6 +482,35 @@ class AnalysisModuleTests(unittest.TestCase):
                 (out / "precision_report.md").read_text(encoding="utf-8"),
             )
 
+    def test_precision_report_reads_csv_vector_export_from_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            model = root / "model"
+            out = root / "precision"
+            model.mkdir()
+            (model / "vectors.csv").write_text(
+                "\n".join(
+                    [
+                        "vector,index,value,shape,dtype,l2_norm,sha256",
+                        f"mean_embedding,0,0.6,2,float32,1.0,{'a' * 64}",
+                        f"mean_embedding,1,0.8,2,float32,1.0,{'a' * 64}",
+                        f"median_embedding,0,1.0,2,float32,1.0,{'b' * 64}",
+                        f"median_embedding,1,0.0,2,float32,1.0,{'b' * 64}",
+                    ]
+                ),
+                encoding="utf-8-sig",
+            )
+
+            report = write_precision_report(model_dir=model, out_dir=out, vector_export=model)
+
+            self.assertTrue(report["model"]["vector_export"]["available"])
+            self.assertEqual(report["model"]["vector_export"]["vectors"]["mean_embedding"]["sha256"], "a" * 64)
+            self.assertEqual(report["model"]["vector_export"]["vectors"]["mean_embedding"]["values_count"], 2)
+            self.assertIn(
+                "vector_export_mean_sha256: " + "a" * 64,
+                (out / "precision_report.md").read_text(encoding="utf-8"),
+            )
+
     def test_model_audit_reports_mean_median_vector_distance(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
