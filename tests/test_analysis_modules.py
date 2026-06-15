@@ -345,6 +345,20 @@ class AnalysisModuleTests(unittest.TestCase):
                         "best_qa_centroid_score": 0.45,
                         "best_qa_image_id": "candidate",
                         "best_qa_path": "candidate.png",
+                        "by_centroid_kind": {
+                            "mean": {
+                                "run_count": 1,
+                                "best_run_dir": "outputs/generated",
+                                "best_centroid_score": 0.4,
+                                "best_qa_centroid_score": 0.45,
+                                "best_combined_score": None,
+                                "best_image_id": "candidate",
+                                "best_qa_image_id": "candidate",
+                                "qa_pass_count": 1,
+                                "image_count": 2,
+                                "failed_count": 0,
+                            }
+                        },
                         "runs": [
                             {
                                 "image_count": 2,
@@ -555,6 +569,11 @@ class AnalysisModuleTests(unittest.TestCase):
             self.assertEqual(report["generation"]["provider"], "diffusers")
             self.assertEqual(report["generation"]["model_id"], "local/test-model")
             self.assertEqual(report["generation"]["centroid_kind"], "mean")
+            self.assertEqual(report["generation"]["by_centroid_kind"]["mean"]["run_count"], 1)
+            self.assertEqual(
+                report["generation"]["by_centroid_kind"]["mean"]["best_qa_centroid_score"],
+                0.45,
+            )
             self.assertEqual(report["generation"]["prompt_profile"], "detector-friendly")
             self.assertEqual(report["generation"]["seed"], 260623)
             self.assertEqual(report["generation"]["planned_count"], 2)
@@ -621,6 +640,14 @@ class AnalysisModuleTests(unittest.TestCase):
             )
             self.assertIn(
                 "centroid_kind: mean",
+                (out / "precision_report.md").read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                "By Centroid Kind",
+                (out / "precision_report.md").read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                "| mean | 1 | 2 | 0 | 1 | 0.4 | 0.45 |  |",
                 (out / "precision_report.md").read_text(encoding="utf-8"),
             )
             self.assertIn(
@@ -1870,6 +1897,9 @@ class AnalysisModuleTests(unittest.TestCase):
             self.assertEqual(summary["best_generation"]["seed"], 42)
             self.assertEqual(summary["best_generation"]["planned_count"], 3)
             self.assertEqual(summary["best_generation"]["size"], "512x512")
+            self.assertEqual(summary["by_centroid_kind"]["mean"]["run_count"], 1)
+            self.assertEqual(summary["by_centroid_kind"]["mean"]["best_combined_score"], 0.7)
+            self.assertIsNone(summary["by_centroid_kind"]["mean"]["qa_pass_count"])
             self.assertIn("centroid_kind", csv_text)
             self.assertIn("prompt_profile,seed,planned_count,steps", csv_text)
             self.assertEqual(summary["runs"][0]["best_combined_image_id"], "balanced")
@@ -1972,6 +2002,12 @@ class AnalysisModuleTests(unittest.TestCase):
             self.assertEqual(summary["best_run_dir"], str(run_b))
             self.assertEqual(summary["best_qa_image_id"], "single_high")
             self.assertEqual(summary["best_qa_centroid_score"], 0.6)
+            self.assertEqual(summary["by_centroid_kind"]["unknown"]["run_count"], 2)
+            self.assertEqual(summary["by_centroid_kind"]["unknown"]["best_image_id"], "collage")
+            self.assertEqual(summary["by_centroid_kind"]["unknown"]["best_centroid_score"], 1.0)
+            self.assertEqual(summary["by_centroid_kind"]["unknown"]["best_qa_image_id"], "single_high")
+            self.assertEqual(summary["by_centroid_kind"]["unknown"]["best_qa_centroid_score"], 0.6)
+            self.assertEqual(summary["by_centroid_kind"]["unknown"]["qa_pass_count"], 2)
             self.assertEqual(summary["runs"][0]["qa_pass_count"], 1)
             self.assertEqual(summary["runs"][0]["qa_pass_rate"], 1.0)
 

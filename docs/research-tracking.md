@@ -24,6 +24,7 @@ Retrieval/design date: 2026-06-14.
 - OpenAI GPT Image generation is implemented as `generate --provider openai-image` with optional `.[openai]`.
 - `generate --prompt-profile detector-friendly` records detector-oriented prompt settings for frontal, unobscured candidate batches.
 - `generate --centroid-kind mean|median` records whether the prompt was derived from mean or median centroid descriptors.
+- `compare-runs` and `precision-report` now summarize generated candidates by centroid kind so mean-vs-median generation experiments can be reviewed without mixing their winners.
 - `qa-images` flags generated candidates that are collages, extreme crops, off-center faces, or missing a frontal OpenCV face.
 - `compare-runs` now reads `quality/` outputs and reports QA-gated best centroid scores.
 - `review-generated` runs generated-image evaluation, QA, and one-run comparison as the standard precision-review shortcut.

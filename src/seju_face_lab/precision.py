@@ -310,6 +310,17 @@ def _generation_summary(
         "qa_pass_rate": _first_present(top_run.get("qa_pass_rate"), _pass_rate(qa_pass_count, qa_total)),
         "evaluated_image_count": _first_present(top_run.get("image_count"), evaluation.get("image_count")),
         "failed_image_count": _first_present(top_run.get("failed_count"), evaluation.get("failed_count")),
+        "by_centroid_kind": _generation_by_centroid_kind(generation.get("by_centroid_kind")),
+    }
+
+
+def _generation_by_centroid_kind(summary: Any) -> dict[str, Any]:
+    if not isinstance(summary, dict):
+        return {}
+    return {
+        str(kind): values
+        for kind, values in summary.items()
+        if isinstance(values, dict)
     }
 
 
@@ -582,6 +593,7 @@ def _render_precision_report(report: dict[str, Any]) -> str:
         f"- best_combined_score: {_value(generation['best_combined_score'])}",
         f"- qa_pass: {_value(generation['qa_pass_count'])}/{_value(generation['qa_reviewed_count'])}",
         "",
+        *_render_generation_by_centroid_kind(generation.get("by_centroid_kind")),
         "## Subject Review",
         "",
         f"- subject_count: {_value(subjects['subject_count'])}",
@@ -650,6 +662,30 @@ def _render_precision_report(report: dict[str, Any]) -> str:
         ]
     )
     return "\n".join(lines)
+
+
+def _render_generation_by_centroid_kind(summary: Any) -> list[str]:
+    if not isinstance(summary, dict) or not summary:
+        return []
+    lines = [
+        "### By Centroid Kind",
+        "",
+        "| centroid | runs | images | failed | qa_pass | best_face | best_qa_face | best_combined |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for kind, values in sorted(summary.items()):
+        if isinstance(values, dict):
+            lines.append(
+                f"| {kind} | {_value(values.get('run_count'))} | "
+                f"{_value(values.get('image_count'))} | "
+                f"{_value(values.get('failed_count'))} | "
+                f"{_value(values.get('qa_pass_count'))} | "
+                f"{_value(values.get('best_centroid_score'))} | "
+                f"{_value(values.get('best_qa_centroid_score'))} | "
+                f"{_value(values.get('best_combined_score'))} |"
+            )
+    lines.append("")
+    return lines
 
 
 def _resolve_generation_review_path(path: Path | None) -> Path | None:

@@ -42,6 +42,7 @@ OpenAI Image API check: 2026-06-15, official docs at https://developers.openai.c
 9. `compare-runs`
    - generation batches are ranked by QA-gated face score when quality outputs are present
    - otherwise batches are ranked by face score, or by best per-image combined face/style score when style outputs are present
+   - run summaries group results by `centroid_kind` so mean-derived and median-derived prompt batches can be reviewed separately
 10. `review-generated`
    - convenience command that runs `evaluate`, `qa-images`, and one-run `compare-runs` for a generated directory
    - also used by `generate --review` so generated batches can be scored immediately

@@ -466,6 +466,7 @@ def _generation_run_reviews_summary(reviews: list[GenerationRunReview]) -> dict:
         "best_qa_path": best.best_qa_path if best else None,
         "best_qa_centroid_score": _round_optional(best.best_qa_centroid_score) if best else None,
         "best_generation": _generation_config_summary(best),
+        "by_centroid_kind": _generation_summary_by_centroid_kind(reviews),
         "runs": [
             {
                 **asdict(review),
@@ -491,6 +492,58 @@ def _generation_run_reviews_summary(reviews: list[GenerationRunReview]) -> dict:
             "and style axes when both are present. QA scores are OpenCV detector-gated triage only."
         ),
     }
+
+
+def _generation_summary_by_centroid_kind(reviews: list[GenerationRunReview]) -> dict[str, dict[str, object]]:
+    grouped: dict[str, list[GenerationRunReview]] = {}
+    for review in reviews:
+        key = review.centroid_kind or "unknown"
+        grouped.setdefault(key, []).append(review)
+    return {
+        key: _generation_kind_summary(rows)
+        for key, rows in sorted(grouped.items())
+    }
+
+
+def _generation_kind_summary(reviews: list[GenerationRunReview]) -> dict[str, object]:
+    best = next((review for review in reviews if _has_review_score(review)), None)
+    best_centroid = _best_review_by_score(reviews, "best_centroid_score")
+    best_qa = _best_review_by_score(reviews, "best_qa_centroid_score")
+    best_combined = _best_review_by_score(reviews, "best_combined_score")
+    return {
+        "run_count": len(reviews),
+        "best_run_dir": best.run_dir if best else None,
+        "best_centroid_score": (
+            _round_optional(best_centroid.best_centroid_score) if best_centroid else None
+        ),
+        "best_qa_centroid_score": _round_optional(best_qa.best_qa_centroid_score) if best_qa else None,
+        "best_combined_score": (
+            _round_optional(best_combined.best_combined_score) if best_combined else None
+        ),
+        "best_image_id": best_centroid.best_image_id if best_centroid else None,
+        "best_qa_image_id": best_qa.best_qa_image_id if best_qa else None,
+        "best_combined_image_id": best_combined.best_combined_image_id if best_combined else None,
+        "qa_pass_count": _sum_known([review.qa_pass_count for review in reviews]),
+        "image_count": sum(review.image_count for review in reviews),
+        "failed_count": sum(review.failed_count for review in reviews),
+    }
+
+
+def _best_review_by_score(
+    reviews: list[GenerationRunReview],
+    score_attr: str,
+) -> GenerationRunReview | None:
+    scored = [review for review in reviews if getattr(review, score_attr) is not None]
+    if not scored:
+        return None
+    return max(scored, key=lambda review: getattr(review, score_attr))
+
+
+def _sum_known(values: list[int | None]) -> int | None:
+    known = [value for value in values if value is not None]
+    if not known:
+        return None
+    return sum(known)
 
 
 def _quality_summary(run_dir: Path) -> dict:

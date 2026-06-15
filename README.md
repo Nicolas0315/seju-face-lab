@@ -396,8 +396,8 @@ See `docs/gpu-generation-log.md` for RTX 4090 generation smoke results.
 - generation `prompt_profile`: `balanced` by default, or `detector-friendly` for frontal, unobscured candidate batches.
 - evaluation `scores.csv`: similarity of candidate generated images to the centroid vectors.
 - evaluation `summary.json`: best/mean/median generated-image similarity for quick comparisons.
-- generated review `generation_run_reviews.csv`: one-command generated-image evaluation + QA + run review via `review-generated`, or directly after Diffusers generation with `generate --review`; includes provider, model, prompt profile, seed, count, steps, size, device, and dtype when `generation_run.json` is present.
-- precision report `precision_report.json`: workflow readiness checklist, model centroid, optional `model_audit.json` mean/median vector distance summary, generation settings, generated-image mean/median score components, QA, subject-review, backend-comparison, subject-backend-comparison, and optional correlation summary via `precision-report`.
+- generated review `generation_run_reviews.csv`: one-command generated-image evaluation + QA + run review via `review-generated`, or directly after Diffusers generation with `generate --review`; includes provider, model, centroid kind, prompt profile, seed, count, steps, size, device, and dtype when `generation_run.json` is present.
+- precision report `precision_report.json`: workflow readiness checklist, model centroid, optional `model_audit.json` mean/median vector distance summary, generation settings, generated-image mean/median score components, mean-vs-median generation grouping, QA, subject-review, backend-comparison, subject-backend-comparison, and optional correlation summary via `precision-report`.
 - pipeline run `pipeline_run.json`: configured build/audit-model/export-vectors/evaluate/style-evaluate/review/backend-comparison/subject-backend-comparison/precision orchestration via `run-pipeline`.
 - generation sweep `configs/pipelines/generation-sweep.example.json`: repeatable seed/profile generation experiments with per-run manifests and optional shared run comparison.
 - pipeline config `configs/pipelines/full-retinaface-review.example.json`: deterministic continuity plus `deepface-retinaface` neural rank agreement for the precision bundle.
@@ -411,7 +411,7 @@ See `docs/gpu-generation-log.md` for RTX 4090 generation smoke results.
 - image quality `image_quality.csv`: OpenCV single-face QA for generated candidates.
 - generation run reviews: rank evaluated candidate batches by local centroid scores.
 - generation run review `generation_run_reviews.html`: local thumbnail review cards with face/style/combined/QA evidence.
-- generation run reviews include QA-gated face scores, style scores, and per-image combined scores when those outputs exist.
+- generation run reviews include QA-gated face scores, style scores, per-image combined scores, and `centroid_kind` grouped summaries when those outputs exist.
 - subject review outputs: per-person approximate similarity rankings.
 
 ## Verification
