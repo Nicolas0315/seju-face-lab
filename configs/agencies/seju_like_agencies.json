@@ -115,6 +115,89 @@
         "symmetry": 0.004,
         "upper_band_darkness": 0.004
       }
+    },
+    {
+      "slug": "lvs",
+      "name": "LVS",
+      "official_sources": [
+        {
+          "name": "TALENTタレント一覧 - LVS",
+          "url": "https://lvsfamily.co.jp/talent"
+        }
+      ],
+      "public_examples": ["みりちゃむ", "きぃぃりぷ", "あいさ", "瀬戸ももあ"],
+      "positioning": ["gyaru/model", "egg/nuts-adjacent", "high styling", "SNS/fashion"],
+      "parameter_basis": [
+        "contrast agency for stronger gal-style makeup and fashion styling",
+        "expected to spread the map toward vivid, warm, crisp, and less seju-soft presentation"
+      ],
+      "descriptor_offsets": {
+        "luminance": -0.018,
+        "contrast": 0.075,
+        "saturation": 0.075,
+        "warmth": 0.04,
+        "edge_density": 0.03,
+        "symmetry": -0.025,
+        "upper_band_darkness": -0.035
+      }
+    },
+    {
+      "slug": "sgmedia",
+      "name": "SGMedia",
+      "official_sources": [
+        {
+          "name": "SGM official",
+          "url": "https://sgmedia.tokyo/"
+        },
+        {
+          "name": "SGM company",
+          "url": "https://sgmedia.tokyo/contents/company.html"
+        }
+      ],
+      "public_examples": ["大塚愛里", "池田菜々", "中野恵那", "れいたぴ"],
+      "positioning": ["social model", "SNS-native", "gal/fashion", "individual styling"],
+      "parameter_basis": [
+        "contrast agency for social-model styling and stronger color signals",
+        "expected to separate from the seju centroid through vivid color, visible styling, and less symmetric editorial framing"
+      ],
+      "descriptor_offsets": {
+        "luminance": -0.012,
+        "contrast": 0.06,
+        "saturation": 0.06,
+        "warmth": 0.03,
+        "edge_density": 0.026,
+        "symmetry": -0.035,
+        "upper_band_darkness": -0.018
+      }
+    },
+    {
+      "slug": "twin-planet",
+      "name": "TWIN PLANET",
+      "official_sources": [
+        {
+          "name": "TWIN PLANET official",
+          "url": "https://twinplanet.co.jp/"
+        },
+        {
+          "name": "TWIN PLANET business",
+          "url": "https://twinplanet.co.jp/business/"
+        }
+      ],
+      "public_examples": ["鈴木奈々", "ぺえ", "村重杏奈", "ミチ"],
+      "positioning": ["trend/IP", "talent/model", "variety/SNS", "individuality-forward"],
+      "parameter_basis": [
+        "contrast agency for stronger media personality and trend styling",
+        "expected to spread the map toward vivid, dynamic, and styled presentation without treating it as a gal-only office"
+      ],
+      "descriptor_offsets": {
+        "luminance": -0.008,
+        "contrast": 0.052,
+        "saturation": 0.05,
+        "warmth": 0.025,
+        "edge_density": 0.022,
+        "symmetry": -0.04,
+        "upper_band_darkness": 0.005
+      }
     }
   ]
 }

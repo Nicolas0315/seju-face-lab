@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 import tempfile
 import unittest
@@ -1215,6 +1216,71 @@ class PipelineTests(unittest.TestCase):
             self.assertTrue((out / "image_scores" / "scores.csv").exists())
             self.assertTrue((out / "face_axes" / "face_axis_report.json").exists())
             self.assertIn("agency enhancement report", (out / "agency_enhancement_report.md").read_text(encoding="utf-8"))
+
+    def test_agency_site_renders_8_axis_map(self) -> None:
+        spec = importlib.util.spec_from_file_location("build_agency_site", Path("scripts/build_agency_site.py"))
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        site = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(site)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            out = root / "site"
+            images = root / "images"
+            images.mkdir()
+            config = {
+                "retrieved_at": "2026-06-15",
+                "agencies": [
+                    {
+                        "slug": "seju",
+                        "public_examples": ["sample"],
+                        "positioning": ["sample positioning"],
+                        "official_sources": [{"name": "official", "url": "https://example.com"}],
+                    }
+                ],
+            }
+            params = {"agencies": [{"slug": "seju", "average_descriptors": {}, "axis_vector": {}}]}
+            enhancement = {
+                "summary": {"top_slug": "seju", "top_score": 0.8},
+                "agencies": [
+                    {
+                        "slug": "seju",
+                        "name": "seju",
+                        "rank": 1,
+                        "enhancement_score": 0.8,
+                        "confidence": "measured",
+                        "components": {
+                            "descriptor_similarity": 1.0,
+                            "image_centroid_score": 0.4,
+                            "axis_alignment": 0.6,
+                        },
+                        "observed_distribution": {"quadrant": "defined_bright"},
+                        "observed_axis_vector": {
+                            "soft_defined": 0.7,
+                            "cool_warm": 0.3,
+                            "deep_bright": 0.5,
+                            "natural_styled": 0.2,
+                            "muted_vivid": -0.2,
+                            "soft_crisp": 0.4,
+                            "light_dark_hair": 0.5,
+                            "dynamic_symmetric": 0.6,
+                        },
+                        "hypothesis_axis_vector": {},
+                        "presentation_flags": [],
+                        "improvement_actions": [],
+                    }
+                ],
+            }
+
+            site.build_site(config, params, enhancement, {}, images, out)
+
+            html = (out / "index.html").read_text(encoding="utf-8")
+            data = json.loads((out / "data.json").read_text(encoding="utf-8"))
+            self.assertIn("8軸方向性マップ", html)
+            self.assertIn('class="axis-map"', html)
+            self.assertIn("soft defined", html)
+            self.assertEqual(data["agencies"][0]["observed_axis_vector"]["dynamic_symmetric"], 0.6)
 
     def test_calibrate_agency_generation_writes_refined_prompts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

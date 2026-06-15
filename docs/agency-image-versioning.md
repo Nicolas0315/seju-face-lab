@@ -46,6 +46,46 @@ Verification:
 - Remote image hash check: `seju.png` and `asia-promotion.png` matched v1 local images.
 - Browser check: 5 cards, 5 images, all images loaded after lazy-load scroll.
 
+## agency-direction-map-v1
+
+- page section: `8軸方向性マップ`
+- implementation: `scripts/build_agency_site.py`
+- source vectors: `outputs/agency_generation_refined/v1/enhancement/agency_enhancement_report.json`
+- rendered page: `outputs/agency_site/index.html`
+- data export: `outputs/agency_site/data.json`
+- deployment URL: `https://02230471.seju-face-lab-agency-research.pages.dev/`
+- encoding:
+  - main quadrant: average of `soft_defined` + `natural_styled` by average of `deep_bright` + `cool_warm`
+  - cross-axis notes: `dynamic_symmetric` and `light_dark_hair`
+  - detailed rows: all 8 observed axes per agency
+
+## agency-subject-review-v1
+
+- output: `outputs/agency_subject_reviews/subject_reviews.html`
+- csv: `outputs/agency_subject_reviews/subject_reviews.csv`
+- json: `outputs/agency_subject_reviews/subject_reviews.json`
+- input grouping: `outputs/agency_subject_reviews/input_by_agency/`
+- source images: `outputs/agency_generation_refined/v1/images/`
+- note: this is a subject-review-format comparison of generated agency aggregate images, not a per-talent review for non-seju agencies.
+- current ranking by generated aggregate image score: `seju`, `platinum`, `lespros`, `trustar`, `asia-promotion`
+
+## agency-contrast-v2
+
+- purpose: add higher-styling contrast agencies so the 8-axis map shows more spread than the close seju-like set.
+- added agencies: `lvs`, `sgmedia`, `twin-planet`
+- config: `configs/agencies/seju_like_agencies.json`
+- average params: `outputs/agency_reviews/seju_like_v2/agency_average_params.json`
+- generated images: `outputs/agency_generation_refined/v2_contrast/images/`
+- evaluation: `outputs/agency_generation_refined/v2_contrast/evaluation/`
+- face axes: `outputs/agency_generation_refined/v2_contrast/face_axes/`
+- enhancement: `outputs/agency_generation_refined/v2_contrast/enhancement/`
+- subject-review-format comparison: `outputs/agency_subject_reviews_v2_contrast/subject_reviews.html`
+- page build: `outputs/agency_site/index.html`
+- deployment URL: `https://19b8ac6a.seju-face-lab-agency-research.pages.dev/`
+- current top enhancement ranking: `sgmedia`, `seju`, `platinum`, `lvs`, `lespros`, `twin-planet`, `asia-promotion`, `trustar`
+- largest visible axis spread: `lvs` has stronger vivid/styled/outlier signals than the close seju-like set.
+- evidence boundary: v2 contrast agencies are official-source descriptor hypotheses plus generated aggregate image scoring; they are not real per-talent image averages yet.
+
 Version rules:
 
 - Generated images stay under `outputs/` and are not committed.

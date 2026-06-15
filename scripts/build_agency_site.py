@@ -10,6 +10,18 @@ import shutil
 from typing import Any
 
 
+AXIS_LABELS = {
+    "soft_defined": ("soft", "defined"),
+    "cool_warm": ("cool", "warm"),
+    "deep_bright": ("deep", "bright"),
+    "natural_styled": ("natural", "styled"),
+    "muted_vivid": ("muted", "vivid"),
+    "soft_crisp": ("soft detail", "crisp detail"),
+    "light_dark_hair": ("lighter hair", "dark hair"),
+    "dynamic_symmetric": ("dynamic", "symmetric"),
+}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Build the agency average-face static site.")
     parser.add_argument("--agencies", type=Path, default=Path("configs/agencies/seju_like_agencies.json"))
@@ -83,6 +95,8 @@ def _merge_agencies(
                 "confidence": agency["confidence"],
                 "components": agency["components"],
                 "distribution": agency.get("observed_distribution", {}),
+                "observed_axis_vector": agency.get("observed_axis_vector", {}),
+                "hypothesis_axis_vector": agency.get("hypothesis_axis_vector", {}),
                 "presentation_flags": agency.get("presentation_flags", []),
                 "improvement_actions": agency.get("improvement_actions", []),
                 "members": cfg.get("public_examples", []),
@@ -106,6 +120,7 @@ def _render_html(
     cards = "\n".join(_agency_card(agency) for agency in agencies)
     rows = "\n".join(_ranking_row(agency) for agency in agencies)
     calibration_rows = "\n".join(_calibration_row(agency) for agency in agencies)
+    axis_map = _axis_map_section(agencies)
     nav = "\n".join(f'<a href="#{escape(agency["slug"])}">{escape(agency["name"])}</a>' for agency in agencies)
     generated_at = date.today().isoformat()
     retrieved_at = config.get("retrieved_at", "unknown")
@@ -171,6 +186,8 @@ def _render_html(
       </div>
     </section>
 
+    {axis_map}
+
     <section class="cards" aria-label="Agency cards">
       {cards}
     </section>
@@ -213,6 +230,113 @@ def _render_html(
   </main>
 </body>
 </html>
+"""
+
+
+def _axis_map_section(agencies: list[dict[str, Any]]) -> str:
+    if not any(agency.get("observed_axis_vector") for agency in agencies):
+        return ""
+    axis_rows = "\n".join(_axis_vector_row(agency) for agency in agencies)
+    return f"""
+    <section class="axis-map-section" aria-labelledby="axis-map-title">
+      <div class="axis-map-copy">
+        <h2 id="axis-map-title">8軸方向性マップ</h2>
+        <p>
+          生成された事務所別平均顔画像を、8つの観測軸に分解した位置図です。
+          大きな象限は defined/natural と bright/warm の合成、十字軸は symmetric と dark hair の傾向を示します。
+        </p>
+        <p class="axis-caveat">
+          これは画像特徴の研究用マップであり、実在人物や所属者への評価ラベルではありません。
+        </p>
+      </div>
+      <div class="axis-map-panel">
+        {_axis_map_svg(agencies)}
+      </div>
+      <div class="axis-bars" aria-label="8-axis vectors by agency">
+        {axis_rows}
+      </div>
+    </section>
+"""
+
+
+def _axis_map_svg(agencies: list[dict[str, Any]]) -> str:
+    points = "\n".join(_axis_map_point(agency, index) for index, agency in enumerate(agencies))
+    return f"""
+<svg class="axis-map" viewBox="0 0 640 420" role="img" aria-labelledby="axis-map-svg-title axis-map-svg-desc">
+  <title id="axis-map-svg-title">Agency 8-axis quadrant map</title>
+  <desc id="axis-map-svg-desc">Two-dimensional projection of observed 8-axis vectors for each agency aggregate image.</desc>
+  <rect class="axis-map-bg" x="54" y="34" width="520" height="300" rx="6"></rect>
+  <line class="axis-map-mid" x1="314" y1="34" x2="314" y2="334"></line>
+  <line class="axis-map-mid" x1="54" y1="184" x2="574" y2="184"></line>
+  <text class="axis-map-label center" x="314" y="24">bright / warm</text>
+  <text class="axis-map-label center" x="314" y="356">deep / cool</text>
+  <text class="axis-map-label side" x="24" y="190" transform="rotate(-90 24 190)">natural / soft</text>
+  <text class="axis-map-label side" x="612" y="190" transform="rotate(90 612 190)">defined / styled</text>
+  <text class="axis-map-corner" x="74" y="72">soft bright</text>
+  <text class="axis-map-corner end" x="554" y="72">defined bright</text>
+  <text class="axis-map-corner" x="74" y="314">soft deep</text>
+  <text class="axis-map-corner end" x="554" y="314">defined deep</text>
+  {points}
+</svg>
+"""
+
+
+def _axis_map_point(agency: dict[str, Any], index: int) -> str:
+    axes = agency.get("observed_axis_vector", {})
+    x_axis = _axis_average(axes, ["soft_defined", "natural_styled"])
+    y_axis = _axis_average(axes, ["deep_bright", "cool_warm"])
+    cross_x = _axis_value(axes, "dynamic_symmetric")
+    cross_y = _axis_value(axes, "light_dark_hair")
+    x = _scale_axis(x_axis, 54, 574)
+    y = _scale_axis(y_axis, 334, 34)
+    r = 8 + max(0.0, _axis_value(agency.get("components", {}), "axis_alignment")) * 6
+    label_y = y - 14 if index % 2 == 0 else y + 25
+    slug = str(agency.get("slug", ""))
+    name = str(agency.get("name", slug))
+    return f"""
+  <g class="axis-point axis-point-{index + 1}" tabindex="0" aria-label="{escape(name)} x {_fmt(x_axis)} y {_fmt(y_axis)} cross symmetric {_fmt(cross_x)} dark hair {_fmt(cross_y)}">
+    <circle cx="{x:.1f}" cy="{y:.1f}" r="{r:.1f}"></circle>
+    <text x="{x:.1f}" y="{label_y:.1f}">{escape(slug)}</text>
+  </g>
+"""
+
+
+def _axis_vector_row(agency: dict[str, Any]) -> str:
+    axes = agency.get("observed_axis_vector", {})
+    bars = "\n".join(_axis_bar(axis, axes.get(axis)) for axis in AXIS_LABELS)
+    distribution = agency.get("distribution", {})
+    return f"""
+<article class="axis-vector-card">
+  <div class="axis-vector-head">
+    <h3>{escape(str(agency.get("name", "")))}</h3>
+    <span>{escape(str(distribution.get("quadrant", "")))}</span>
+  </div>
+  <div class="axis-vector-grid">
+    {bars}
+  </div>
+</article>
+"""
+
+
+def _axis_bar(axis: str, value: Any) -> str:
+    low, high = AXIS_LABELS[axis]
+    numeric = _axis_value({axis: value}, axis)
+    left = 50 if numeric >= 0 else 50 + numeric * 50
+    width = abs(numeric) * 50
+    side = "pos" if numeric >= 0 else "neg"
+    return f"""
+<div class="axis-bar {side}">
+  <div class="axis-bar-label">
+    <span>{escape(low)}</span>
+    <strong>{escape(axis.replace("_", " "))}</strong>
+    <span>{escape(high)}</span>
+  </div>
+  <div class="axis-track" aria-label="{escape(axis)} {_fmt(numeric)}">
+    <span class="axis-zero"></span>
+    <span class="axis-fill" style="left: {left:.1f}%; width: {width:.1f}%"></span>
+  </div>
+  <span class="axis-value">{_fmt(numeric)}</span>
+</div>
 """
 
 
@@ -328,6 +452,24 @@ def _fmt(value: Any) -> str:
     return f"{float(value):.3f}"
 
 
+def _axis_value(values: dict[str, Any], key: str) -> float:
+    try:
+        return max(-1.0, min(1.0, float(values.get(key, 0.0))))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _axis_average(values: dict[str, Any], keys: list[str]) -> float:
+    if not keys:
+        return 0.0
+    return sum(_axis_value(values, key) for key in keys) / len(keys)
+
+
+def _scale_axis(value: float, start: float, end: float) -> float:
+    normalized = (_axis_value({"value": value}, "value") + 1.0) / 2.0
+    return start + normalized * (end - start)
+
+
 def _headers() -> str:
     nonce = b64encode(b"seju-face-lab").decode("ascii")
     return f"""/*
@@ -417,6 +559,130 @@ td:nth-child(1), td:nth-child(3), td:nth-child(4), td:nth-child(5) {
   font-variant-numeric: tabular-nums;
 }
 .cards { display: grid; gap: 18px; }
+.axis-map-section {
+  display: grid;
+  grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+  padding: 20px 0 26px;
+  border-top: 1px solid var(--line);
+}
+.axis-map-copy p { color: var(--muted); margin: 0 0 12px; }
+.axis-caveat { font-size: 13px; }
+.axis-map-panel {
+  border: 1px solid var(--line);
+  background: white;
+  padding: 12px;
+}
+.axis-map { display: block; width: 100%; height: auto; }
+.axis-map-bg { fill: #fbfcfb; stroke: var(--line); }
+.axis-map-mid { stroke: #b8c0c8; stroke-width: 1; stroke-dasharray: 5 5; }
+.axis-map-label, .axis-map-corner {
+  fill: var(--muted);
+  font-size: 13px;
+}
+.axis-map-corner { font-size: 12px; fill: #7a8188; }
+.axis-map-label.end, .axis-map-corner.end { text-anchor: end; }
+.axis-map-label.center, .axis-map-label.side { text-anchor: middle; }
+.axis-point circle {
+  fill: var(--accent);
+  fill-opacity: .82;
+  stroke: white;
+  stroke-width: 2;
+}
+.axis-point text {
+  fill: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: white;
+  stroke-width: 4px;
+}
+.axis-point-2 circle { fill: #b4535f; }
+.axis-point-3 circle { fill: #8a6b16; }
+.axis-point-4 circle { fill: #4f6f9f; }
+.axis-point-5 circle { fill: #6f5b8c; }
+.axis-point-6 circle { fill: #62764f; }
+.axis-point-7 circle { fill: #9a5f3f; }
+.axis-point-8 circle { fill: #3f7688; }
+.axis-bars {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.axis-vector-card {
+  border: 1px solid var(--line);
+  background: white;
+  padding: 12px;
+}
+.axis-vector-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: baseline;
+  margin-bottom: 10px;
+}
+.axis-vector-head h3 {
+  margin: 0;
+  color: var(--ink);
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 15px;
+}
+.axis-vector-head span {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.axis-vector-grid { display: grid; gap: 7px; }
+.axis-bar {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) minmax(120px, 1.1fr) 46px;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+}
+.axis-bar-label {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 6px;
+  color: var(--muted);
+}
+.axis-bar-label strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+.axis-bar-label span:last-child { text-align: right; }
+.axis-track {
+  position: relative;
+  height: 10px;
+  border-radius: 999px;
+  background: #edf1f0;
+  overflow: hidden;
+}
+.axis-zero {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: #8f979f;
+}
+.axis-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 999px;
+  background: var(--accent);
+}
+.axis-bar.neg .axis-fill { background: var(--rose); }
+.axis-value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
 .card {
   display: grid;
   grid-template-columns: minmax(240px, 360px) minmax(0, 1fr);
@@ -476,8 +742,11 @@ td:nth-child(1), td:nth-child(3), td:nth-child(4), td:nth-child(5) {
   color: var(--muted);
 }
 @media (max-width: 820px) {
-  .summary, .card, .split, .calibration { grid-template-columns: 1fr; }
+  .summary, .card, .split, .calibration, .axis-map-section, .axis-bars { grid-template-columns: 1fr; }
   .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .axis-bar { grid-template-columns: 1fr; gap: 4px; }
+  .axis-bar-label { grid-template-columns: 1fr auto 1fr; }
+  .axis-value { text-align: left; }
   .portrait { min-height: 0; }
 }
 """
