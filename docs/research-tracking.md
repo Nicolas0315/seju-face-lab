@@ -26,7 +26,7 @@ Retrieval/design date: 2026-06-14.
 - `compare-runs` now reads `quality/` outputs and reports QA-gated best centroid scores.
 - `review-generated` runs generated-image evaluation, QA, and one-run comparison as the standard precision-review shortcut.
 - `generate --review` now chains real Diffusers generation into the same generated-image review shortcut.
-- `precision-report` consolidates centroid, optional `model_audit.json` mean/median vector distance metadata, generated-image mean/median score components, QA, subject-review, backend-comparison, and subject-backend-comparison evidence into a review bundle.
+- `precision-report` consolidates a workflow readiness checklist, centroid, optional `model_audit.json` mean/median vector distance metadata, generated-image mean/median score components, QA, subject-review, backend-comparison, and subject-backend-comparison evidence into a review bundle.
 - `audit-model` writes standalone mean/median vector hashes, norms, distance metrics, and descriptor deltas for centroid-model review.
 - `export-vectors` writes full mean/median centroid embedding values as JSON or CSV for external analysis and generation tooling.
 - `run-pipeline` executes JSON-configured build/audit-model/export-vectors/evaluate/style-evaluate/review/backend-comparison/subject-backend-comparison/precision steps and records a pipeline run manifest.

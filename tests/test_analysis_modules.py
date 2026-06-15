@@ -423,6 +423,13 @@ class AnalysisModuleTests(unittest.TestCase):
             self.assertEqual(report["model"]["model_audit"]["mean_median_embedding"]["cosine"], 0.6)
             self.assertEqual(report["model"]["model_audit"]["mean_median_appearance"]["euclidean"], 1.1)
             self.assertEqual(report["model"]["model_audit"]["descriptor_delta"]["brightness"], 0.1)
+            self.assertEqual(report["workflow_readiness"]["ready_count"], 8)
+            self.assertEqual(report["workflow_readiness"]["total_count"], 8)
+            self.assertEqual(report["workflow_readiness"]["optional_ready_count"], 2)
+            self.assertEqual(report["workflow_readiness"]["optional_total_count"], 2)
+            self.assertEqual(report["workflow_readiness"]["missing"], [])
+            self.assertEqual(report["workflow_readiness"]["optional_missing"], [])
+            self.assertIsNone(report["workflow_readiness"]["next_action"])
             self.assertEqual(report["generation"]["provider"], "diffusers")
             self.assertEqual(report["generation"]["model_id"], "local/test-model")
             self.assertEqual(report["generation"]["prompt_profile"], "detector-friendly")
@@ -455,6 +462,14 @@ class AnalysisModuleTests(unittest.TestCase):
             self.assertTrue((out / "precision_report.json").exists())
             self.assertIn(
                 "Backend Comparison",
+                (out / "precision_report.md").read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                "Workflow Readiness",
+                (out / "precision_report.md").read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                "ready: 8/8",
                 (out / "precision_report.md").read_text(encoding="utf-8"),
             )
             self.assertIn(
@@ -711,6 +726,7 @@ class AnalysisModuleTests(unittest.TestCase):
         self.assertTrue(report["model"]["has_centroid_vectors"])
         self.assertFalse(report["model"]["centroid_vectors"]["available"])
         self.assertEqual(report["model"]["centroid_vectors"]["error"], "unreadable centroids.npz")
+        self.assertIn("centroid_vectors", report["workflow_readiness"]["missing"])
 
     def test_precision_report_does_not_mix_components_from_nonmatching_best_image(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -66,17 +66,31 @@ def build_precision_report(
     subject_backend_comparison_summary = _load_optional_json(
         _resolve_subject_backend_comparison_path(subject_backend_comparison)
     )
+    model = _model_summary(model_dir, profile, model_audit_summary, vector_export_summary)
+    generation_summary = _generation_summary(
+        generation,
+        evaluation_summary,
+        quality_summary,
+        evaluation_scores,
+    )
+    subjects_summary = _subject_summary(subjects)
+    backend_summary = _backend_comparison_summary(backend_comparison_summary)
+    subject_backend_summary = _backend_comparison_summary(subject_backend_comparison_summary)
     return {
-        "model": _model_summary(model_dir, profile, model_audit_summary, vector_export_summary),
-        "generation": _generation_summary(
-            generation,
-            evaluation_summary,
-            quality_summary,
-            evaluation_scores,
+        "workflow_readiness": _workflow_readiness(
+            model,
+            generation_summary,
+            subjects_summary,
+            backend_summary,
+            subject_backend_summary,
+            bool(evaluation_summary or evaluation_scores),
+            bool(quality_summary),
         ),
-        "subjects": _subject_summary(subjects),
-        "backend_comparison": _backend_comparison_summary(backend_comparison_summary),
-        "subject_backend_comparison": _backend_comparison_summary(subject_backend_comparison_summary),
+        "model": model,
+        "generation": generation_summary,
+        "subjects": subjects_summary,
+        "backend_comparison": backend_summary,
+        "subject_backend_comparison": subject_backend_summary,
         "inputs": {
             "model_dir": str(model_dir),
             "generation_review": str(generation_review) if generation_review else None,
@@ -339,7 +353,113 @@ def _backend_comparison_summary(comparison: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _workflow_readiness(
+    model: dict[str, Any],
+    generation: dict[str, Any],
+    subjects: dict[str, Any],
+    backend_comparison: dict[str, Any],
+    subject_backend_comparison: dict[str, Any],
+    has_evaluation: bool,
+    has_quality: bool,
+) -> dict[str, Any]:
+    checks = [
+        _readiness_check(
+            "model_profile",
+            model.get("image_count") is not None and model.get("embedding_dim") is not None,
+            "Build a centroid model with profile.json",
+        ),
+        _readiness_check(
+            "centroid_vectors",
+            bool(model.get("has_centroid_vectors"))
+            and bool(_vector_field(model, "mean_embedding", "available"))
+            and bool(_vector_field(model, "median_embedding", "available")),
+            "Build centroids.npz with mean and median embeddings",
+        ),
+        _readiness_check(
+            "model_audit",
+            bool(model.get("model_audit", {}).get("available")),
+            "Run audit-model for mean/median vector distance evidence",
+            required=False,
+        ),
+        _readiness_check(
+            "vector_export",
+            bool(model.get("vector_export", {}).get("available")),
+            "Run export-vectors for portable mean/median vector evidence",
+            required=False,
+        ),
+        _readiness_check(
+            "generation_review",
+            generation.get("best_image_id") is not None or generation.get("reviewed_run_count") is not None,
+            "Run generate --review or review-generated on candidate portraits",
+        ),
+        _readiness_check(
+            "evaluation",
+            has_evaluation or generation.get("best_centroid_score") is not None,
+            "Run evaluate against generated candidate portraits",
+        ),
+        _readiness_check(
+            "quality_review",
+            has_quality or generation.get("qa_reviewed_count") is not None,
+            "Run qa-images or review-generated for detector QA",
+        ),
+        _readiness_check(
+            "subject_review",
+            subjects.get("subject_count") is not None,
+            "Run review-subjects for celebrity/public-figure near-face ranking",
+        ),
+        _readiness_check(
+            "backend_comparison",
+            bool(backend_comparison.get("completed_backends")),
+            "Run compare-backends for backend rank-agreement evidence",
+        ),
+        _readiness_check(
+            "subject_backend_comparison",
+            bool(subject_backend_comparison.get("completed_backends")),
+            "Run compare-subject-backends for subject-ranking backend agreement",
+        ),
+    ]
+    required_checks = [check for check in checks if check["required"]]
+    optional_checks = [check for check in checks if not check["required"]]
+    passed = [check for check in required_checks if check["ready"]]
+    optional_passed = [check for check in optional_checks if check["ready"]]
+    missing = [check["name"] for check in required_checks if not check["ready"]]
+    optional_missing = [check["name"] for check in optional_checks if not check["ready"]]
+    return {
+        "ready_count": len(passed),
+        "total_count": len(required_checks),
+        "ready_ratio": round(len(passed) / len(required_checks), 6) if required_checks else None,
+        "optional_ready_count": len(optional_passed),
+        "optional_total_count": len(optional_checks),
+        "optional_missing": optional_missing,
+        "missing": missing,
+        "next_action": _next_readiness_action(checks),
+        "checks": checks,
+    }
+
+
+def _readiness_check(
+    name: str,
+    ready: bool,
+    next_action: str,
+    required: bool = True,
+) -> dict[str, Any]:
+    return {
+        "name": name,
+        "required": required,
+        "ready": bool(ready),
+        "next_action": None if ready else next_action,
+    }
+
+
+def _next_readiness_action(checks: list[dict[str, Any]]) -> str | None:
+    for check in checks:
+        if check["required"] and not check["ready"]:
+            return check["next_action"]
+    return None
+
+
 def _render_precision_report(report: dict[str, Any]) -> str:
+    readiness = report["workflow_readiness"]
     model = report["model"]
     generation = report["generation"]
     subjects = report["subjects"]
@@ -347,6 +467,15 @@ def _render_precision_report(report: dict[str, Any]) -> str:
     subject_backend_comparison = report["subject_backend_comparison"]
     lines = [
         "# seju-face precision report",
+        "",
+        "## Workflow Readiness",
+        "",
+        f"- ready: {readiness['ready_count']}/{readiness['total_count']}",
+        f"- ready_ratio: {_value(readiness['ready_ratio'])}",
+        f"- missing: {', '.join(readiness['missing'])}",
+        f"- optional_ready: {readiness['optional_ready_count']}/{readiness['optional_total_count']}",
+        f"- optional_missing: {', '.join(readiness['optional_missing'])}",
+        f"- next_action: {_value(readiness['next_action'])}",
         "",
         "## Model",
         "",
@@ -415,6 +544,16 @@ def _render_precision_report(report: dict[str, Any]) -> str:
         f"- completed_backends: {', '.join(subject_backend_comparison['completed_backends'])}",
         f"- failed_backends: {', '.join(subject_backend_comparison['failed_backends'])}",
     ]
+    if readiness["checks"]:
+        lines.extend(["", "## Workflow Readiness Checks", "", "| check | required | ready | next_action |"])
+        lines.append("| --- | --- | --- | --- |")
+        for check in readiness["checks"]:
+            if isinstance(check, dict):
+                lines.append(
+                    f"| {_value(check.get('name'))} | {_value(check.get('required'))} | "
+                    f"{_value(check.get('ready'))} | "
+                    f"{_value(check.get('next_action'))} |"
+                )
     if backend_comparison["rank_agreement"]:
         lines.extend(["", "| backend_a | backend_b | common_images | spearman_rank |"])
         lines.append("| --- | --- | ---: | ---: |")

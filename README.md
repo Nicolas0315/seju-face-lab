@@ -141,9 +141,9 @@ subject-review evidence, and backend agreement into one reviewable bundle:
 python -m seju_face_lab precision-report --model outputs/seju_model --model-audit outputs/model_audit --vector-export outputs/seju_vectors.json --generation-review outputs/generated_detector/review --subject-review outputs/subject_reviews --backend-comparison outputs/backend_compare --subject-backend-comparison outputs/subject_backend_compare --out outputs/precision_report
 ```
 
-This writes `precision_report.json` and `precision_report.md`, including the optional
-mean/median vector audit and vector-export evidence when `--model-audit` and
-`--vector-export` point at files or directories.
+This writes `precision_report.json` and `precision_report.md`, including a workflow
+readiness checklist plus optional mean/median vector audit and vector-export evidence
+when `--model-audit` and `--vector-export` point at files or directories.
 
 Run a reproducible local pipeline from a JSON config:
 
@@ -360,7 +360,7 @@ See `docs/gpu-generation-log.md` for RTX 4090 generation smoke results.
 - evaluation `scores.csv`: similarity of candidate generated images to the centroid vectors.
 - evaluation `summary.json`: best/mean/median generated-image similarity for quick comparisons.
 - generated review `generation_run_reviews.csv`: one-command generated-image evaluation + QA + run review via `review-generated`, or directly after Diffusers generation with `generate --review`; includes provider, model, prompt profile, seed, count, steps, size, device, and dtype when `generation_run.json` is present.
-- precision report `precision_report.json`: model centroid, optional `model_audit.json` mean/median vector distance summary, generation settings, generated-image mean/median score components, QA, subject-review, backend-comparison, and subject-backend-comparison summary via `precision-report`.
+- precision report `precision_report.json`: workflow readiness checklist, model centroid, optional `model_audit.json` mean/median vector distance summary, generation settings, generated-image mean/median score components, QA, subject-review, backend-comparison, and subject-backend-comparison summary via `precision-report`.
 - pipeline run `pipeline_run.json`: configured build/audit-model/export-vectors/evaluate/style-evaluate/review/backend-comparison/subject-backend-comparison/precision orchestration via `run-pipeline`.
 - generation sweep `configs/pipelines/generation-sweep.example.json`: repeatable seed/profile generation experiments with per-run manifests and optional shared run comparison.
 - pipeline config `configs/pipelines/full-retinaface-review.example.json`: deterministic continuity plus `deepface-retinaface` neural rank agreement for the precision bundle.
