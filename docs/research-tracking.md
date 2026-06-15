@@ -26,12 +26,12 @@ Retrieval/design date: 2026-06-14.
 - `compare-runs` now reads `quality/` outputs and reports QA-gated best centroid scores.
 - `review-generated` runs generated-image evaluation, QA, and one-run comparison as the standard precision-review shortcut.
 - `generate --review` now chains real Diffusers generation into the same generated-image review shortcut.
-- `precision-report` consolidates a workflow readiness checklist, centroid, optional `model_audit.json` mean/median vector distance metadata, generated-image mean/median score components, QA, subject-review, backend-comparison, and subject-backend-comparison evidence into a review bundle.
+- `precision-report` consolidates a workflow readiness checklist, centroid, optional `model_audit.json` mean/median vector distance metadata, generated-image mean/median score components, QA, subject-review, backend-comparison, subject-backend-comparison, and optional correlation evidence into a review bundle.
 - `audit-model` writes standalone mean/median vector hashes, norms, distance metrics, and descriptor deltas for centroid-model review.
 - `export-vectors` writes full mean/median centroid embedding values as JSON or CSV for external analysis and generation tooling.
 - `run-pipeline` executes JSON-configured build/audit-model/export-vectors/evaluate/style-evaluate/review/backend-comparison/subject-backend-comparison/SNS-engagement/correlation/precision steps and records a pipeline run manifest.
 - `generation_sweep` pipeline configs execute repeatable multi-seed/multi-profile generation experiments with per-run manifests and optional shared generated-run comparison.
-- `configs/pipelines/sns-correlation.example.json` captures the repeatable subject-review + cached SNS exploration + face-score/SNS correlation workflow.
+- `configs/pipelines/sns-correlation.example.json` captures the repeatable subject-review + cached SNS exploration + face-score/SNS correlation + precision-report workflow.
 - `configs/pipelines/full-retinaface-review.example.json` captures the current full review path with deterministic continuity plus `deepface-retinaface` backend rank agreement.
 - `worker-diagnostics` records local RTX 4090 and optional SSH remote-GPU Python/CUDA/torch/package readiness without remote writes.
 - `distributed-evaluate` runs explicit local worker-chunk scoring and records merged score outputs plus worker assignment artifacts before any remote split-run.

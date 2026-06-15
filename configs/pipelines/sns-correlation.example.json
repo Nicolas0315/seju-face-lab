@@ -15,6 +15,7 @@
   "correlation": {
     "out": "outputs/correlation"
   },
+  "precision_out": "outputs/sns_correlation_precision",
   "vector_backend": "deterministic",
   "crop": "center",
   "notes": [

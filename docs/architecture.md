@@ -43,9 +43,9 @@ Retrieval/design date: 2026-06-14.
    - convenience command that runs `evaluate`, `qa-images`, and one-run `compare-runs` for a generated directory
    - also used by `generate --review` so generated batches can be scored immediately
 11. `precision-report`
-   - consolidates centroid metadata, generated-image review, QA, subject-review, backend-comparison, and subject-backend-comparison summaries for tracking
+   - consolidates centroid metadata, generated-image review, QA, subject-review, backend-comparison, subject-backend-comparison, and optional correlation summaries for tracking
 12. `run-pipeline`
-   - executes configured build, vector export, generation, evaluation, style evaluation, review, backend comparison, subject backend comparison, and precision-report steps from JSON
+   - executes configured build, vector export, generation, evaluation, style evaluation, review, backend comparison, subject backend comparison, SNS engagement, correlation, and precision-report steps from JSON
    - can execute `generation_sweep` configs to track multiple seed/profile generation attempts under one experiment folder
    - writes `pipeline_run.json` and `pipeline_run.md` as the orchestration trace
 13. `review-subjects`
@@ -88,10 +88,9 @@ Use `--reuse-existing` when a long detector sweep has completed some per-detecto
 Use `--max-reference-images` and `--max-images` for slow detector smoke audits before committing
 to a full reference-set run.
 Pass vector export and comparison outputs into `precision-report --vector-export`,
-`--backend-comparison`, and `--subject-backend-comparison`, or set `vector_export.out`,
-`backend_comparison.out`, and
-`subject_backend_comparison.out` in a pipeline config so final precision bundles include
-centroid-vector export evidence plus generated-image and per-subject backend agreement.
+`--backend-comparison`, `--subject-backend-comparison`, and `--correlation`, or set `vector_export.out`,
+`backend_comparison.out`, `subject_backend_comparison.out`, and `correlation.out` in a pipeline config so final precision bundles include
+centroid-vector export evidence plus generated-image, per-subject backend agreement, and face-score/SNS correlation evidence.
 
 ## Subject Review Contract
 
