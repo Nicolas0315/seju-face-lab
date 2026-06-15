@@ -11,6 +11,7 @@ Retrieval/design date: 2026-06-14.
 - InsightFace adapter code is dependency-gated and has a sample-verified 512D comparison path when `insightface` and ONNXRuntime providers are available.
 - DeepFace adapter code is dependency-gated and uses `DeepFace.represent` for neural cross-checking.
 - `backend-diagnostics` records optional dependency, CUDA, and ONNXRuntime provider visibility.
+- `benchmark-research` records benchmark/OSS adoption notes for NIST FRTE/FATE, NEC context, InsightFace, DeepFace, OpenCLIP, and Worldcoin Open IRIS.
 - `compare-backends` builds/evaluates multiple vector backends on the same local image sets and reports rank agreement.
 - `compare-deepface-detectors` sweeps DeepFace detector choices on the same local image sets and reports detector acceptance/rank agreement.
 - Per-subject similarity review is implemented through `review-subjects`.
@@ -48,6 +49,7 @@ Retrieval/design date: 2026-06-14.
 Create and track these issues:
 
 - `P1 GPU face embeddings`: expand multi-candidate InsightFace/ONNXRuntime-GPU comparisons beyond the current 6-image batch and investigate DeepFace ranking divergence.
+- `P1 Benchmark/OSS vectorization review`: keep `benchmark-research` current and map OSS benchmark lessons into local backend comparisons.
 - `P1 Celebrity subject review workflow`: collect reviewed subject folders and run `review-subjects` plus `compare-subject-backends`.
 - `P1 Generation loop`: expand reviewed Diffusers batches and compare generated candidates across face, style, QA, and backend axes.
 - `P1 SNS correlation workflow`: run handle extraction, engagement manifesting, and correlation reports.
@@ -80,9 +82,10 @@ Create and track these issues:
 13. Use `run-pipeline` for repeatable local build/audit-model/export-vectors/evaluate/style-evaluate/review/backend-agreement/precision runs from config.
 14. Run SNS handle/engagement manifests and `analyze correlation`, or `configs/pipelines/sns-correlation.example.json`, for reviewable metric joins.
 15. Run `backend-diagnostics` and `worker-diagnostics --include-remote` on RTX nodes and archive the ignored output paths in the Issue comment.
-16. Run `distributed-evaluate` locally before remote split-runs so chunk assignment and merged score outputs are reviewable.
-17. Compare deterministic scores against InsightFace/DeepFace on the same ignored image sets with `compare-backends`.
-18. When DeepFace diverges, run `compare-deepface-detectors` with `opencv mtcnn retinaface skip` and compare acceptance counts before reviewing ranks.
+16. Run `benchmark-research` to refresh benchmark/OSS adoption notes before adding or changing vector backends.
+17. Run `distributed-evaluate` locally before remote split-runs so chunk assignment and merged score outputs are reviewable.
+18. Compare deterministic scores against InsightFace/DeepFace on the same ignored image sets with `compare-backends`.
+19. When DeepFace diverges, run `compare-deepface-detectors` with `opencv mtcnn retinaface skip` and compare acceptance counts before reviewing ranks.
 
 ## GPU Generation Notes
 

@@ -21,7 +21,11 @@ OpenAI Image API check: 2026-06-15, official docs at https://developers.openai.c
    - `export-vectors` writes full mean/median embedding values as JSON or CSV
    - `audit-model` writes vector hashes, norms, mean/median distances, and descriptor deltas
    - `ingredients-report` turns aggregate descriptors into face-part, color-tone, makeup-texture, hair-signal, and prompt-guidance notes
-5. generation
+5. benchmark and OSS research
+   - `backend-diagnostics` checks local optional dependency and GPU/provider readiness
+   - `benchmark-research` records benchmark/OSS adoption notes before vector backend changes
+   - face recognition, face analysis, style similarity, and iris recognition stay separate modalities
+6. generation
    - `prompt.txt` and `generation_manifest.json` feed `generate`
    - `generate --provider dry-run` writes a reproducible run plan
    - `generate --provider diffusers` runs an optional local Diffusers batch
@@ -32,34 +36,34 @@ OpenAI Image API check: 2026-06-15, official docs at https://developers.openai.c
    - `--variant auto` maps `--dtype float16` to the Diffusers `fp16` variant
    - `--prompt-profile detector-friendly` steers aggregate prompts toward frontal, unobscured faces for detector/evaluation passes
    - `--review` runs the standard generated-image review after a real generation run produces files
-6. `evaluate`
+7. `evaluate`
    - generated candidates are scored against mean and median vectors
-7. `style-evaluate`
+8. `style-evaluate`
    - generated candidates are scored against mean/median rendered appearances with OpenCLIP image embeddings
    - this is a style/photographic axis, not a face-geometry score
-8. `qa-images`
+9. `qa-images`
    - generated candidates are checked for exactly one centered frontal OpenCV face
    - this catches collages, extreme crops, off-center faces, and no-face detector failures before review
-9. `compare-runs`
+10. `compare-runs`
    - generation batches are ranked by QA-gated face score when quality outputs are present
    - otherwise batches are ranked by face score, or by best per-image combined face/style score when style outputs are present
    - run summaries group results by `centroid_kind` so mean-derived and median-derived prompt batches can be reviewed separately
-10. `review-generated`
+11. `review-generated`
    - convenience command that runs `evaluate`, `qa-images`, and one-run `compare-runs` for a generated directory
    - also used by `generate --review` so generated batches can be scored immediately
-11. `precision-report`
+12. `precision-report`
    - consolidates centroid metadata, generated-image review, QA, subject-review, backend-comparison, subject-backend-comparison, and optional correlation summaries for tracking
-12. `run-pipeline`
+13. `run-pipeline`
    - executes configured build, vector export, generation, evaluation, style evaluation, review, backend comparison, subject backend comparison, SNS engagement, correlation, and precision-report steps from JSON
    - can execute `generation_sweep` configs to track multiple seed/profile generation attempts under one experiment folder
    - writes `pipeline_run.json` and `pipeline_run.md` as the orchestration trace
-13. `review-subjects`
+14. `review-subjects`
    - per-person image folders are ranked against the local seju centroid
    - output is CSV, Markdown, and JSON for review and tracking
-14. `compare-subject-backends`
+15. `compare-subject-backends`
    - reviews the same per-person folders across deterministic, face-crop, and neural backends
    - writes `subject_backend_comparison.json` / `.md` plus per-backend `subject_reviews.json`
-15. SNS and correlation analysis
+16. SNS and correlation analysis
    - `sources scrape-handles` writes reviewed SNS handle manifests
    - `sources fetch-engagement` writes best-effort public engagement manifests
    - `explore profile|batch|load-cache|discover` adds cache-backed local SNS exploration with optional explicit SSH routing

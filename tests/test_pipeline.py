@@ -1003,6 +1003,20 @@ class PipelineTests(unittest.TestCase):
             self.assertIn("insightface", {item["name"] for item in report["backends"]})
             self.assertIn("diffusers", {item["name"] for item in report["generation_providers"]})
 
+    def test_benchmark_research_writes_vectorization_catalog(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "benchmark_research"
+
+            self.assertEqual(main(["benchmark-research", "--out", str(out)]), 0)
+
+            report = json.loads((out / "benchmark_research.json").read_text(encoding="utf-8"))
+            source_names = {item["name"] for item in report["sources"]}
+            self.assertIn("NIST FRTE/FATE", source_names)
+            self.assertIn("InsightFace", source_names)
+            self.assertIn("Worldcoin Open IRIS", source_names)
+            self.assertEqual(report["vectorization_strategy"]["iris_axis"], "out of scope for face-vector scoring; separate modality only")
+            self.assertTrue((out / "benchmark_research.md").exists())
+
     def test_compare_backends_writes_rank_agreement(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -14,6 +14,7 @@ It can:
 - score generated images on a separate OpenCLIP style axis
 - review per-person image folders against the seju centroid
 - extract SNS handles/engagement manifests and correlate them with face-score outputs
+- track benchmark/OSS adoption notes for face-vector backends
 
 The current implementation is intentionally local and dependency-light: Python + `numpy` + `Pillow`. It does not identify people, infer identity, or claim that the result is a universal definition of "seju face"; it only summarizes the images you provide.
 
@@ -300,6 +301,7 @@ python -m seju_face_lab run-pipeline --config configs/pipelines/sns-correlation.
 ```powershell
 python -m seju_face_lab backends
 python -m seju_face_lab backend-diagnostics --out outputs/backend_diagnostics
+python -m seju_face_lab benchmark-research --out outputs/benchmark_research
 ```
 
 Implemented now:
@@ -412,6 +414,7 @@ See `docs/gpu-generation-log.md` for RTX 4090 generation smoke results.
 - generation sweep `configs/pipelines/generation-sweep.example.json`: repeatable seed/profile generation experiments with per-run manifests and optional shared run comparison.
 - pipeline config `configs/pipelines/full-retinaface-review.example.json`: deterministic continuity plus `deepface-retinaface` neural rank agreement for the precision bundle.
 - backend diagnostics `backend_diagnostics.json`: optional dependency, CUDA, vector backend, and generation-provider visibility.
+- benchmark research `benchmark_research.json`: NIST/NEC/InsightFace/DeepFace/OpenCLIP/World IRIS adoption notes and vectorization priorities.
 - worker diagnostics `worker_diagnostics.json`: local/SSH Python, CUDA, torch, and package readiness for GPU split-run planning.
 - backend comparison `backend_comparison.json`: per-backend model/evaluation outputs and same-image rank agreement.
 - subject backend comparison `subject_backend_comparison.json`: per-backend celebrity/public-figure subject rankings and rank agreement.

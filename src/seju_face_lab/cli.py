@@ -10,6 +10,7 @@ import numpy as np
 from .backends import backend_help, get_vector_backend
 from .backend_compare import compare_deepface_detectors, compare_subject_backends, compare_vector_backends
 from .backend_diagnostics import write_backend_diagnostics
+from .benchmark_research import write_benchmark_research
 from .embeddings import iter_image_paths, render_appearance
 from .generation import (
     build_generation_config,
@@ -235,6 +236,12 @@ def main(argv: list[str] | None = None) -> int:
         help="write dependency and GPU/provider diagnostics for optional backends",
     )
     backend_diag_parser.add_argument("--out", type=Path, required=True)
+
+    benchmark_research_parser = subparsers.add_parser(
+        "benchmark-research",
+        help="write face/iris benchmark and OSS adoption notes for vectorization planning",
+    )
+    benchmark_research_parser.add_argument("--out", type=Path, required=True)
 
     worker_diag_parser = subparsers.add_parser(
         "worker-diagnostics",
@@ -477,6 +484,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "backend-diagnostics":
         return _backend_diagnostics(args.out)
+    if args.command == "benchmark-research":
+        return _benchmark_research(args.out)
     if args.command == "worker-diagnostics":
         return _worker_diagnostics(args.out, args.include_remote, args.timeout_seconds)
     if args.command == "compare-backends":
@@ -1275,6 +1284,14 @@ def _backend_diagnostics(out: Path) -> int:
     print(f"backend diagnostics: {out / 'backend_diagnostics.md'}")
     print(f"implemented backends: {implemented}")
     print(f"torch cuda available: {cuda_available}")
+    return 0
+
+
+def _benchmark_research(out: Path) -> int:
+    report = write_benchmark_research(out)
+    print(f"benchmark research: {out / 'benchmark_research.md'}")
+    print(f"sources: {len(report['sources'])}")
+    print(f"primary face embedding: {report['vectorization_strategy']['primary_face_embedding']}")
     return 0
 
 
