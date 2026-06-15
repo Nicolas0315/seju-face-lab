@@ -15,6 +15,7 @@ def main() -> int:
     parser.add_argument("--agencies", type=Path, default=Path("configs/agencies/seju_like_agencies.json"))
     parser.add_argument("--average-params", type=Path, default=Path("outputs/agency_reviews/seju_like/agency_average_params.json"))
     parser.add_argument("--enhancement", type=Path, default=Path("outputs/agency_enhancement/agency_enhancement_report.json"))
+    parser.add_argument("--calibration", type=Path, default=Path("outputs/agency_generation_calibration/generation_calibration.json"))
     parser.add_argument("--images", type=Path, default=Path("outputs/agency_imagegen_samples"))
     parser.add_argument("--out", type=Path, default=Path("outputs/agency_site"))
     args = parser.parse_args()
@@ -22,7 +23,8 @@ def main() -> int:
     config = _read_json(args.agencies)
     params = _read_json(args.average_params)
     enhancement = _read_json(args.enhancement)
-    build_site(config, params, enhancement, args.images, args.out)
+    calibration = _read_json(args.calibration) if args.calibration.exists() else {}
+    build_site(config, params, enhancement, calibration, args.images, args.out)
     print(f"site: {args.out / 'index.html'}")
     return 0
 
@@ -31,6 +33,7 @@ def build_site(
     config: dict[str, Any],
     params: dict[str, Any],
     enhancement: dict[str, Any],
+    calibration: dict[str, Any],
     images_dir: Path,
     out_dir: Path,
 ) -> None:
@@ -38,10 +41,18 @@ def build_site(
     assets_dir = out_dir / "assets"
     assets_dir.mkdir(exist_ok=True)
     _copy_images(images_dir, assets_dir)
-    agencies = _merge_agencies(config, params, enhancement)
-    (out_dir / "index.html").write_text(_render_html(config, enhancement, agencies), encoding="utf-8")
+    agencies = _merge_agencies(config, params, enhancement, calibration)
+    (out_dir / "index.html").write_text(_render_html(config, enhancement, calibration, agencies), encoding="utf-8")
     (out_dir / "data.json").write_text(
-        json.dumps({"agencies": agencies, "summary": enhancement.get("summary", {})}, ensure_ascii=False, indent=2),
+        json.dumps(
+            {
+                "agencies": agencies,
+                "summary": enhancement.get("summary", {}),
+                "calibration_summary": calibration.get("summary", {}),
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
         encoding="utf-8",
     )
     (out_dir / "_headers").write_text(_headers(), encoding="utf-8")
@@ -51,15 +62,18 @@ def _merge_agencies(
     config: dict[str, Any],
     params: dict[str, Any],
     enhancement: dict[str, Any],
+    calibration: dict[str, Any],
 ) -> list[dict[str, Any]]:
     config_by_slug = {agency["slug"]: agency for agency in config.get("agencies", [])}
     params_by_slug = {agency["slug"]: agency for agency in params.get("agencies", [])}
+    calibration_by_slug = {agency["slug"]: agency for agency in calibration.get("agencies", [])}
     enhanced = enhancement.get("agencies", [])
     rows = []
     for agency in enhanced:
         slug = agency["slug"]
         cfg = config_by_slug.get(slug, {})
         param = params_by_slug.get(slug, {})
+        calibrated = calibration_by_slug.get(slug, {})
         rows.append(
             {
                 "slug": slug,
@@ -76,19 +90,27 @@ def _merge_agencies(
                 "official_sources": cfg.get("official_sources", []),
                 "average_descriptors": param.get("average_descriptors", {}),
                 "axis_vector": param.get("axis_vector", {}),
+                "calibration": calibrated,
                 "image": f"assets/{slug}.png",
             }
         )
     return rows
 
 
-def _render_html(config: dict[str, Any], enhancement: dict[str, Any], agencies: list[dict[str, Any]]) -> str:
+def _render_html(
+    config: dict[str, Any],
+    enhancement: dict[str, Any],
+    calibration: dict[str, Any],
+    agencies: list[dict[str, Any]],
+) -> str:
     cards = "\n".join(_agency_card(agency) for agency in agencies)
     rows = "\n".join(_ranking_row(agency) for agency in agencies)
+    calibration_rows = "\n".join(_calibration_row(agency) for agency in agencies)
     nav = "\n".join(f'<a href="#{escape(agency["slug"])}">{escape(agency["name"])}</a>' for agency in agencies)
     generated_at = date.today().isoformat()
     retrieved_at = config.get("retrieved_at", "unknown")
     summary = enhancement.get("summary", {})
+    calibration_summary = calibration.get("summary", {})
     return f"""<!doctype html>
 <html lang="ja">
 <head>
@@ -112,6 +134,7 @@ def _render_html(config: dict[str, Any], enhancement: dict[str, Any], agencies: 
         <span>generated: {escape(generated_at)}</span>
         <span>source retrieved: {escape(str(retrieved_at))}</span>
         <span>top: {escape(str(summary.get("top_slug", "")))} {escape(str(summary.get("top_score", "")))}</span>
+        <span>regen first: {escape(", ".join(calibration_summary.get("regenerate_first", [])))}</span>
       </div>
     </div>
   </header>
@@ -152,6 +175,33 @@ def _render_html(config: dict[str, Any], enhancement: dict[str, Any], agencies: 
       {cards}
     </section>
 
+    <section class="calibration" aria-labelledby="calibration-title">
+      <div>
+        <h2 id="calibration-title">生成精度改善プラン</h2>
+        <p>
+          現在の生成画像を測定し、目標 image score 0.35、axis alignment 0.62、
+          enhancement score 0.76 に届いていない箇所を補正した次回生成プランです。
+        </p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>agency</th>
+              <th>priority</th>
+              <th>image gap</th>
+              <th>axis gap</th>
+              <th>seed</th>
+              <th>next</th>
+            </tr>
+          </thead>
+          <tbody>
+            {calibration_rows}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
     <section class="boundary" aria-labelledby="boundary-title">
       <h2 id="boundary-title">Research Boundary</h2>
       <p>
@@ -174,6 +224,9 @@ def _agency_card(agency: dict[str, Any]) -> str:
     )
     flags = "".join(f"<span>{escape(str(flag))}</span>" for flag in agency["presentation_flags"])
     actions = "".join(f"<li>{escape(str(action))}</li>" for action in agency["improvement_actions"])
+    calibration = agency.get("calibration", {})
+    gaps = calibration.get("gaps_to_target", {}) if isinstance(calibration, dict) else {}
+    plan = calibration.get("generation_plan", {}) if isinstance(calibration, dict) else {}
     positioning = " / ".join(escape(str(item)) for item in agency["positioning"])
     image_alt = f"{agency['name']} fictional aggregate average face sample"
     components = agency["components"]
@@ -215,6 +268,15 @@ def _agency_card(agency: dict[str, Any]) -> str:
       <h3>次の改善</h3>
       <ul>{actions}</ul>
     </section>
+    <section class="calibration-note">
+      <h3>精度改善プラン</h3>
+      <p>
+        priority: <strong>{escape(str(calibration.get("priority", "n/a")))}</strong> /
+        image gap: {_fmt(gaps.get("image_centroid_score"))} /
+        axis gap: {_fmt(gaps.get("axis_alignment"))} /
+        seed: {escape(str(plan.get("seed", "n/a")))}
+      </p>
+    </section>
   </div>
 </article>
 """
@@ -231,6 +293,22 @@ def _ranking_row(agency: dict[str, Any]) -> str:
   <td>{_fmt(components.get("image_centroid_score"))}</td>
   <td>{_fmt(components.get("axis_alignment"))}</td>
   <td>{escape(str(distribution.get("quadrant", "")))}</td>
+</tr>
+"""
+
+
+def _calibration_row(agency: dict[str, Any]) -> str:
+    calibration = agency.get("calibration", {})
+    gaps = calibration.get("gaps_to_target", {}) if isinstance(calibration, dict) else {}
+    plan = calibration.get("generation_plan", {}) if isinstance(calibration, dict) else {}
+    return f"""
+<tr>
+  <td><a href="#{escape(agency["slug"])}">{escape(agency["name"])}</a></td>
+  <td>{escape(str(calibration.get("priority", "")))}</td>
+  <td>{_fmt(gaps.get("image_centroid_score"))}</td>
+  <td>{_fmt(gaps.get("axis_alignment"))}</td>
+  <td>{escape(str(plan.get("seed", "")))}</td>
+  <td>{escape(str(plan.get("recommended_output_dir", "")))}</td>
 </tr>
 """
 
@@ -377,6 +455,20 @@ td:nth-child(1), td:nth-child(3), td:nth-child(4), td:nth-child(5) {
 .flags span { background: #f6ead1; color: var(--gold); }
 .actions { margin-top: 16px; }
 .actions ul { margin: 0; padding-left: 18px; }
+.calibration {
+  display: grid;
+  grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+  margin-top: 24px;
+  padding: 20px 0;
+}
+.calibration-note {
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+.calibration-note p { margin: 0; color: var(--muted); }
 .boundary {
   margin-top: 28px;
   border-top: 1px solid var(--line);
@@ -384,7 +476,7 @@ td:nth-child(1), td:nth-child(3), td:nth-child(4), td:nth-child(5) {
   color: var(--muted);
 }
 @media (max-width: 820px) {
-  .summary, .card, .split { grid-template-columns: 1fr; }
+  .summary, .card, .split, .calibration { grid-template-columns: 1fr; }
   .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .portrait { min-height: 0; }
 }
