@@ -2245,6 +2245,136 @@ class AnalysisModuleTests(unittest.TestCase):
 
             self.assertEqual([score["image_id"] for score in scores], ["selected"])
 
+    def test_cli_distributed_evaluate_writes_merged_outputs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "raw"
+            generated = root / "generated"
+            out = root / "distributed_eval"
+            raw.mkdir()
+            generated.mkdir()
+            _write_image(raw / "a.png", (230, 210, 200))
+            _write_image(raw / "b.png", (180, 160, 150))
+            _write_image(generated / "selected.png", (231, 211, 201))
+
+            model = root / "model"
+            self.assertEqual(main(["build", "--images", str(raw), "--out", str(model)]), 0)
+            self.assertEqual(
+                main(
+                    [
+                        "distributed-evaluate",
+                        "--model",
+                        str(model),
+                        "--images",
+                        str(generated),
+                        "--out",
+                        str(out),
+                        "--backend",
+                        "deterministic",
+                    ]
+                ),
+                0,
+            )
+
+            scores = (out / "scores.csv").read_text(encoding="utf-8-sig")
+            summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+            distributed = json.loads((out / "distributed_scores.json").read_text(encoding="utf-8"))
+            self.assertIn("selected", scores)
+            self.assertEqual(summary["image_count"], 1)
+            self.assertEqual(summary["failed_count"], 0)
+            self.assertEqual(distributed[0]["image_id"], "selected")
+
+    def test_cli_distributed_evaluate_returns_nonzero_when_worker_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "raw"
+            generated = root / "generated"
+            out = root / "distributed_eval"
+            raw.mkdir()
+            generated.mkdir()
+            _write_image(raw / "a.png", (230, 210, 200))
+            _write_image(generated / "selected.png", (231, 211, 201))
+
+            model = root / "model"
+            self.assertEqual(main(["build", "--images", str(raw), "--out", str(model)]), 0)
+            result = main(
+                [
+                    "distributed-evaluate",
+                    "--model",
+                    str(model),
+                    "--images",
+                    str(generated),
+                    "--out",
+                    str(out),
+                    "--backend",
+                    "missing-backend",
+                ]
+            )
+
+            summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(result, 1)
+            self.assertEqual(summary["image_count"], 0)
+            self.assertEqual(summary["worker_failures"][0]["worker"], "ultra2025-4090")
+
+    def test_cli_distributed_evaluate_writes_empty_outputs_for_empty_images(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "raw"
+            generated = root / "generated"
+            out = root / "distributed_eval"
+            raw.mkdir()
+            generated.mkdir()
+            _write_image(raw / "a.png", (230, 210, 200))
+
+            model = root / "model"
+            self.assertEqual(main(["build", "--images", str(raw), "--out", str(model)]), 0)
+            result = main(
+                [
+                    "distributed-evaluate",
+                    "--model",
+                    str(model),
+                    "--images",
+                    str(generated),
+                    "--out",
+                    str(out),
+                ]
+            )
+
+            summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+            distributed = json.loads((out / "distributed_scores.json").read_text(encoding="utf-8"))
+            self.assertEqual(result, 0)
+            self.assertEqual(summary["image_count"], 0)
+            self.assertEqual(summary["failed_count"], 0)
+            self.assertEqual(distributed, [])
+
+    def test_distributed_evaluate_preserves_full_failed_count(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "raw"
+            out = root / "distributed_eval"
+            raw.mkdir()
+            _write_image(raw / "a.png", (230, 210, 200))
+            bad_paths = []
+            for index in range(21):
+                bad = root / f"bad_{index}.png"
+                bad.write_text("not an image", encoding="utf-8")
+                bad_paths.append(bad)
+
+            model = root / "model"
+            self.assertEqual(main(["build", "--images", str(raw), "--out", str(model)]), 0)
+            scores = distribute_vectorize(
+                bad_paths,
+                model,
+                out,
+                backend="deterministic",
+                workers=[WorkerConfig(name="local-test", python="", project_dir="")],
+            )
+
+            summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(scores, [])
+            self.assertEqual(summary["failed_count"], 21)
+            self.assertEqual(len(summary["failed_paths"]), 20)
+
     def test_worker_evaluate_reports_failed_paths(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

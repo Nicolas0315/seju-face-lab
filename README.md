@@ -327,6 +327,17 @@ python -m seju_face_lab worker-diagnostics --out outputs/worker_diagnostics
 python -m seju_face_lab worker-diagnostics --out outputs/worker_diagnostics_fleet --include-remote
 ```
 
+Run local explicit-worker evaluation when you want an auditable chunk assignment before
+trying remote split runs:
+
+```powershell
+python -m seju_face_lab distributed-evaluate --model outputs/seju_model --images outputs/generated --out outputs/distributed_evaluation --backend deterministic
+```
+
+This writes merged `scores.csv`, `summary.json`, `distributed_scores.json`, and per-worker
+assignment/output files under `.worker_tmp/`. `--include-remote` remains a readiness guard
+until a reviewed shared-path or sync manifest is configured.
+
 Implemented generation providers:
 
 - `dry-run`: writes prompt, seed, and evaluation plan without running an image model.

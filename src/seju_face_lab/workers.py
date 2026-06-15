@@ -97,6 +97,7 @@ def distribute_vectorize(
     model_dir: Path,
     out_dir: Path,
     backend: str = "insightface",
+    crop: str = "center",
     workers: list[WorkerConfig] | None = None,
     tmp_dir: Path | None = None,
 ) -> list[dict]:
@@ -108,6 +109,9 @@ def distribute_vectorize(
     """
     active_workers = workers or [LOCAL_4090]
     if not image_paths:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "distributed_scores.json").write_text("[]\n", encoding="utf-8")
+        _write_distributed_scores([], 0, [], [], out_dir)
         return []
     remote_workers = [worker.name for worker in active_workers if worker.remote_host is not None]
     if remote_workers:
@@ -132,24 +136,35 @@ def distribute_vectorize(
             worker_out.mkdir(parents=True, exist_ok=True)
             f = executor.submit(
                 _run_worker_evaluate,
-                worker, chunk, model_dir, worker_out, backend, tmp_root,
+                worker, chunk, model_dir, worker_out, backend, crop, tmp_root,
             )
             futures_map[f] = (worker, worker_out)
 
         all_scores: list[dict] = []
+        failed_count = 0
+        failed_paths: list[str] = []
+        worker_failures: list[dict[str, str]] = []
         for future in as_completed(futures_map):
             worker_cfg, worker_out = futures_map[future]
             try:
                 scores = future.result()
                 all_scores.extend(scores)
+                worker_failed_count, worker_failed_paths = _worker_failure_summary(worker_out)
+                failed_count += worker_failed_count
+                failed_paths.extend(worker_failed_paths)
                 print(f"  [{worker_cfg.name}] {len(scores)} scores collected")
             except Exception as exc:  # noqa: BLE001
+                worker_failures.append({"worker": worker_cfg.name, "error": str(exc)})
                 print(f"  [{worker_cfg.name}] failed: {exc}")
 
     all_scores.sort(key=lambda s: s.get("centroid_score", 0.0), reverse=True)
     (out_dir / "distributed_scores.json").write_text(
         json.dumps(all_scores, ensure_ascii=False, indent=2), encoding="utf-8"
     )
+    _write_distributed_scores(all_scores, failed_count, failed_paths, worker_failures, out_dir)
+    if worker_failures:
+        names = ", ".join(failure["worker"] for failure in worker_failures)
+        raise RuntimeError(f"distributed worker failures: {names}")
     return all_scores
 
 
@@ -158,6 +173,7 @@ def run_local_evaluate(
     model_dir: Path,
     out_dir: Path,
     backend: str = "insightface",
+    crop: str = "center",
 ) -> list[dict]:
     """Run evaluation for an explicit image-path subset on the local machine."""
     from .backends import get_vector_backend
@@ -173,7 +189,7 @@ def run_local_evaluate(
     max_workers = max(1, min(4, len(image_paths)))
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_index = {
-            executor.submit(backend_obj.vectorize, path, "center"): index
+            executor.submit(backend_obj.vectorize, path, crop): index
             for index, path in enumerate(image_paths)
         }
         for future in as_completed(future_to_index):
@@ -195,6 +211,8 @@ def run_local_evaluate(
             "image_id": s.image_id, "path": s.path,
             "centroid_score": s.centroid_score,
             "cosine_to_mean": s.cosine_to_mean, "cosine_to_median": s.cosine_to_median,
+            "euclidean_to_mean": s.euclidean_to_mean,
+            "euclidean_to_median": s.euclidean_to_median,
         }
         for s in scores
     ]
@@ -244,6 +262,7 @@ def _run_worker_evaluate(
     model_dir: Path,
     out_dir: Path,
     backend: str,
+    crop: str,
     tmp_root: Path,
 ) -> list[dict]:
     # Persist the assignment as an audit artifact even for local direct evaluation.
@@ -253,8 +272,8 @@ def _run_worker_evaluate(
     )
 
     if worker.remote_host is None:
-        return run_local_evaluate(image_paths, model_dir, out_dir, backend)
-    return _run_remote_subprocess(worker, image_paths, model_dir, out_dir, backend)
+        return run_local_evaluate(image_paths, model_dir, out_dir, backend, crop)
+    return _run_remote_subprocess(worker, image_paths, model_dir, out_dir, backend, crop)
 
 
 def _run_remote_subprocess(
@@ -263,6 +282,7 @@ def _run_remote_subprocess(
     model_dir: Path,
     out_dir: Path,
     backend: str,
+    crop: str,
 ) -> list[dict]:
     """Placeholder for a future shared-path remote evaluator."""
     raise NotImplementedError(
@@ -343,6 +363,89 @@ def _worker_probe_failure(worker: WorkerConfig, error_type: str, message: str) -
         "stdout_tail": "",
         "stderr_tail": "",
     }
+
+
+def _worker_failure_summary(worker_out: Path) -> tuple[int, list[str]]:
+    summary_path = worker_out / "summary.json"
+    if not summary_path.exists():
+        return 0, []
+    try:
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return 0, []
+    failed_count = int(summary.get("failed_count") or 0)
+    failed = summary.get("failed_paths")
+    failed_paths = [str(path) for path in failed] if isinstance(failed, list) else []
+    return failed_count, failed_paths
+
+
+def _write_distributed_scores(
+    scores: list[dict],
+    failed_count: int,
+    failed_paths: list[str],
+    worker_failures: list[dict[str, str]],
+    out_dir: Path,
+) -> None:
+    lines = [
+        "image_id,path,cosine_to_mean,cosine_to_median,euclidean_to_mean,euclidean_to_median,centroid_score"
+    ]
+    for score in scores:
+        lines.append(
+            ",".join(
+                [
+                    _csv(str(score.get("image_id", ""))),
+                    _csv(str(score.get("path", ""))),
+                    _format_score(score.get("cosine_to_mean")),
+                    _format_score(score.get("cosine_to_median")),
+                    _format_score(score.get("euclidean_to_mean")),
+                    _format_score(score.get("euclidean_to_median")),
+                    _format_score(score.get("centroid_score")),
+                ]
+            )
+        )
+    (out_dir / "scores.csv").write_text("\n".join(lines) + "\n", encoding="utf-8-sig")
+    summary = {
+        "image_count": len(scores),
+        "failed_count": failed_count,
+        "failed_paths": failed_paths[:20],
+        "worker_failures": worker_failures,
+        "best_image_id": scores[0].get("image_id") if scores else None,
+        "best_centroid_score": _round_score(scores[0].get("centroid_score")) if scores else None,
+        "top_images": [
+            {
+                "image_id": score.get("image_id"),
+                "path": score.get("path"),
+                "centroid_score": _round_score(score.get("centroid_score")),
+                "cosine_to_mean": _round_score(score.get("cosine_to_mean")),
+                "cosine_to_median": _round_score(score.get("cosine_to_median")),
+                "euclidean_to_mean": _round_score(score.get("euclidean_to_mean")),
+                "euclidean_to_median": _round_score(score.get("euclidean_to_median")),
+            }
+            for score in scores[:5]
+        ],
+        "boundary": "Distributed worker scores are approximate local centroid measurements only.",
+    }
+    (out_dir / "summary.json").write_text(
+        json.dumps(summary, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def _format_score(value: Any) -> str:
+    if value is None:
+        return ""
+    return f"{float(value):.6f}"
+
+
+def _round_score(value: Any) -> float | None:
+    if value is None:
+        return None
+    return round(float(value), 6)
+
+
+def _csv(value: str) -> str:
+    escaped = value.replace('"', '""')
+    return f'"{escaped}"'
 
 
 def _parse_probe_json(stdout: str) -> dict[str, Any]:

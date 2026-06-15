@@ -33,6 +33,7 @@ Retrieval/design date: 2026-06-14.
 - `generation_sweep` pipeline configs execute repeatable multi-seed/multi-profile generation experiments with per-run manifests and optional shared generated-run comparison.
 - `configs/pipelines/full-retinaface-review.example.json` captures the current full review path with deterministic continuity plus `deepface-retinaface` backend rank agreement.
 - `worker-diagnostics` records local RTX 4090 and optional SSH remote-GPU Python/CUDA/torch/package readiness without remote writes.
+- `distributed-evaluate` runs explicit local worker-chunk scoring and records merged score outputs plus worker assignment artifacts before any remote split-run.
 
 ## GitHub Issue Plan
 
@@ -44,7 +45,7 @@ Create and track these issues:
 - `P1 SNS correlation workflow`: run handle extraction, engagement manifesting, and correlation reports.
 - `P2 DeepFace adapter`: run the committed detector sweep after the default DeepFace/OpenCV detector accepted only `139/259` official references.
 - `P2 CLIP style axis`: verify optional OpenCLIP install and use `style-evaluate` alongside face geometry scores.
-- `P2 Remote worker playbook`: document RTX 4090 and SSH remote-GPU split-run commands.
+- `P2 Remote worker playbook`: document RTX 4090 local worker chunking and SSH remote-GPU split-run commands.
 
 ## Local ToDo
 
@@ -71,8 +72,9 @@ Create and track these issues:
 13. Use `run-pipeline` for repeatable local build/audit-model/export-vectors/evaluate/style-evaluate/review/backend-agreement/precision runs from config.
 14. Run SNS handle/engagement manifests and `analyze correlation` for reviewable metric joins.
 15. Run `backend-diagnostics` and `worker-diagnostics --include-remote` on RTX nodes and archive the ignored output paths in the Issue comment.
-16. Compare deterministic scores against InsightFace/DeepFace on the same ignored image sets with `compare-backends`.
-17. When DeepFace diverges, run `compare-deepface-detectors` with `opencv mtcnn retinaface skip` and compare acceptance counts before reviewing ranks.
+16. Run `distributed-evaluate` locally before remote split-runs so chunk assignment and merged score outputs are reviewable.
+17. Compare deterministic scores against InsightFace/DeepFace on the same ignored image sets with `compare-backends`.
+18. When DeepFace diverges, run `compare-deepface-detectors` with `opencv mtcnn retinaface skip` and compare acceptance counts before reviewing ranks.
 
 ## GPU Generation Notes
 

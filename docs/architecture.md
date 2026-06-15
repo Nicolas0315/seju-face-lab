@@ -119,7 +119,8 @@ identity recognition, attractiveness scoring, ethnicity classification, or an ob
 - Run `qa-images` before trusting generated-image scores; a collage can score well if one crop matches the centroid.
 - Keep generated-image prompts aggregate-only; avoid copying a specific real person.
 - `worker-diagnostics` writes local/SSH Python, CUDA, torch, and package readiness reports before split-run planning.
-- `seju_face_lab.workers` contains local/SSH worker helpers; treat remote writes and distributed remote evaluation as explicit ops steps, not default CLI behavior.
+- `distributed-evaluate` runs an explicit local worker-chunk evaluation and writes merged scores plus worker assignment artifacts.
+- `seju_face_lab.workers` contains local/SSH worker helpers; treat remote writes and distributed remote evaluation as explicit ops steps, not default CLI behavior until a reviewed shared-path or sync manifest exists.
 
 Dry-run planning:
 

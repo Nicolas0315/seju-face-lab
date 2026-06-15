@@ -23,7 +23,7 @@ from .run_reviews import review_generation_runs, write_generation_run_reviews
 from .sources import discover_sources, download_source_images, read_source_manifest, write_source_manifest
 from .style import OpenClipStyleBackend, score_style_images, write_style_scores
 from .vector_export import write_vector_export
-from .workers import DEFAULT_DIAGNOSTIC_WORKERS, LOCAL_4090, write_worker_diagnostics
+from .workers import DEFAULT_DIAGNOSTIC_WORKERS, LOCAL_4090, distribute_vectorize, write_worker_diagnostics
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -110,6 +110,21 @@ def main(argv: list[str] | None = None) -> int:
     evaluate_parser.add_argument("--out", type=Path, required=True)
     evaluate_parser.add_argument("--crop", choices=["center", "none"], default="center")
     evaluate_parser.add_argument("--backend", default="deterministic")
+
+    distributed_evaluate_parser = subparsers.add_parser(
+        "distributed-evaluate",
+        help="score generated images through explicit worker chunks",
+    )
+    distributed_evaluate_parser.add_argument("--model", type=Path, required=True)
+    distributed_evaluate_parser.add_argument("--images", type=Path, required=True)
+    distributed_evaluate_parser.add_argument("--out", type=Path, required=True)
+    distributed_evaluate_parser.add_argument("--crop", choices=["center", "none"], default="center")
+    distributed_evaluate_parser.add_argument("--backend", default="deterministic")
+    distributed_evaluate_parser.add_argument(
+        "--include-remote",
+        action="store_true",
+        help="include configured SSH workers; currently requires a shared-path/sync plan",
+    )
 
     style_parser = subparsers.add_parser(
         "style-evaluate",
@@ -365,6 +380,8 @@ def main(argv: list[str] | None = None) -> int:
         return _audit_model(args.model, args.out)
     if args.command == "evaluate":
         return _evaluate(args.model, args.images, args.out, args.crop, args.backend)
+    if args.command == "distributed-evaluate":
+        return _distributed_evaluate(args)
     if args.command == "style-evaluate":
         return _style_evaluate(args)
     if args.command == "compare-runs":
@@ -558,6 +575,29 @@ def _evaluate(model_dir: Path, images: Path, out: Path, crop: str, backend_name:
     print(f"evaluated images: {len(scores)}")
     print(f"failed images: {len(failed_paths)}")
     print(f"scores: {out / 'scores.csv'}")
+    return 0
+
+
+def _distributed_evaluate(args: argparse.Namespace) -> int:
+    workers = DEFAULT_DIAGNOSTIC_WORKERS if args.include_remote else [LOCAL_4090]
+    try:
+        scores = distribute_vectorize(
+            list(iter_image_paths(args.images)),
+            args.model,
+            args.out,
+            backend=args.backend,
+            crop=args.crop,
+            workers=workers,
+        )
+    except RuntimeError as exc:
+        print(f"distributed evaluate failed: {exc}")
+        print(f"scores: {args.out / 'scores.csv'}")
+        print(f"distributed scores: {args.out / 'distributed_scores.json'}")
+        return 1
+    print(f"distributed evaluated images: {len(scores)}")
+    print(f"workers: {len(workers)}")
+    print(f"scores: {args.out / 'scores.csv'}")
+    print(f"distributed scores: {args.out / 'distributed_scores.json'}")
     return 0
 
 
