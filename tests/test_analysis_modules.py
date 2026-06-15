@@ -847,6 +847,96 @@ class AnalysisModuleTests(unittest.TestCase):
             audit = json.loads((out / "model_audit.json").read_text(encoding="utf-8"))
             self.assertEqual(audit["centroids"]["mean_median_embedding"]["cosine"], 1.0)
 
+    def test_cli_ingredients_report_decomposes_face_elements(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            model = root / "model"
+            out = root / "ingredients"
+            model.mkdir()
+            (model / "profile.json").write_text(
+                json.dumps(
+                    {
+                        "image_count": 3,
+                        "embedding_dim": 8,
+                        "appearance_shape": [64, 64, 3],
+                        "descriptors": {
+                            "mean": {
+                                "luminance": 0.7,
+                                "contrast": 0.05,
+                                "warmth": -0.03,
+                                "saturation": 0.04,
+                                "edge_density": 0.01,
+                                "symmetry": 0.97,
+                                "upper_band_darkness": 0.3,
+                                "middle_luminance": 0.7,
+                                "lower_luminance": 0.72,
+                            },
+                            "median": {
+                                "luminance": 0.78,
+                                "contrast": 0.08,
+                                "warmth": -0.05,
+                                "saturation": 0.08,
+                                "edge_density": 0.01,
+                                "symmetry": 0.98,
+                                "upper_band_darkness": 0.24,
+                                "middle_luminance": 0.78,
+                                "lower_luminance": 0.8,
+                            },
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(main(["ingredients-report", "--model", str(model), "--out", str(out)]), 0)
+
+            report = json.loads((out / "face_ingredients.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["image_count"], 3)
+            self.assertIn("face_parts", report["ingredients"])
+            self.assertIn("makeup_texture", report["ingredients"])
+            self.assertIn("hair", report["ingredients"])
+            self.assertEqual(report["descriptor_values"]["delta_median_minus_mean"]["luminance"], 0.08)
+            md = (out / "face_ingredients.md").read_text(encoding="utf-8")
+            self.assertIn("Makeup Texture", md)
+            self.assertIn("dark natural hair", md)
+
+    def test_cli_ingredients_report_derives_prompt_guidance_from_descriptors(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            model = root / "model"
+            out = root / "ingredients"
+            model.mkdir()
+            (model / "profile.json").write_text(
+                json.dumps(
+                    {
+                        "image_count": 1,
+                        "embedding_dim": 8,
+                        "descriptors": {
+                            "median": {
+                                "luminance": 0.45,
+                                "contrast": 0.2,
+                                "warmth": 0.03,
+                                "saturation": 0.14,
+                                "edge_density": 0.05,
+                                "symmetry": 0.9,
+                                "upper_band_darkness": 0.1,
+                            },
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(main(["ingredients-report", "--model", str(model), "--out", str(out)]), 0)
+
+            report = json.loads((out / "face_ingredients.json").read_text(encoding="utf-8"))
+            guidance = report["prompt_guidance"]
+            self.assertIn("moderate portrait lighting", guidance)
+            self.assertIn("clearer facial contrast", guidance)
+            self.assertIn("lighter hair signal kept away from both eyes", guidance)
+            self.assertNotIn("bright, low-contrast frontal portrait", guidance)
+            self.assertNotIn("dark natural hair kept away from both eyes", guidance)
+
     def test_export_vectors_writes_mean_and_median_embedding_json_and_csv(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

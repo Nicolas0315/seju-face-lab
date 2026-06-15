@@ -20,6 +20,7 @@ OpenAI Image API check: 2026-06-15, official docs at https://developers.openai.c
 4. `export-vectors` / `audit-model`
    - `export-vectors` writes full mean/median embedding values as JSON or CSV
    - `audit-model` writes vector hashes, norms, mean/median distances, and descriptor deltas
+   - `ingredients-report` turns aggregate descriptors into face-part, color-tone, makeup-texture, hair-signal, and prompt-guidance notes
 5. generation
    - `prompt.txt` and `generation_manifest.json` feed `generate`
    - `generate --provider dry-run` writes a reproducible run plan

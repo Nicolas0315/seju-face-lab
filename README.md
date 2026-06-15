@@ -7,6 +7,7 @@ It can:
 - extract deterministic image vectors from input portraits
 - compute mean and median centroid vectors
 - render approximate mean/median face images
+- decompose aggregate face ingredients from mean/median descriptors
 - discover official seju profile image candidates into a source manifest
 - write generation prompts from centroid descriptors
 - score generated images against the mean/median vectors
@@ -53,6 +54,12 @@ Audit mean/median centroid vectors and descriptor deltas:
 
 ```powershell
 python -m seju_face_lab audit-model --model outputs/seju_model --out outputs/model_audit
+```
+
+Decompose aggregate face ingredients into face parts, color tone, makeup texture, and hair signal:
+
+```powershell
+python -m seju_face_lab ingredients-report --model outputs/seju_model --out outputs/face_ingredients
 ```
 
 Export the full mean/median embedding vectors for external analysis or generation tooling:
@@ -391,6 +398,7 @@ See `docs/gpu-generation-log.md` for RTX 4090 generation smoke results.
 - `median_face.png`: pixel-wise median, often more robust to outliers.
 - `profile.json`: compact descriptor values and vector metadata.
 - model audit `model_audit.json`: mean/median vector hashes, norms, cosine/euclidean distance, and descriptor deltas.
+- face ingredients `face_ingredients.json`: aggregate face-part, color-tone, makeup-texture, and hair-signal interpretation from mean/median descriptors.
 - vector export `export-vectors`: full mean/median embedding values as JSON or UTF-8 BOM CSV for external generation/scoring workflows.
 - `prompt.txt`: a generation prompt based on observed centroid descriptors.
 - generation `generation_run.json`: prompt, seed, provider, output paths, and evaluation command/argv.
