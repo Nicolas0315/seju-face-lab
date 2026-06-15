@@ -354,8 +354,18 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(far_subject["failed_count"], 1)
             near_subject = next(item for item in review_json["subjects"] if item["subject"] == "near_subject")
             self.assertEqual(near_subject["top_images"][0]["image_id"], "near")
+            self.assertEqual(review_json["analysis"]["top_mean_subjects"][0]["subject"], "near_subject")
+            self.assertEqual(review_json["analysis"]["top_best_subjects"][0]["subject"], "near_subject")
+            self.assertIn("single_image_lift", review_json["analysis"])
+            self.assertIn("Vector Analysis", (review_dir / "subject_reviews.md").read_text(encoding="utf-8"))
+            self.assertIn(
+                "Stable Mean Leaders",
+                (review_dir / "subject_reviews.md").read_text(encoding="utf-8"),
+            )
             self.assertIn("near_subject", review_html)
             self.assertIn("<img", review_html)
+            self.assertIn("Vector Analysis", review_html)
+            self.assertIn("Stable Mean Leaders", review_html)
             self.assertIn((subjects / "near_subject" / "near.png").resolve(strict=False).as_uri(), review_html)
 
     def test_run_pipeline_config_builds_reviews_and_precision_report(self) -> None:

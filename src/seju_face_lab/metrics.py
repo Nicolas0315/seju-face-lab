@@ -258,6 +258,7 @@ def _render_subject_reviews(reviews: list[SubjectReview]) -> str:
             f"{_optional_float(review.best_centroid_score)} | "
             f"{review.best_image_id or ''} |"
         )
+    lines.extend(_render_subject_analysis(_subject_review_analysis(reviews)))
     lines.extend(
         [
             "",
@@ -269,8 +270,49 @@ def _render_subject_reviews(reviews: list[SubjectReview]) -> str:
     return "\n".join(lines)
 
 
+def _render_subject_analysis(analysis: dict[str, object]) -> list[str]:
+    if not analysis:
+        return []
+    stats = analysis.get("score_stats")
+    lines = ["", "## Vector Analysis", ""]
+    if isinstance(stats, dict):
+        lines.extend(
+            [
+                f"- reviewed_images: {stats.get('reviewed_image_count', 0)}",
+                f"- failed_images: {stats.get('failed_image_count', 0)}",
+                f"- mean_of_subject_means: {_optional_float(stats.get('mean_of_subject_means'))}",
+                f"- median_of_subject_means: {_optional_float(stats.get('median_of_subject_means'))}",
+                "",
+            ]
+        )
+    lines.extend(_render_subject_analysis_table("Stable Mean Leaders", analysis.get("top_mean_subjects")))
+    lines.extend(_render_subject_analysis_table("Peak Best Leaders", analysis.get("top_best_subjects")))
+    lines.extend(_render_subject_analysis_table("Single Image Lift", analysis.get("single_image_lift")))
+    lines.extend(_render_subject_analysis_table("Mean Vector Affinity", analysis.get("mean_vector_leaders")))
+    lines.extend(_render_subject_analysis_table("Median Vector Affinity", analysis.get("median_vector_leaders")))
+    return lines
+
+
+def _render_subject_analysis_table(title: str, rows: object) -> list[str]:
+    if not isinstance(rows, list) or not rows:
+        return []
+    lines = [f"### {title}", "", "| rank | subject | metric | mean | best | median |", "| --- | --- | ---: | ---: | ---: | ---: |"]
+    for rank, row in enumerate(rows, start=1):
+        if isinstance(row, dict):
+            lines.append(
+                f"| {rank} | {row.get('subject', '')} | "
+                f"{_optional_float(row.get('metric'))} | "
+                f"{_optional_float(row.get('mean_centroid_score'))} | "
+                f"{_optional_float(row.get('best_centroid_score'))} | "
+                f"{_optional_float(row.get('median_centroid_score'))} |"
+            )
+    lines.append("")
+    return lines
+
+
 def _render_subject_reviews_html(reviews: list[SubjectReview]) -> str:
     cards = "\n".join(_render_subject_card(rank, review) for rank, review in enumerate(reviews, start=1))
+    analysis = _render_subject_analysis_html(_subject_review_analysis(reviews))
     return "\n".join(
         [
             "<!doctype html>",
@@ -289,12 +331,18 @@ def _render_subject_reviews_html(reviews: list[SubjectReview]) -> str:
             ".pill{background:#eef2f7;border-radius:999px;padding:3px 8px}",
             ".scores{font-size:12px;line-height:1.45;margin-top:6px}",
             ".path{overflow-wrap:anywhere;color:#59636e}",
+            ".analysis{margin-top:24px}",
+            ".analysis h2{font-size:18px;margin:18px 0 8px}",
+            "table{border-collapse:collapse;width:100%;font-size:12px;background:#fff;margin-bottom:12px}",
+            "th,td{border:1px solid #d7d7d0;padding:6px;text-align:left}",
+            "td.metric,td.score{text-align:right;font-variant-numeric:tabular-nums}",
             ".boundary{font-size:12px;color:#667085;margin-top:18px}",
             "</style>",
             "</head>",
             "<body>",
             "<h1>subject seju-face similarity review</h1>",
             f'<div class="subjects">{cards}</div>' if cards else "<p>No subject directories found.</p>",
+            analysis,
             '<p class="boundary">Scores are approximate local triage against this centroid model. '
             "They are not identity, attractiveness, ethnicity, or objective face-type labels.</p>",
             "</body>",
@@ -302,6 +350,45 @@ def _render_subject_reviews_html(reviews: list[SubjectReview]) -> str:
             "",
         ]
     )
+
+
+def _render_subject_analysis_html(analysis: dict[str, object]) -> str:
+    if not analysis:
+        return ""
+    sections = [
+        _render_subject_analysis_html_table("Stable Mean Leaders", analysis.get("top_mean_subjects")),
+        _render_subject_analysis_html_table("Peak Best Leaders", analysis.get("top_best_subjects")),
+        _render_subject_analysis_html_table("Single Image Lift", analysis.get("single_image_lift")),
+        _render_subject_analysis_html_table("Mean Vector Affinity", analysis.get("mean_vector_leaders")),
+        _render_subject_analysis_html_table("Median Vector Affinity", analysis.get("median_vector_leaders")),
+    ]
+    body = "\n".join(section for section in sections if section)
+    return f'<section class="analysis"><h2>Vector Analysis</h2>{body}</section>' if body else ""
+
+
+def _render_subject_analysis_html_table(title: str, rows: object) -> str:
+    if not isinstance(rows, list) or not rows:
+        return ""
+    lines = [
+        f"<h2>{escape(title)}</h2>",
+        "<table>",
+        "<thead><tr><th>rank</th><th>subject</th><th>metric</th><th>mean</th><th>best</th><th>median</th></tr></thead>",
+        "<tbody>",
+    ]
+    for rank, row in enumerate(rows, start=1):
+        if isinstance(row, dict):
+            lines.append(
+                "<tr>"
+                f"<td>{rank}</td>"
+                f"<td>{escape(str(row.get('subject', '')))}</td>"
+                f"<td class=\"metric\">{_optional_float(row.get('metric'))}</td>"
+                f"<td class=\"score\">{_optional_float(row.get('mean_centroid_score'))}</td>"
+                f"<td class=\"score\">{_optional_float(row.get('best_centroid_score'))}</td>"
+                f"<td class=\"score\">{_optional_float(row.get('median_centroid_score'))}</td>"
+                "</tr>"
+            )
+    lines.extend(["</tbody>", "</table>"])
+    return "\n".join(lines)
 
 
 def _render_subject_card(rank: int, review: SubjectReview) -> str:
@@ -383,6 +470,7 @@ def _score_summary(scores: list[Score], failed_paths: list[str]) -> dict:
 def _subject_review_summary(reviews: list[SubjectReview]) -> dict:
     return {
         "subject_count": len(reviews),
+        "analysis": _subject_review_analysis(reviews),
         "subjects": [
             {
                 "subject": review.subject,
@@ -403,6 +491,65 @@ def _subject_review_summary(reviews: list[SubjectReview]) -> dict:
     }
 
 
+def _subject_review_analysis(reviews: list[SubjectReview]) -> dict[str, object]:
+    scored = [review for review in reviews if review.mean_centroid_score is not None]
+    if not scored:
+        return {
+            "score_stats": {
+                "reviewed_image_count": sum(review.image_count for review in reviews),
+                "failed_image_count": sum(review.failed_count for review in reviews),
+                "mean_of_subject_means": None,
+                "median_of_subject_means": None,
+            },
+            "top_mean_subjects": [],
+            "top_best_subjects": [],
+            "single_image_lift": [],
+            "mean_vector_leaders": [],
+            "median_vector_leaders": [],
+        }
+    mean_scores = np.asarray([review.mean_centroid_score for review in scored], dtype=np.float32)
+    return {
+        "score_stats": {
+            "reviewed_image_count": sum(review.image_count for review in reviews),
+            "failed_image_count": sum(review.failed_count for review in reviews),
+            "mean_of_subject_means": round(float(np.mean(mean_scores)), 6),
+            "median_of_subject_means": round(float(np.median(mean_scores)), 6),
+        },
+        "top_mean_subjects": _rank_subjects(scored, "mean_centroid_score"),
+        "top_best_subjects": _rank_subjects(scored, "best_centroid_score"),
+        "single_image_lift": _rank_subjects(scored, "single_image_lift"),
+        "mean_vector_leaders": _rank_subjects(scored, "mean_cosine_to_mean"),
+        "median_vector_leaders": _rank_subjects(scored, "mean_cosine_to_median"),
+    }
+
+
+def _rank_subjects(reviews: list[SubjectReview], metric: str, limit: int = 5) -> list[dict[str, object]]:
+    rows = [_subject_metric_row(review, metric) for review in reviews]
+    rows = [row for row in rows if row["metric"] is not None]
+    return sorted(rows, key=lambda row: row["metric"], reverse=True)[:limit]
+
+
+def _subject_metric_row(review: SubjectReview, metric: str) -> dict[str, object]:
+    if metric == "single_image_lift":
+        metric_value = _score_delta(review.best_centroid_score, review.mean_centroid_score)
+    else:
+        metric_value = getattr(review, metric)
+    return {
+        "subject": review.subject,
+        "metric": _round_optional(metric_value),
+        "mean_centroid_score": _round_optional(review.mean_centroid_score),
+        "best_centroid_score": _round_optional(review.best_centroid_score),
+        "median_centroid_score": _round_optional(review.median_centroid_score),
+        "best_image_id": review.best_image_id,
+    }
+
+
+def _score_delta(a: float | None, b: float | None) -> float | None:
+    if a is None or b is None:
+        return None
+    return a - b
+
+
 def _score_dict(score: Score) -> dict[str, object]:
     return {
         "image_id": score.image_id,
@@ -415,10 +562,10 @@ def _score_dict(score: Score) -> dict[str, object]:
     }
 
 
-def _optional_float(value: float | None) -> str:
+def _optional_float(value: object) -> str:
     if value is None:
         return ""
-    return f"{value:.6f}"
+    return f"{float(value):.6f}"
 
 
 def _round_optional(value: float | None) -> float | None:
