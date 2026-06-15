@@ -27,7 +27,7 @@ from seju_face_lab.correlation import (
 )
 from seju_face_lab.generation import build_generation_config, run_openai_image_generation
 from seju_face_lab.precision import write_precision_report
-from seju_face_lab.model_audit import write_model_audit
+from seju_face_lab.model_audit import centroid_stability, write_model_audit
 from seju_face_lab.quality import ImageQuality, judge_face_quality, review_image_quality
 from seju_face_lab.run_reviews import review_generation_runs, write_generation_run_reviews
 from seju_face_lab.sns_metrics import (
@@ -923,6 +923,67 @@ class AnalysisModuleTests(unittest.TestCase):
 
             audit = json.loads((out / "model_audit.json").read_text(encoding="utf-8"))
             self.assertEqual(audit["centroids"]["mean_median_embedding"]["cosine"], 1.0)
+
+    def test_centroid_stability_reports_tight_interval_for_identical_vectors(self) -> None:
+        embeddings = np.tile(np.asarray([1.0, 0.0, 0.0], dtype=np.float32), (5, 1))
+
+        result = centroid_stability(embeddings, resamples=64, seed=0)
+
+        self.assertTrue(result["available"])
+        self.assertEqual(result["unit"], "image")
+        self.assertEqual(result["unit_count"], 5)
+        self.assertAlmostEqual(result["self_cosine_mean"], 1.0, places=6)
+        self.assertEqual(result["self_cosine_low"], 1.0)
+        self.assertEqual(result["band"], "stable")
+
+    def test_centroid_stability_widens_for_diverse_vectors(self) -> None:
+        embeddings = np.random.default_rng(1).normal(size=(8, 6)).astype(np.float32)
+
+        result = centroid_stability(embeddings, resamples=128, seed=0)
+
+        self.assertTrue(result["available"])
+        self.assertLessEqual(result["self_cosine_low"], result["self_cosine_mean"])
+        self.assertLessEqual(result["self_cosine_mean"], result["self_cosine_high"])
+        self.assertGreater(result["self_cosine_std"], 0.0)
+        self.assertIn(result["band"], {"moderate", "unstable"})
+
+    def test_centroid_stability_resamples_subject_units(self) -> None:
+        embeddings = np.asarray(
+            [[1.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+            dtype=np.float32,
+        )
+
+        result = centroid_stability(embeddings, subject_ids=["a", "a", "a", "b"], resamples=64, seed=0)
+
+        self.assertEqual(result["unit"], "subject")
+        self.assertEqual(result["unit_count"], 2)
+        self.assertGreater(result["self_cosine_std"], 0.0)
+
+    def test_centroid_stability_flags_single_unit(self) -> None:
+        result = centroid_stability(np.asarray([[1.0, 0.0]], dtype=np.float32))
+
+        self.assertEqual(result["band"], "insufficient_units")
+        self.assertEqual(result["unit_count"], 1)
+        self.assertEqual(result["resamples"], 0)
+
+    def test_model_audit_tolerates_malformed_stability_sidecar(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            model = root / "model"
+            out = root / "audit"
+            (model / "vectors").mkdir(parents=True)
+            np.savez(
+                model / "centroids.npz",
+                mean_embedding=np.asarray([1.0, 0.0], dtype=np.float32),
+                median_embedding=np.asarray([1.0, 0.0], dtype=np.float32),
+                mean_appearance=np.asarray([[[0.1, 0.1, 0.1]]], dtype=np.float32),
+                median_appearance=np.asarray([[[0.1, 0.1, 0.1]]], dtype=np.float32),
+            )
+            (model / "vectors" / "centroid_stability.json").write_text("{not json", encoding="utf-8")
+
+            audit = write_model_audit(model, out)
+
+            self.assertFalse(audit["stability"]["available"])
 
     def test_cli_ingredients_report_decomposes_face_elements(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

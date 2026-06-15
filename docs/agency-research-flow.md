@@ -25,8 +25,9 @@ flowchart TD
     A[Official agency lists] --> B[Agency research config]
     S[seju official image set] --> V[Vectorize each reviewed image]
     V --> T[Descriptor tags per image]
-    V --> C[seju mean/median centroid model]
+    V --> C[seju centroid model: image- or subject-balanced]
     T --> C
+    C --> ST[Bootstrap centroid stability CI]
     C --> D[Median descriptor baseline]
     B --> E[Agency descriptor offsets]
     D --> F[Agency average face parameters]
@@ -40,10 +41,16 @@ flowchart TD
     H --> O[8-axis observed distribution]
     O --> N
     F --> N
+    S --> Q[Data quality audit: evidence type and image quality gates]
+    B --> Q
+    Q --> R[Evidence-type badges on agency site]
     N --> L[Agency precision review]
     J --> L
     K --> L
+    ST --> L
+    Q --> L
     L --> M[Commit docs, configs, tests, and workflow evidence]
+    R --> M
 ```
 
 ## Full Logic: Data to Prompt
@@ -54,7 +61,7 @@ flowchart LR
     B --> C[Embedding vector]
     B --> D[Appearance tensor]
     D --> E[Visual descriptor tags]
-    C --> F[Mean embedding]
+    C --> F[Mean embedding: image- or subject-balanced]
     C --> G[Median embedding]
     D --> H[Mean appearance]
     D --> I[Median appearance]
@@ -95,6 +102,14 @@ flowchart LR
   insulting labels to a person.
 - `enhancement_engine`: combine descriptor similarity, generated-image centroid score, and 8-axis
   alignment into a ranked action list for the next prompt or data-collection pass.
+- `centroid_model` aggregation: average per image (`image_weighted`) or per subject first then across
+  subjects (`subject_balanced` via `build --balance subject`) so image-heavy subjects cannot dominate.
+- `centroid_stability`: at build time, bootstrap the centroid by resampling subjects/images and record
+  the resampled self-cosine mean and CI in `vectors/centroid_stability.json` as a local
+  data-confidence signal; `audit-model` surfaces it. Band thresholds are heuristic candidates.
+- `data_quality_gate`: `scripts/audit_research_data_quality.py` classifies per-agency evidence type
+  (`real_centroid_baseline`, `hypothesis_and_generated`, `real_and_generated`) and image-quality
+  risks; the agency site renders these as evidence badges before any score is interpreted.
 
 ## Tag Layers
 

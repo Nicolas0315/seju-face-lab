@@ -25,7 +25,7 @@ from .generation import (
 from .ingredients import write_ingredients_report
 from .metrics import review_subject_directories, score_generated_images, write_scores, write_subject_reviews
 from .model import build_centroid_model, load_model, save_model
-from .model_audit import write_model_audit
+from .model_audit import centroid_stability, write_model_audit
 from .pipeline import run_pipeline_config
 from .prompting import prompt_from_descriptors
 from .precision import write_precision_report
@@ -627,6 +627,11 @@ def _build(images: Path, out: Path, crop: str, backend_name: str, balance: str =
             json.dumps(model.subject_counts or {}, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+    stability = centroid_stability(embeddings, subject_ids=subject_ids)
+    (vector_dir / "centroid_stability.json").write_text(
+        json.dumps(stability, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
     if failed_vectors:
         (vector_dir / "image_vector_failures.json").write_text(
             json.dumps({"failed_count": len(failed_vectors), "failures": failed_vectors}, indent=2),
@@ -639,6 +644,7 @@ def _build(images: Path, out: Path, crop: str, backend_name: str, balance: str =
     print(f"backend: {backend.name}")
     print(f"centroid_mode: {model.centroid_mode}")
     print(f"subjects: {model.subject_count}")
+    print(f"centroid_stability: {stability.get('band')} (self_cosine_mean={stability.get('self_cosine_mean')})")
     print(f"embedding_dim: {model.embedding_dim}")
     print(f"prompt: {out / 'prompt.txt'}")
     return 0

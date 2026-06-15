@@ -394,6 +394,32 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(profile["subject_counts"], {"subject-a": 2, "subject-b": 1})
             self.assertEqual(subject_counts, {"subject-a": 2, "subject-b": 1})
 
+    def test_build_records_centroid_stability_and_audit_surfaces_it(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "raw"
+            raw.mkdir(parents=True)
+            model_dir = root / "model"
+            audit_dir = root / "audit"
+
+            _write_face_like_image(raw / "a.png", (235, 205, 190), eye_offset=0)
+            _write_face_like_image(raw / "b.png", (180, 150, 130), eye_offset=6)
+            _write_face_like_image(raw / "c.png", (210, 180, 160), eye_offset=3)
+
+            self.assertEqual(main(["build", "--images", str(raw), "--out", str(model_dir)]), 0)
+
+            stability = json.loads((model_dir / "vectors" / "centroid_stability.json").read_text(encoding="utf-8"))
+            self.assertTrue(stability["available"])
+            self.assertEqual(stability["unit"], "image")
+            self.assertEqual(stability["unit_count"], 3)
+            self.assertIn(stability["band"], {"stable", "moderate", "unstable"})
+
+            self.assertEqual(main(["audit-model", "--model", str(model_dir), "--out", str(audit_dir)]), 0)
+            audit = json.loads((audit_dir / "model_audit.json").read_text(encoding="utf-8"))
+            self.assertTrue(audit["stability"]["available"])
+            self.assertEqual(audit["stability"]["unit_count"], 3)
+            self.assertIn("## Centroid Stability", (audit_dir / "model_audit.md").read_text(encoding="utf-8"))
+
     def test_subject_id_fallback_uses_parent_for_external_paths(self) -> None:
         root = Path("dataset")
         external = Path("external") / "subject-x" / "face.png"

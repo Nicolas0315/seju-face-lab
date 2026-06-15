@@ -49,6 +49,9 @@ Retrieval/design date: 2026-06-14.
 - `distributed-evaluate` runs explicit local worker-chunk scoring and records merged score outputs plus worker assignment artifacts before any remote split-run.
 - `audit_research_data_quality.py` checks real-vs-hypothesis evidence type, subject/image counts, image imbalance, duplicates, small images, aspect outliers, agency generated-score coverage, and quadrant separability before strong claims.
 - `docs/strengthening-next-plan.md` records the next strengthening engine execution order, output paths, promotion rules, and verification commands.
+- `build --balance subject` builds a subject-balanced centroid (average per subject folder first, then across subjects) and records `subject_counts`, so image-heavy subjects no longer dominate the mean/median centroid.
+- `build` records bootstrap centroid stability (subject- or image-resampled self-cosine mean and CI) to `vectors/centroid_stability.json`, and `audit-model` surfaces it as a local data-confidence signal; band thresholds are heuristic review candidates, not validated cutoffs.
+- The agency research site renders per-agency evidence-type badges (`real_centroid_baseline`, `hypothesis_and_generated`, `real_and_generated`) from `audit_research_data_quality.py`, so evidence type is visible before any score is read.
 
 ## GitHub Issue Plan
 

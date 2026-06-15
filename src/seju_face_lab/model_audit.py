@@ -23,6 +23,7 @@ def write_model_audit(model_dir: Path, out_dir: Path) -> dict[str, Any]:
 def build_model_audit(model_dir: Path) -> dict[str, Any]:
     profile = _load_json(model_dir / "profile.json")
     centroids = _load_centroids(model_dir / "centroids.npz")
+    stability = _load_optional_json(model_dir / "vectors" / "centroid_stability.json")
     return {
         "model_dir": str(model_dir),
         "image_count": profile.get("image_count"),
@@ -32,6 +33,7 @@ def build_model_audit(model_dir: Path) -> dict[str, Any]:
         "median_face": str(model_dir / "median_face.png"),
         "centroids": centroids,
         "descriptor_delta": _descriptor_delta(profile.get("descriptors", {})),
+        "stability": stability or {"available": False},
         "boundary": (
             "Model audit describes local aggregate vectors and rendered centroid appearances. "
             "It is not identity, attractiveness, ethnicity, or an objective face-type label."
@@ -39,10 +41,125 @@ def build_model_audit(model_dir: Path) -> dict[str, Any]:
     }
 
 
+def centroid_stability(
+    embeddings: np.ndarray,
+    subject_ids: list[str] | None = None,
+    resamples: int = 200,
+    ci: float = 0.95,
+    seed: int = 0,
+) -> dict[str, Any]:
+    """Bootstrap the centroid to report how stable the local aggregate is given the data.
+
+    Units are resampled with replacement (subjects when subject_ids is given, else images),
+    the L2-normalized mean centroid is recomputed per resample, and its cosine to the
+    full-sample centroid is measured. A tight, near-1.0 interval means the centroid barely
+    depends on which units happened to be included; a wide or low interval means the local
+    set is too narrow to support strong centroid claims. This is a local data-confidence
+    signal only, never an identity, attractiveness, or demographic measure.
+    """
+    if embeddings.ndim != 2:
+        raise ValueError("embeddings must be a 2D array")
+    if resamples < 1:
+        raise ValueError("resamples must be >= 1")
+    if not 0.0 < ci < 1.0:
+        raise ValueError("ci must be between 0 and 1")
+    if embeddings.shape[0] == 0:
+        return {"available": False, "reason": "no embeddings"}
+
+    # Aggregate to one template per unit first so an image-heavy subject cannot dominate a draw.
+    if subject_ids is not None:
+        if len(subject_ids) != embeddings.shape[0]:
+            raise ValueError("subject_ids must match embeddings")
+        unit = "subject"
+        units = np.stack(
+            [
+                _l2(np.mean(embeddings[[i for i, s in enumerate(subject_ids) if s == name]], axis=0))
+                for name in sorted(set(subject_ids))
+            ]
+        )
+    else:
+        unit = "image"
+        units = np.asarray(embeddings, dtype=np.float64)
+
+    unit_count = int(units.shape[0])
+    full_centroid = _l2(np.mean(units, axis=0))
+    if unit_count < 2:
+        return {
+            "available": True,
+            "unit": unit,
+            "unit_count": unit_count,
+            "resamples": 0,
+            "ci": ci,
+            "self_cosine_mean": 1.0,
+            "self_cosine_low": 1.0,
+            "self_cosine_high": 1.0,
+            "self_cosine_std": 0.0,
+            "band": "insufficient_units",
+            "band_thresholds": _STABILITY_BANDS,
+            "boundary": _STABILITY_BOUNDARY,
+        }
+
+    rng = np.random.default_rng(seed)
+    cosines = np.empty(resamples, dtype=np.float64)
+    for index in range(resamples):
+        pick = rng.integers(0, unit_count, size=unit_count)
+        cosines[index] = _cosine(_l2(np.mean(units[pick], axis=0)), full_centroid)
+
+    low_pct = (1.0 - ci) / 2.0 * 100.0
+    high_pct = (1.0 + ci) / 2.0 * 100.0
+    mean_cosine = float(np.mean(cosines))
+    return {
+        "available": True,
+        "unit": unit,
+        "unit_count": unit_count,
+        "resamples": int(resamples),
+        "ci": ci,
+        "self_cosine_mean": round(mean_cosine, 6),
+        "self_cosine_low": round(float(np.percentile(cosines, low_pct)), 6),
+        "self_cosine_high": round(float(np.percentile(cosines, high_pct)), 6),
+        "self_cosine_std": round(float(np.std(cosines)), 6),
+        "band": _stability_band(mean_cosine),
+        "band_thresholds": _STABILITY_BANDS,
+        "boundary": _STABILITY_BOUNDARY,
+    }
+
+
+_STABILITY_BANDS = {"stable": 0.99, "moderate": 0.95}
+_STABILITY_BOUNDARY = (
+    "Bootstrap centroid self-similarity is a local data-confidence signal only. It is not "
+    "identity, attractiveness, ethnicity, or an objective face-type label. Band thresholds "
+    "are heuristic review candidates, not validated cutoffs."
+)
+
+
+def _stability_band(mean_cosine: float) -> str:
+    if mean_cosine >= _STABILITY_BANDS["stable"]:
+        return "stable"
+    if mean_cosine >= _STABILITY_BANDS["moderate"]:
+        return "moderate"
+    return "unstable"
+
+
+def _l2(vector: np.ndarray) -> np.ndarray:
+    vector = np.asarray(vector, dtype=np.float64)
+    norm = float(np.linalg.norm(vector))
+    if norm < 1e-12:
+        return vector
+    return vector / norm
+
+
 def _load_json(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _load_optional_json(path: Path) -> dict[str, Any]:
+    # Stability is an optional build sidecar; a corrupt file must degrade to "unavailable", not crash.
+    try:
+        return _load_json(path)
+    except (OSError, ValueError):
+        return {}
 
 
 def _load_centroids(path: Path) -> dict[str, Any]:
@@ -162,6 +279,22 @@ def _render_model_audit(audit: dict[str, Any]) -> str:
         lines.extend(f"- {key}: {value}" for key, value in descriptor_delta.items())
     else:
         lines.append("- no numeric descriptor delta available")
+    lines.extend(["", "## Centroid Stability", ""])
+    stability = audit.get("stability", {})
+    if stability.get("available"):
+        lines.extend(
+            [
+                f"- unit: {_value(stability.get('unit'))}",
+                f"- unit_count: {_value(stability.get('unit_count'))}",
+                f"- resamples: {_value(stability.get('resamples'))}",
+                f"- self_cosine_mean: {_value(stability.get('self_cosine_mean'))}",
+                f"- self_cosine_ci: {_value(stability.get('self_cosine_low'))} .. "
+                f"{_value(stability.get('self_cosine_high'))}",
+                f"- band: {_value(stability.get('band'))} (heuristic candidate)",
+            ]
+        )
+    else:
+        lines.append("- not recorded (build did not write vectors/centroid_stability.json)")
     lines.extend(["", "## Boundary", "", audit["boundary"], ""])
     return "\n".join(lines)
 

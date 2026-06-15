@@ -17,9 +17,11 @@ OpenAI Image API check: 2026-06-15, official docs at https://developers.openai.c
    - vector backend extracts per-image vectors
    - mean and median centroids are saved
    - mean/median appearance images are rendered
+   - `--balance subject` averages per subject before the global centroid; `image` (default) weights every image
+   - bootstrap centroid stability (resampled self-cosine mean and CI) is recorded to `vectors/centroid_stability.json`
 4. `export-vectors` / `audit-model`
    - `export-vectors` writes full mean/median embedding values as JSON or CSV
-   - `audit-model` writes vector hashes, norms, mean/median distances, and descriptor deltas
+   - `audit-model` writes vector hashes, norms, mean/median distances, descriptor deltas, and the recorded centroid-stability interval
    - `ingredients-report` turns aggregate descriptors into face-part, color-tone, makeup-texture, hair-signal, and prompt-guidance notes
 5. benchmark and OSS research
    - `backend-diagnostics` checks local optional dependency and GPU/provider readiness
