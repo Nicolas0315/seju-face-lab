@@ -11,6 +11,7 @@
     "height": 1024,
     "quality": "medium",
     "output_format": "png",
+    "centroid_kind": "median",
     "prompt_profile": "detector-friendly",
     "review": true,
     "review_backend": "deterministic",

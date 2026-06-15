@@ -25,6 +25,7 @@ OpenAI Image API check: 2026-06-15, official docs at https://developers.openai.c
    - `generate --provider dry-run` writes a reproducible run plan
    - `generate --provider diffusers` runs an optional local Diffusers batch
    - `generate --provider openai-image` runs an optional GPT Image batch through the OpenAI Images API
+   - `--centroid-kind mean|median` selects which centroid descriptor builds the generation prompt
    - `generation_sweep` pipeline configs expand multiple seed/profile runs into per-run directories
    - `--dry-run` always records `provider: dry-run`, even if the requested provider was diffusers
    - `--variant auto` maps `--dtype float16` to the Diffusers `fp16` variant
@@ -148,6 +149,13 @@ Detector-friendly generation pass:
 
 ```powershell
 python -m seju_face_lab generate --model outputs/seju_model --out outputs/generated_detector --provider diffusers --prompt-profile detector-friendly --count 8 --device cuda
+```
+
+Mean-vs-median prompt comparison:
+
+```powershell
+python -m seju_face_lab generate --model outputs/seju_model --out outputs/generated_mean --provider dry-run --centroid-kind mean --count 4
+python -m seju_face_lab generate --model outputs/seju_model --out outputs/generated_median --provider dry-run --centroid-kind median --count 4
 ```
 
 Generation sweep:

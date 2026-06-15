@@ -111,6 +111,12 @@ class PipelineTests(unittest.TestCase):
             )
             self.assertIn("hair covering face", generation_manifest["negative_prompt"])
             self.assertIn("illustration", generation_manifest["negative_prompt"])
+            self.assertIn("mean", generation_manifest["centroid_prompt_profiles"])
+            self.assertIn("median", generation_manifest["centroid_prompt_profiles"])
+            self.assertIn(
+                "Aggregate traits",
+                generation_manifest["centroid_prompt_profiles"]["mean"]["balanced"],
+            )
             self.assertIn("detector-friendly", generation_manifest["prompt_profiles"])
             self.assertIn("passport headshot", generation_manifest["prompt_profiles"]["detector-friendly"])
             self.assertIn("side profile", generation_manifest["negative_prompt_profiles"]["detector-friendly"])
@@ -236,6 +242,8 @@ class PipelineTests(unittest.TestCase):
                         "",
                         "--negative-prompt",
                         "copied identity",
+                        "--centroid-kind",
+                        "mean",
                     ]
                 ),
                 0,
@@ -244,6 +252,7 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(generation_run["result"]["status"], "planned")
             self.assertEqual(generation_run["config"]["provider"], "dry-run")
             self.assertEqual(generation_run["config"]["count"], 2)
+            self.assertEqual(generation_run["config"]["centroid_kind"], "mean")
             self.assertEqual(generation_run["config"]["prompt_profile"], "balanced")
             self.assertEqual(generation_run["config"]["prompt"], "")
             self.assertEqual(generation_run["config"]["variant"], "fp16")
@@ -527,6 +536,7 @@ class PipelineTests(unittest.TestCase):
                             "runs": [
                                 {
                                     "name": "balanced_seed_42",
+                                    "centroid_kind": "mean",
                                     "prompt_profile": "balanced",
                                     "seed": 42,
                                 },
@@ -556,8 +566,10 @@ class PipelineTests(unittest.TestCase):
             )
             self.assertEqual(first["config"]["seed"], 42)
             self.assertEqual(first["config"]["steps"], 12)
+            self.assertEqual(first["config"]["centroid_kind"], "mean")
             self.assertEqual(first["config"]["prompt_profile"], "balanced")
             self.assertEqual(second["config"]["seed"], 43)
+            self.assertEqual(second["config"]["centroid_kind"], "median")
             self.assertEqual(second["config"]["prompt_profile"], "detector-friendly")
             pipeline_run = json.loads((pipeline_dir / "pipeline_run.json").read_text(encoding="utf-8"))
             self.assertEqual(

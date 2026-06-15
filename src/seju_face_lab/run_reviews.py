@@ -13,6 +13,7 @@ class GenerationRunReview:
     provider: str
     model_id: str
     status: str
+    centroid_kind: str
     prompt_profile: str
     seed: int | None
     planned_count: int | None
@@ -115,6 +116,7 @@ def _review_generation_run(run_dir: Path) -> GenerationRunReview:
         provider=str(config.get("provider", "")),
         model_id=str(config.get("model_id", "")),
         status=str(result.get("status", "")),
+        centroid_kind=str(config.get("centroid_kind", "")),
         prompt_profile=str(config.get("prompt_profile", "")),
         seed=_optional_int(config.get("seed")),
         planned_count=_optional_int(config.get("count")),
@@ -216,7 +218,7 @@ def _is_evaluation_output_dir(run_dir: Path) -> bool:
 
 def _render_generation_run_reviews_csv(reviews: list[GenerationRunReview]) -> str:
     lines = [
-        "rank,run_dir,provider,model_id,status,image_count,best_image_id,"
+        "rank,run_dir,provider,model_id,status,centroid_kind,image_count,best_image_id,"
         "failed_count,best_centroid_score,mean_centroid_score,median_centroid_score,"
         "best_style_score,mean_style_score,median_style_score,best_combined_image_id,"
         "best_combined_path,best_combined_score,qa_pass_count,qa_fail_count,qa_pass_rate,"
@@ -232,6 +234,7 @@ def _render_generation_run_reviews_csv(reviews: list[GenerationRunReview]) -> st
                     _csv(review.provider),
                     _csv(review.model_id),
                     _csv(review.status),
+                    _csv(review.centroid_kind),
                     str(review.image_count),
                     _csv(review.best_image_id or ""),
                     str(review.failed_count),
@@ -271,12 +274,12 @@ def _render_generation_run_reviews_md(reviews: list[GenerationRunReview]) -> str
         lines.extend(["No generation runs provided.", ""])
         return "\n".join(lines)
     lines.append(
-        "| rank | run | provider | profile | seed | images | failed | qa_pass | best_face | qa_face | best_style | combined | best_image | qa_image |"
+        "| rank | run | provider | centroid | profile | seed | images | failed | qa_pass | best_face | qa_face | best_style | combined | best_image | qa_image |"
     )
-    lines.append("| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |")
+    lines.append("| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |")
     for rank, review in enumerate(reviews, start=1):
         lines.append(
-            f"| {rank} | {review.run_dir} | {review.provider} | {review.prompt_profile} | "
+            f"| {rank} | {review.run_dir} | {review.provider} | {review.centroid_kind} | {review.prompt_profile} | "
             f"{'' if review.seed is None else review.seed} | {review.image_count} | {review.failed_count} | "
             f"{'' if review.qa_pass_count is None else review.qa_pass_count} | "
             f"{_format_optional(review.best_centroid_score)} | "
@@ -352,6 +355,7 @@ def _render_run_card(rank: int, review: GenerationRunReview) -> str:
             f'<span class="pill">images {review.image_count}</span>',
             f'<span class="pill">failed {review.failed_count}</span>',
             f'<span class="pill">provider {escape(review.provider)}</span>',
+            f'<span class="pill">centroid {escape(review.centroid_kind)}</span>',
             f'<span class="pill">profile {escape(review.prompt_profile)}</span>',
             f'<span class="pill">seed {"" if review.seed is None else review.seed}</span>',
             f'<span class="pill">best face {_format_optional(review.best_centroid_score)}</span>',
@@ -503,6 +507,7 @@ def _generation_config_summary(review: GenerationRunReview | None) -> dict[str, 
         "provider": review.provider,
         "model_id": review.model_id,
         "status": review.status,
+        "centroid_kind": review.centroid_kind,
         "prompt_profile": review.prompt_profile,
         "seed": review.seed,
         "planned_count": review.planned_count,

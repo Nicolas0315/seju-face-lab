@@ -15,6 +15,7 @@ from .prompting import PROMPT_PROFILES, negative_prompt_for_profile, prompt_from
 class GenerationConfig:
     provider: str
     model_id: str
+    centroid_kind: str
     prompt_profile: str
     prompt: str
     negative_prompt: str
@@ -57,6 +58,7 @@ def build_generation_config(
     variant: str | None,
     output_format: str = "png",
     quality: str = "medium",
+    centroid_kind: str = "median",
     prompt_profile: str = "balanced",
     prompt_override: str | None = None,
     negative_prompt_override: str | None = None,
@@ -64,11 +66,14 @@ def build_generation_config(
     manifest = json.loads((model_dir / "generation_manifest.json").read_text(encoding="utf-8"))
     if prompt_profile not in PROMPT_PROFILES:
         raise ValueError(f"Unsupported prompt profile: {prompt_profile}")
-    prompt = _prompt_for_profile(model_dir, manifest, prompt_profile, prompt_override)
+    if centroid_kind not in {"mean", "median"}:
+        raise ValueError(f"Unsupported centroid kind: {centroid_kind}")
+    prompt = _prompt_for_profile(model_dir, manifest, centroid_kind, prompt_profile, prompt_override)
     negative_prompt = _negative_prompt_for_profile(manifest, prompt_profile, negative_prompt_override)
     return GenerationConfig(
         provider=provider,
         model_id=model_id,
+        centroid_kind=centroid_kind,
         prompt_profile=prompt_profile,
         prompt=prompt,
         negative_prompt=negative_prompt,
@@ -89,18 +94,24 @@ def build_generation_config(
 def _prompt_for_profile(
     model_dir: Path,
     manifest: dict[str, Any],
+    centroid_kind: str,
     prompt_profile: str,
     prompt_override: str | None,
 ) -> str:
     if prompt_override is not None:
         return prompt_override
-    if prompt_profile == "balanced":
+    if centroid_kind == "median" and prompt_profile == "balanced":
         return str(manifest["prompt"])
+    centroid_profiles = manifest.get("centroid_prompt_profiles", {})
+    if isinstance(centroid_profiles, dict):
+        kind_profiles = centroid_profiles.get(centroid_kind, {})
+        if isinstance(kind_profiles, dict) and prompt_profile in kind_profiles:
+            return str(kind_profiles[prompt_profile])
     prompt_profiles = manifest.get("prompt_profiles", {})
-    if isinstance(prompt_profiles, dict) and prompt_profile in prompt_profiles:
+    if centroid_kind == "median" and isinstance(prompt_profiles, dict) and prompt_profile in prompt_profiles:
         return str(prompt_profiles[prompt_profile])
     profile = json.loads((model_dir / "profile.json").read_text(encoding="utf-8"))
-    return prompt_from_descriptors(profile["descriptors"]["median"], profile=prompt_profile)
+    return prompt_from_descriptors(profile["descriptors"][centroid_kind], profile=prompt_profile)
 
 
 def _negative_prompt_for_profile(
@@ -273,6 +284,7 @@ def _render_generation_run(config: GenerationConfig, result: GenerationResult) -
         f"- status: {result.status}",
         f"- provider: {config.provider}",
         f"- model_id: {config.model_id}",
+        f"- centroid_kind: {config.centroid_kind}",
         f"- prompt_profile: {config.prompt_profile}",
         f"- count: {config.count}",
         f"- seed: {config.seed}",

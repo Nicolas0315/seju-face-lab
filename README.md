@@ -104,6 +104,12 @@ Run a Diffusers batch after installing a CUDA-enabled PyTorch build and `.[gener
 python -m seju_face_lab generate --model outputs/seju_model --out outputs/generated --provider diffusers --hf-model runwayml/stable-diffusion-v1-5 --count 8 --negative-prompt "copied identity"
 ```
 
+Generate from the mean centroid descriptor instead of the default median descriptor:
+
+```powershell
+python -m seju_face_lab generate --model outputs/seju_model --out outputs/generated_mean --provider dry-run --centroid-kind mean --count 4
+```
+
 Run a GPT Image batch through the OpenAI Images API after installing `.[openai]` and exporting
 `OPENAI_API_KEY`:
 
@@ -386,6 +392,7 @@ See `docs/gpu-generation-log.md` for RTX 4090 generation smoke results.
 - vector export `export-vectors`: full mean/median embedding values as JSON or UTF-8 BOM CSV for external generation/scoring workflows.
 - `prompt.txt`: a generation prompt based on observed centroid descriptors.
 - generation `generation_run.json`: prompt, seed, provider, output paths, and evaluation command/argv.
+- generation `centroid_kind`: `median` by default, or `mean` to generate from the mean centroid descriptor.
 - generation `prompt_profile`: `balanced` by default, or `detector-friendly` for frontal, unobscured candidate batches.
 - evaluation `scores.csv`: similarity of candidate generated images to the centroid vectors.
 - evaluation `summary.json`: best/mean/median generated-image similarity for quick comparisons.

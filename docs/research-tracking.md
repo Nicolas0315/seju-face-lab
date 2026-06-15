@@ -23,6 +23,7 @@ Retrieval/design date: 2026-06-14.
 - Image-generation dry-run planning and local RTX 4090 Diffusers smoke runs are implemented.
 - OpenAI GPT Image generation is implemented as `generate --provider openai-image` with optional `.[openai]`.
 - `generate --prompt-profile detector-friendly` records detector-oriented prompt settings for frontal, unobscured candidate batches.
+- `generate --centroid-kind mean|median` records whether the prompt was derived from mean or median centroid descriptors.
 - `qa-images` flags generated candidates that are collages, extreme crops, off-center faces, or missing a frontal OpenCV face.
 - `compare-runs` now reads `quality/` outputs and reports QA-gated best centroid scores.
 - `review-generated` runs generated-image evaluation, QA, and one-run comparison as the standard precision-review shortcut.
@@ -68,7 +69,7 @@ Create and track these issues:
 5. Plan aggregate candidate faces with `generate --provider dry-run`.
 6. For detector-visible scoring batches, use `generate --prompt-profile detector-friendly`.
 7. Generate with Diffusers/ComfyUI on a GPU worker, or `openai-image` through the OpenAI Images API, and score with `generate --review` or `review-generated`.
-8. For seed/profile iteration, run `configs/pipelines/generation-sweep.example.json` so all candidate settings have per-run manifests and a shared run comparison.
+8. For seed/profile/mean-vs-median iteration, run `configs/pipelines/generation-sweep.example.json` so all candidate settings have per-run manifests and a shared run comparison.
 9. Run `style-evaluate` so generated candidates have both face-geometry and style-axis scores.
 10. Run `qa-images` or `review-generated` before visual review so collages/extreme crops do not win on score alone.
 11. Rank evaluated generated batches with `compare-runs`, including QA-gated and combined face/style scores when available.

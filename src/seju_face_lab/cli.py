@@ -91,6 +91,12 @@ def main(argv: list[str] | None = None) -> int:
         default="balanced",
         help="generation prompt profile; detector-friendly favors frontal visible faces",
     )
+    generate_parser.add_argument(
+        "--centroid-kind",
+        choices=["mean", "median"],
+        default="median",
+        help="centroid descriptor used to build the generation prompt",
+    )
     generate_parser.add_argument("--prompt", default=None)
     generate_parser.add_argument("--negative-prompt", default=None)
     generate_parser.add_argument("--dry-run", action="store_true")
@@ -574,6 +580,7 @@ def _generate(args: argparse.Namespace) -> int:
         variant=variant,
         output_format=args.output_format,
         quality=args.quality,
+        centroid_kind=args.centroid_kind,
         prompt_profile=args.prompt_profile,
         prompt_override=args.prompt,
         negative_prompt_override=args.negative_prompt,
@@ -992,6 +999,7 @@ def _generation_namespace(config: dict, generation: dict, out: Path) -> argparse
         dtype=str(generation.get("dtype", "float16")),
         output_format=str(generation.get("output_format", "png")),
         quality=str(generation.get("quality", "medium")),
+        centroid_kind=str(generation.get("centroid_kind", "median")),
         variant=str(generation.get("variant", "auto")),
         prompt_profile=str(generation.get("prompt_profile", "balanced")),
         prompt=generation.get("prompt"),

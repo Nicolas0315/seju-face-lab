@@ -83,6 +83,13 @@ def save_model(model: CentroidModel, out_dir: Path) -> None:
         profile: prompt_from_descriptors(model.descriptors["median"], profile=profile)
         for profile in PROMPT_PROFILES
     }
+    centroid_prompt_profiles = {
+        kind: {
+            profile: prompt_from_descriptors(model.descriptors[kind], profile=profile)
+            for profile in PROMPT_PROFILES
+        }
+        for kind in ("mean", "median")
+    }
     negative_prompt_profiles = {}
     for profile_name in PROMPT_PROFILES:
         profile_negative = negative_prompt_for_profile(profile_name)
@@ -92,6 +99,7 @@ def save_model(model: CentroidModel, out_dir: Path) -> None:
     manifest = {
         "prompt": prompt,
         "prompt_profiles": prompt_profiles,
+        "centroid_prompt_profiles": centroid_prompt_profiles,
         "negative_prompt": (
             "specific celebrity likeness, copied identity, distorted face, extra eyes, "
             "asymmetry artifact, hair covering face, obscured eyes, harsh shadows, "

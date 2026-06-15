@@ -330,6 +330,7 @@ class AnalysisModuleTests(unittest.TestCase):
                             "provider": "diffusers",
                             "model_id": "local/test-model",
                             "status": "generated",
+                            "centroid_kind": "mean",
                             "prompt_profile": "detector-friendly",
                             "seed": 260623,
                             "planned_count": 2,
@@ -553,6 +554,7 @@ class AnalysisModuleTests(unittest.TestCase):
             self.assertIsNone(report["workflow_readiness"]["next_action"])
             self.assertEqual(report["generation"]["provider"], "diffusers")
             self.assertEqual(report["generation"]["model_id"], "local/test-model")
+            self.assertEqual(report["generation"]["centroid_kind"], "mean")
             self.assertEqual(report["generation"]["prompt_profile"], "detector-friendly")
             self.assertEqual(report["generation"]["seed"], 260623)
             self.assertEqual(report["generation"]["planned_count"], 2)
@@ -615,6 +617,10 @@ class AnalysisModuleTests(unittest.TestCase):
             )
             self.assertIn(
                 "prompt_profile: detector-friendly",
+                (out / "precision_report.md").read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                "centroid_kind: mean",
                 (out / "precision_report.md").read_text(encoding="utf-8"),
             )
             self.assertIn(
@@ -1795,6 +1801,7 @@ class AnalysisModuleTests(unittest.TestCase):
                         "config": {
                             "provider": "diffusers",
                             "model_id": "local/test-model",
+                            "centroid_kind": "mean",
                             "prompt_profile": "detector-friendly",
                             "prompt": "aggregate face prompt",
                             "count": 3,
@@ -1858,13 +1865,16 @@ class AnalysisModuleTests(unittest.TestCase):
             self.assertEqual(summary["best_combined_path"], "balanced.png")
             self.assertEqual(summary["best_combined_score"], 0.7)
             self.assertEqual(summary["best_generation"]["provider"], "diffusers")
+            self.assertEqual(summary["best_generation"]["centroid_kind"], "mean")
             self.assertEqual(summary["best_generation"]["prompt_profile"], "detector-friendly")
             self.assertEqual(summary["best_generation"]["seed"], 42)
             self.assertEqual(summary["best_generation"]["planned_count"], 3)
             self.assertEqual(summary["best_generation"]["size"], "512x512")
+            self.assertIn("centroid_kind", csv_text)
             self.assertIn("prompt_profile,seed,planned_count,steps", csv_text)
             self.assertEqual(summary["runs"][0]["best_combined_image_id"], "balanced")
             self.assertEqual(summary["runs"][0]["best_combined_path"], "balanced.png")
+            self.assertEqual(summary["runs"][0]["centroid_kind"], "mean")
             self.assertEqual(summary["runs"][0]["prompt_profile"], "detector-friendly")
 
     def test_generation_run_reviews_prefer_quality_passed_candidates(self) -> None:

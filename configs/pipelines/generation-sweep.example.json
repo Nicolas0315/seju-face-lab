@@ -21,11 +21,13 @@
     "runs": [
       {
         "name": "balanced_seed_260800",
+        "centroid_kind": "mean",
         "prompt_profile": "balanced",
         "seed": 260800
       },
       {
         "name": "detector_seed_260900",
+        "centroid_kind": "median",
         "prompt_profile": "detector-friendly",
         "seed": 260900
       }
