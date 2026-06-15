@@ -54,7 +54,7 @@ OpenAI Image API check: 2026-06-15, official docs at https://developers.openai.c
 12. `precision-report`
    - consolidates centroid metadata, generated-image review, QA, subject-review, backend-comparison, subject-backend-comparison, and optional correlation summaries for tracking
 13. `run-pipeline`
-   - executes configured build, vector export, generation, evaluation, style evaluation, review, backend comparison, subject backend comparison, SNS engagement, correlation, and precision-report steps from JSON
+   - executes configured build, vector export, ingredients-report, benchmark-research, generation, evaluation, style evaluation, review, backend comparison, subject backend comparison, SNS engagement, correlation, and precision-report steps from JSON
    - can execute `generation_sweep` configs to track multiple seed/profile generation attempts under one experiment folder
    - writes `pipeline_run.json` and `pipeline_run.md` as the orchestration trace
 14. `review-subjects`

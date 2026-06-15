@@ -36,7 +36,7 @@ Retrieval/design date: 2026-06-14.
 - `audit-model` writes standalone mean/median vector hashes, norms, distance metrics, and descriptor deltas for centroid-model review.
 - `ingredients-report` decomposes mean/median descriptors into face-part, color-tone, makeup-texture, hair-signal, and generation-guidance notes.
 - `export-vectors` writes full mean/median centroid embedding values as JSON or CSV for external analysis and generation tooling.
-- `run-pipeline` executes JSON-configured build/audit-model/export-vectors/evaluate/style-evaluate/review/backend-comparison/subject-backend-comparison/SNS-engagement/correlation/precision steps and records a pipeline run manifest.
+- `run-pipeline` executes JSON-configured build/audit-model/export-vectors/ingredients-report/benchmark-research/evaluate/style-evaluate/review/backend-comparison/subject-backend-comparison/SNS-engagement/correlation/precision steps and records a pipeline run manifest.
 - `generation_sweep` pipeline configs execute repeatable multi-seed/multi-profile generation experiments with per-run manifests and optional shared generated-run comparison.
 - `configs/pipelines/generation-openai-image.example.json` captures the GPT Image API generation + generated-review + precision-report workflow.
 - `configs/pipelines/sns-correlation.example.json` captures the repeatable subject-review + cached SNS exploration + face-score/SNS correlation + precision-report workflow.

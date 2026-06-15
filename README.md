@@ -173,8 +173,8 @@ Run a reproducible local pipeline from a JSON config:
 python -m seju_face_lab run-pipeline --config configs/pipelines/full-local-review.example.json --out outputs/local_pipeline_run
 ```
 
-The runner executes configured build/audit-model/evaluate/review/backend-comparison/
-subject-backend-comparison/SNS/correlation/precision steps and writes `pipeline_run.json`
+The runner executes configured build/audit-model/export-vectors/ingredients-report/
+benchmark-research/evaluate/review/backend-comparison/subject-backend-comparison/SNS/correlation/precision steps and writes `pipeline_run.json`
 plus `pipeline_run.md`.
 Add a `style_evaluation` config block after installing `.[clip]` to include the optional
 `style-evaluate` OpenCLIP scoring step in the same run.
@@ -410,7 +410,7 @@ See `docs/gpu-generation-log.md` for RTX 4090 generation smoke results.
 - evaluation `summary.json`: best/mean/median generated-image similarity for quick comparisons.
 - generated review `generation_run_reviews.csv`: one-command generated-image evaluation + QA + run review via `review-generated`, or directly after Diffusers generation with `generate --review`; includes provider, model, centroid kind, prompt profile, seed, count, steps, size, device, and dtype when `generation_run.json` is present.
 - precision report `precision_report.json`: workflow readiness checklist, model centroid, optional `model_audit.json` mean/median vector distance summary, generation settings, generated-image mean/median score components, mean-vs-median generation grouping, QA, subject-review vector analysis, backend-comparison, subject-backend-comparison, and optional correlation summary via `precision-report`.
-- pipeline run `pipeline_run.json`: configured build/audit-model/export-vectors/evaluate/style-evaluate/review/backend-comparison/subject-backend-comparison/precision orchestration via `run-pipeline`.
+- pipeline run `pipeline_run.json`: configured build/audit-model/export-vectors/ingredients-report/benchmark-research/evaluate/style-evaluate/review/backend-comparison/subject-backend-comparison/precision orchestration via `run-pipeline`.
 - generation sweep `configs/pipelines/generation-sweep.example.json`: repeatable seed/profile generation experiments with per-run manifests and optional shared run comparison.
 - pipeline config `configs/pipelines/full-retinaface-review.example.json`: deterministic continuity plus `deepface-retinaface` neural rank agreement for the precision bundle.
 - backend diagnostics `backend_diagnostics.json`: optional dependency, CUDA, vector backend, and generation-provider visibility.
