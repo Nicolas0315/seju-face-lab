@@ -6,6 +6,8 @@
   "reference_images": "data/raw",
   "model_out": "outputs/seju_model",
   "vector_export_out": "outputs/seju_model/vectors.json",
+  "face_ingredients_out": "outputs/seju_model/face_ingredients",
+  "benchmark_research_out": "outputs/benchmark_research",
   "generated_images": "outputs/generated",
   "evaluation_out": "outputs/evaluation",
   "notes": [

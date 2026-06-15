@@ -774,6 +774,8 @@ def _run_pipeline(args: argparse.Namespace) -> int:
         "build": _run_pipeline_build,
         "audit-model": _run_pipeline_audit_model,
         "export-vectors": _run_pipeline_export_vectors,
+        "ingredients-report": _run_pipeline_ingredients_report,
+        "benchmark-research": _run_pipeline_benchmark_research,
         "generate": _run_pipeline_generate,
         "generation-sweep": _run_pipeline_generation_sweep,
         "evaluate": _run_pipeline_evaluate,
@@ -815,6 +817,14 @@ def _run_pipeline_export_vectors(config: dict) -> int:
         str(export.get("format", "json")),
         bool(export.get("include_appearance", False)),
     )
+
+
+def _run_pipeline_ingredients_report(config: dict) -> int:
+    return _ingredients_report(_pipeline_model(config), _pipeline_ingredients_report_out(config))
+
+
+def _run_pipeline_benchmark_research(config: dict) -> int:
+    return _benchmark_research(_pipeline_benchmark_research_out(config))
 
 
 def _run_pipeline_generate(config: dict) -> int:
@@ -1107,6 +1117,30 @@ def _pipeline_vector_export_out(config: dict) -> Path | None:
     if export.get("out"):
         return Path(export["out"])
     return None
+
+
+def _pipeline_ingredients_report_out(config: dict) -> Path:
+    ingredients = config.get("ingredients_report")
+    if isinstance(ingredients, dict) and ingredients.get("out"):
+        return Path(ingredients["out"])
+    if config.get("face_ingredients_out"):
+        return Path(config["face_ingredients_out"])
+    if config.get("ingredients_out"):
+        return Path(config["ingredients_out"])
+    if isinstance(ingredients, dict):
+        return _pipeline_model(config) / "face_ingredients"
+    raise SystemExit("Pipeline config requires ingredients_report.out or face_ingredients_out")
+
+
+def _pipeline_benchmark_research_out(config: dict) -> Path:
+    research = config.get("benchmark_research")
+    if isinstance(research, dict) and research.get("out"):
+        return Path(research["out"])
+    if config.get("benchmark_research_out"):
+        return Path(config["benchmark_research_out"])
+    if isinstance(research, dict):
+        return Path("outputs") / "benchmark_research"
+    raise SystemExit("Pipeline config requires benchmark_research.out or benchmark_research_out")
 
 
 def _pipeline_default_vector_export_path(config: dict, export: dict) -> Path:

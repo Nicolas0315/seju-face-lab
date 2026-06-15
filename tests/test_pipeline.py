@@ -32,6 +32,8 @@ class PipelineTests(unittest.TestCase):
                 "build",
                 "audit-model",
                 "export-vectors",
+                "ingredients-report",
+                "benchmark-research",
                 "evaluate",
                 "review-generated",
                 "review-subjects",
@@ -378,6 +380,8 @@ class PipelineTests(unittest.TestCase):
             eval_dir = root / "evaluation"
             audit_dir = root / "model_audit"
             vector_export = root / "vectors.csv"
+            ingredients_dir = root / "face_ingredients"
+            benchmark_research_dir = root / "benchmark_research"
             style_eval_dir = root / "style_eval_custom"
             review_dir = generated / "review"
             subject_review_dir = root / "subject_review"
@@ -401,6 +405,8 @@ class PipelineTests(unittest.TestCase):
                         "model_out": str(model_dir),
                         "model_audit_out": str(audit_dir),
                         "vector_export_out": str(vector_export),
+                        "face_ingredients_out": str(ingredients_dir),
+                        "benchmark_research_out": str(benchmark_research_dir),
                         "generated_images": str(generated),
                         "evaluation_out": str(eval_dir),
                         "style_evaluation": {
@@ -432,13 +438,15 @@ class PipelineTests(unittest.TestCase):
                 )
 
             pipeline_run = json.loads((pipeline_dir / "pipeline_run.json").read_text(encoding="utf-8"))
-            self.assertEqual([step["status"] for step in pipeline_run["steps"]], ["completed"] * 10)
+            self.assertEqual([step["status"] for step in pipeline_run["steps"]], ["completed"] * 12)
             self.assertEqual(
                 [step["name"] for step in pipeline_run["steps"]],
                 [
                     "build",
                     "audit-model",
                     "export-vectors",
+                    "ingredients-report",
+                    "benchmark-research",
                     "evaluate",
                     "style-evaluate",
                     "review-generated",
@@ -451,6 +459,8 @@ class PipelineTests(unittest.TestCase):
             self.assertTrue((model_dir / "centroids.npz").exists())
             self.assertTrue((audit_dir / "model_audit.json").exists())
             self.assertTrue(vector_export.exists())
+            self.assertTrue((ingredients_dir / "face_ingredients.json").exists())
+            self.assertTrue((benchmark_research_dir / "benchmark_research.json").exists())
             self.assertTrue((eval_dir / "summary.json").exists())
             self.assertTrue((style_eval_dir / "style_summary.json").exists())
             self.assertTrue((generated / "style_evaluation" / "style_summary.json").exists())

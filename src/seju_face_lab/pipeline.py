@@ -60,6 +60,14 @@ def build_pipeline_plan(config: dict[str, Any], config_path: Path) -> PipelinePl
     if model_out and vector_export:
         steps.append(PipelineStep("export-vectors", "planned", str(vector_export["out"])))
 
+    ingredients = _ingredients_report_config(config, model_out)
+    if model_out and ingredients:
+        steps.append(PipelineStep("ingredients-report", "planned", str(ingredients["out"])))
+
+    benchmark_research = _benchmark_research_config(config)
+    if benchmark_research:
+        steps.append(PipelineStep("benchmark-research", "planned", str(benchmark_research["out"])))
+
     generation = _generation_config(config)
     generation_out = _path_value(generation, "out") or _path_value(config, "generated_images")
     generation_sweep = _generation_sweep_config(config)
@@ -216,6 +224,32 @@ def _vector_export_config(config: dict[str, Any], model_out: Path | None) -> dic
     out = out or _path_value(config, "vector_export_out")
     if out is None and isinstance(export, dict) and model_out:
         out = _default_vector_export_path(model_out, export)
+    if not out:
+        return None
+    return {"out": out}
+
+
+def _ingredients_report_config(config: dict[str, Any], model_out: Path | None) -> dict[str, Path] | None:
+    ingredients = config.get("ingredients_report")
+    out = None
+    if isinstance(ingredients, dict):
+        out = _path_value(ingredients, "out")
+    out = out or _path_value(config, "face_ingredients_out") or _path_value(config, "ingredients_out")
+    if out is None and isinstance(ingredients, dict) and model_out:
+        out = model_out / "face_ingredients"
+    if not out:
+        return None
+    return {"out": out}
+
+
+def _benchmark_research_config(config: dict[str, Any]) -> dict[str, Path] | None:
+    research = config.get("benchmark_research")
+    out = None
+    if isinstance(research, dict):
+        out = _path_value(research, "out")
+    out = out or _path_value(config, "benchmark_research_out")
+    if out is None and isinstance(research, dict):
+        out = Path("outputs") / "benchmark_research"
     if not out:
         return None
     return {"out": out}
