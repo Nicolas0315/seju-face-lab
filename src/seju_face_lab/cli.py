@@ -22,6 +22,7 @@ from .quality import review_image_quality, write_image_quality
 from .run_reviews import review_generation_runs, write_generation_run_reviews
 from .sources import discover_sources, download_source_images, read_source_manifest, write_source_manifest
 from .style import OpenClipStyleBackend, score_style_images, write_style_scores
+from .vector_export import write_vector_export
 from .workers import DEFAULT_DIAGNOSTIC_WORKERS, LOCAL_4090, write_worker_diagnostics
 
 
@@ -82,6 +83,19 @@ def main(argv: list[str] | None = None) -> int:
     render_parser.add_argument("--model", type=Path, required=True)
     render_parser.add_argument("--kind", choices=["mean", "median"], default="median")
     render_parser.add_argument("--out", type=Path, required=True)
+
+    export_vectors_parser = subparsers.add_parser(
+        "export-vectors",
+        help="export mean/median centroid vectors to JSON or CSV",
+    )
+    export_vectors_parser.add_argument("--model", type=Path, required=True)
+    export_vectors_parser.add_argument("--out", type=Path, required=True)
+    export_vectors_parser.add_argument("--format", choices=["json", "csv"], default="json")
+    export_vectors_parser.add_argument(
+        "--include-appearance",
+        action="store_true",
+        help="also export flattened mean/median appearance render vectors",
+    )
 
     audit_parser = subparsers.add_parser(
         "audit-model",
@@ -344,6 +358,8 @@ def main(argv: list[str] | None = None) -> int:
         return _generate(args)
     if args.command == "render":
         return _render(args.model, args.kind, args.out)
+    if args.command == "export-vectors":
+        return _export_vectors(args.model, args.out, args.format, args.include_appearance)
     if args.command == "audit-model":
         return _audit_model(args.model, args.out)
     if args.command == "evaluate":
@@ -506,6 +522,19 @@ def _render(model_dir: Path, kind: str, out: Path) -> int:
     appearance = model.mean_appearance if kind == "mean" else model.median_appearance
     render_appearance(appearance, out)
     print(f"rendered: {out}")
+    return 0
+
+
+def _export_vectors(model_dir: Path, out: Path, output_format: str, include_appearance: bool) -> int:
+    payload = write_vector_export(
+        model_dir,
+        out,
+        output_format=output_format,
+        include_appearance=include_appearance,
+    )
+    print(f"exported vectors: {out}")
+    print(f"embedding_dim: {payload['embedding_dim']}")
+    print(f"vectors: {len(payload['vectors'])}")
     return 0
 
 

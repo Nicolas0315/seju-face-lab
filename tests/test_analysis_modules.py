@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import json
 import os
 import subprocess
@@ -503,6 +504,77 @@ class AnalysisModuleTests(unittest.TestCase):
 
             audit = json.loads((out / "model_audit.json").read_text(encoding="utf-8"))
             self.assertEqual(audit["centroids"]["mean_median_embedding"]["cosine"], 1.0)
+
+    def test_export_vectors_writes_mean_and_median_embedding_json_and_csv(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            model = root / "model"
+            json_out = root / "vectors.json"
+            appearance_json_out = root / "vectors_with_appearance.json"
+            csv_out = root / "vectors.csv"
+            model.mkdir()
+            np.savez_compressed(
+                model / "centroids.npz",
+                mean_embedding=np.asarray([0.6, 0.8], dtype=np.float32),
+                median_embedding=np.asarray([1.0, 0.0], dtype=np.float32),
+                mean_appearance=np.ones((2, 2, 3), dtype=np.float32),
+                median_appearance=np.zeros((2, 2, 3), dtype=np.float32),
+                image_ids=np.asarray(["a", "b"]),
+                source_paths=np.asarray(["a.png", "b.png"]),
+            )
+            (model / "profile.json").write_text(
+                json.dumps(
+                    {
+                        "image_count": 2,
+                        "embedding_dim": 2,
+                        "appearance_shape": [2, 2, 3],
+                        "descriptors": {"mean": {}, "median": {}},
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                main(["export-vectors", "--model", str(model), "--out", str(json_out)]),
+                0,
+            )
+            payload = json.loads(json_out.read_text(encoding="utf-8"))
+            self.assertEqual(
+                payload["vectors"]["mean_embedding"]["values"],
+                [0.6000000238418579, 0.800000011920929],
+            )
+            self.assertEqual(payload["vectors"]["median_embedding"]["values"], [1.0, 0.0])
+            self.assertEqual(payload["vectors"]["mean_embedding"]["shape"], [2])
+            self.assertEqual(len(payload["vectors"]["mean_embedding"]["sha256"]), 64)
+            self.assertNotIn("mean_appearance", payload["vectors"])
+
+            self.assertEqual(
+                main(
+                    [
+                        "export-vectors",
+                        "--model",
+                        str(model),
+                        "--out",
+                        str(appearance_json_out),
+                        "--include-appearance",
+                    ]
+                ),
+                0,
+            )
+            appearance_payload = json.loads(appearance_json_out.read_text(encoding="utf-8"))
+            self.assertEqual(appearance_payload["vectors"]["mean_appearance"]["shape"], [2, 2, 3])
+            self.assertEqual(len(appearance_payload["vectors"]["mean_appearance"]["values"]), 12)
+
+            self.assertEqual(
+                main(["export-vectors", "--model", str(model), "--out", str(csv_out), "--format", "csv"]),
+                0,
+            )
+            with csv_out.open("r", encoding="utf-8-sig", newline="") as handle:
+                rows = list(csv.DictReader(handle))
+            self.assertEqual(len(rows), 4)
+            self.assertEqual(rows[0]["vector"], "mean_embedding")
+            self.assertEqual(rows[0]["index"], "0")
+            self.assertEqual(rows[2]["vector"], "median_embedding")
 
     def test_precision_report_keeps_centroid_only_best_image_id(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -55,6 +55,13 @@ Audit mean/median centroid vectors and descriptor deltas:
 python -m seju_face_lab audit-model --model outputs/seju_model --out outputs/model_audit
 ```
 
+Export the full mean/median embedding vectors for external analysis or generation tooling:
+
+```powershell
+python -m seju_face_lab export-vectors --model outputs/seju_model --out outputs/seju_vectors.json
+python -m seju_face_lab export-vectors --model outputs/seju_model --out outputs/seju_vectors.csv --format csv
+```
+
 After generating candidate images with any image generator, place them in `outputs/generated/` and evaluate:
 
 ```powershell
@@ -334,6 +341,7 @@ See `docs/gpu-generation-log.md` for RTX 4090 generation smoke results.
 - `median_face.png`: pixel-wise median, often more robust to outliers.
 - `profile.json`: compact descriptor values and vector metadata.
 - model audit `model_audit.json`: mean/median vector hashes, norms, cosine/euclidean distance, and descriptor deltas.
+- vector export `export-vectors`: full mean/median embedding values as JSON or UTF-8 BOM CSV for external generation/scoring workflows.
 - `prompt.txt`: a generation prompt based on observed centroid descriptors.
 - generation `generation_run.json`: prompt, seed, provider, output paths, and evaluation command/argv.
 - generation `prompt_profile`: `balanced` by default, or `detector-friendly` for frontal, unobscured candidate batches.

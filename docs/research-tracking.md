@@ -28,6 +28,7 @@ Retrieval/design date: 2026-06-14.
 - `generate --review` now chains real Diffusers generation into the same generated-image review shortcut.
 - `precision-report` consolidates centroid, optional `model_audit.json` mean/median vector distance metadata, generated-image mean/median score components, QA, subject-review, backend-comparison, and subject-backend-comparison evidence into a review bundle.
 - `audit-model` writes standalone mean/median vector hashes, norms, distance metrics, and descriptor deltas for centroid-model review.
+- `export-vectors` writes full mean/median centroid embedding values as JSON or CSV for external analysis and generation tooling.
 - `run-pipeline` executes JSON-configured build/audit-model/evaluate/style-evaluate/review/backend-comparison/subject-backend-comparison/precision steps and records a pipeline run manifest.
 - `generation_sweep` pipeline configs execute repeatable multi-seed/multi-profile generation experiments with per-run manifests and optional shared generated-run comparison.
 - `configs/pipelines/full-retinaface-review.example.json` captures the current full review path with deterministic continuity plus `deepface-retinaface` backend rank agreement.
