@@ -8,10 +8,12 @@ import shutil
 import numpy as np
 
 from .backends import backend_help, get_vector_backend
+from .agency import write_agency_average_params
 from .backend_compare import compare_deepface_detectors, compare_subject_backends, compare_vector_backends
 from .backend_diagnostics import write_backend_diagnostics
 from .benchmark_research import write_benchmark_research
 from .embeddings import iter_image_paths, render_appearance
+from .face_axes import write_face_axis_report
 from .generation import (
     build_generation_config,
     run_diffusers_generation,
@@ -172,6 +174,15 @@ def main(argv: list[str] | None = None) -> int:
     style_parser.add_argument("--pretrained", default="laion2b_s34b_b79k")
     style_parser.add_argument("--device", default="auto")
 
+    face_axes_parser = subparsers.add_parser(
+        "face-axes",
+        help="map images onto 8 visual face axes with quadrant and cross-axis labels",
+    )
+    face_axes_parser.add_argument("--images", type=Path, required=True)
+    face_axes_parser.add_argument("--out", type=Path, required=True)
+    face_axes_parser.add_argument("--crop", choices=["center", "none"], default="center")
+    face_axes_parser.add_argument("--backend", default="deterministic")
+
     compare_runs_parser = subparsers.add_parser(
         "compare-runs",
         help="rank evaluated generation run directories by centroid scores",
@@ -244,6 +255,14 @@ def main(argv: list[str] | None = None) -> int:
         help="write face/iris benchmark and OSS adoption notes for vectorization planning",
     )
     benchmark_research_parser.add_argument("--out", type=Path, required=True)
+
+    agency_parser = subparsers.add_parser(
+        "review-agencies",
+        help="build agency-level average face parameters and image-generation prompts",
+    )
+    agency_parser.add_argument("--model", type=Path, required=True)
+    agency_parser.add_argument("--agencies", type=Path, required=True)
+    agency_parser.add_argument("--out", type=Path, required=True)
 
     worker_diag_parser = subparsers.add_parser(
         "worker-diagnostics",
@@ -469,6 +488,8 @@ def main(argv: list[str] | None = None) -> int:
         return _distributed_evaluate(args)
     if args.command == "style-evaluate":
         return _style_evaluate(args)
+    if args.command == "face-axes":
+        return _face_axes(args)
     if args.command == "compare-runs":
         return _compare_runs(args.runs, args.out)
     if args.command == "precision-report":
@@ -488,6 +509,8 @@ def main(argv: list[str] | None = None) -> int:
         return _backend_diagnostics(args.out)
     if args.command == "benchmark-research":
         return _benchmark_research(args.out)
+    if args.command == "review-agencies":
+        return _review_agencies(args)
     if args.command == "worker-diagnostics":
         return _worker_diagnostics(args.out, args.include_remote, args.timeout_seconds)
     if args.command == "compare-backends":
@@ -739,6 +762,21 @@ def _style_evaluate(args: argparse.Namespace) -> int:
     print(f"style evaluated images: {len(scores)}")
     print(f"failed images: {len(failed_paths)}")
     print(f"style scores: {args.out / 'style_scores.csv'}")
+    return 0
+
+
+def _face_axes(args: argparse.Namespace) -> int:
+    report = write_face_axis_report(
+        images=args.images,
+        out_dir=args.out,
+        crop=args.crop,
+        backend_name=args.backend,
+    )
+    print(f"face axis report: {args.out / 'face_axis_report.md'}")
+    print(f"images: {report['image_count']}")
+    summary = report.get("summary", {})
+    distribution = summary.get("distribution", {}) if isinstance(summary, dict) else {}
+    print(f"quadrant: {distribution.get('quadrant')}")
     return 0
 
 
@@ -1348,6 +1386,15 @@ def _benchmark_research(out: Path) -> int:
     print(f"benchmark research: {out / 'benchmark_research.md'}")
     print(f"sources: {len(report['sources'])}")
     print(f"primary face embedding: {report['vectorization_strategy']['primary_face_embedding']}")
+    return 0
+
+
+def _review_agencies(args: argparse.Namespace) -> int:
+    report = write_agency_average_params(args.model, args.agencies, args.out)
+    print(f"agency average params: {args.out / 'agency_average_params.md'}")
+    print(f"agencies: {len(report['agencies'])}")
+    top = report["rankings"]["by_descriptor_similarity"][0] if report["agencies"] else {}
+    print(f"top descriptor match: {top.get('name')} {top.get('descriptor_similarity')}")
     return 0
 
 

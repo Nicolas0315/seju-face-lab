@@ -1,0 +1,120 @@
+{
+  "retrieved_at": "2026-06-15",
+  "base_agency": "seju",
+  "notes": [
+    "Official-source list for agency-level aggregate research.",
+    "Descriptor offsets are explicit research hypotheses over the local seju median centroid.",
+    "Generated samples must be fictional aggregate portraits, not likenesses of listed people."
+  ],
+  "agencies": [
+    {
+      "slug": "seju",
+      "name": "seju / GROVE",
+      "official_sources": [
+        {
+          "name": "seju official",
+          "url": "https://seju.tokyo/"
+        }
+      ],
+      "public_examples": ["なえなの", "向井怜衣"],
+      "positioning": ["SNS-native", "Z世代", "natural cute", "clean portrait"],
+      "parameter_basis": ["local seju centroid baseline"],
+      "descriptor_offsets": {}
+    },
+    {
+      "slug": "platinum",
+      "name": "PLATINUM PRODUCTION",
+      "official_sources": [
+        {
+          "name": "TALENT LIST | PLATINUM PRODUCTION",
+          "url": "https://platinumproduction.jp/talent/"
+        }
+      ],
+      "public_examples": ["筧美和子", "谷まりあ", "佐久間由衣", "橋本麗愛"],
+      "positioning": ["model/talent mix", "variety/SNS", "glamour-adjacent", "broad casting"],
+      "parameter_basis": [
+        "slightly stronger color and contour than seju",
+        "keeps bright commercial portrait values"
+      ],
+      "descriptor_offsets": {
+        "contrast": 0.025,
+        "saturation": 0.018,
+        "edge_density": 0.008,
+        "symmetry": -0.01,
+        "upper_band_darkness": 0.012
+      }
+    },
+    {
+      "slug": "trustar",
+      "name": "TRUSTAR",
+      "official_sources": [
+        {
+          "name": "タレント｜TRUSTAR Official Website",
+          "url": "https://trustar.co.jp/talents/"
+        }
+      ],
+      "public_examples": ["武田玲奈", "前田希美", "三原羽衣", "今井アンジェリカ"],
+      "positioning": ["model/talent", "influencer-adjacent", "fashion/SNS", "stronger styling"],
+      "parameter_basis": [
+        "more styled makeup/color than seju",
+        "still close to SNS-friendly frontal portraits"
+      ],
+      "descriptor_offsets": {
+        "contrast": 0.03,
+        "saturation": 0.025,
+        "warmth": 0.01,
+        "edge_density": 0.01,
+        "upper_band_darkness": 0.006
+      }
+    },
+    {
+      "slug": "asia-promotion",
+      "name": "ASIA PROMOTION",
+      "official_sources": [
+        {
+          "name": "ARTIST - ASIA PROMOTION",
+          "url": "https://asiapro.co.jp/profile/"
+        }
+      ],
+      "public_examples": ["近藤千尋", "山本舞香", "ゆきぽよ", "高崎かなみ"],
+      "positioning": ["model/talent", "variety", "fashion", "strong visual styling"],
+      "parameter_basis": [
+        "more contrast and color styling",
+        "slightly farther from seju's soft low-contrast centroid"
+      ],
+      "descriptor_offsets": {
+        "luminance": -0.012,
+        "contrast": 0.04,
+        "saturation": 0.035,
+        "warmth": 0.018,
+        "edge_density": 0.014,
+        "symmetry": -0.012,
+        "upper_band_darkness": 0.018
+      }
+    },
+    {
+      "slug": "lespros",
+      "name": "LesPros Entertainment",
+      "official_sources": [
+        {
+          "name": "プロデュース本部｜LesPros Entertainment",
+          "url": "https://www.lespros.co.jp/artists/"
+        }
+      ],
+      "public_examples": ["南沙良", "新垣結衣", "内田理央"],
+      "positioning": ["actor/model", "clean commercial", "film/advertising", "natural styling"],
+      "parameter_basis": [
+        "clean actor/model commercial axis",
+        "near seju brightness with slightly sharper contours"
+      ],
+      "descriptor_offsets": {
+        "luminance": 0.006,
+        "contrast": 0.018,
+        "saturation": 0.006,
+        "edge_density": 0.007,
+        "symmetry": 0.004,
+        "upper_band_darkness": 0.004
+      }
+    }
+  ]
+}

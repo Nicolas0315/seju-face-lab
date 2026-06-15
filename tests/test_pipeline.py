@@ -1031,6 +1031,121 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(report["vectorization_strategy"]["iris_axis"], "out of scope for face-vector scoring; separate modality only")
             self.assertTrue((out / "benchmark_research.md").exists())
 
+    def test_review_agencies_writes_average_params_and_prompts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            model = root / "model"
+            agencies = root / "agencies.json"
+            out = root / "agency_review"
+            model.mkdir()
+            np.savez_compressed(
+                model / "centroids.npz",
+                mean_embedding=np.asarray([1.0, 0.0], dtype=np.float32),
+                median_embedding=np.asarray([0.9, 0.1], dtype=np.float32),
+                mean_appearance=np.zeros((2, 2, 1), dtype=np.float32),
+                median_appearance=np.ones((2, 2, 1), dtype=np.float32),
+                image_ids=np.asarray(["a"]),
+                source_paths=np.asarray(["a.png"]),
+            )
+            (model / "profile.json").write_text(
+                json.dumps(
+                    {
+                        "image_count": 1,
+                        "embedding_dim": 2,
+                        "appearance_shape": [2, 2, 1],
+                        "descriptors": {
+                            "median": {
+                                "luminance": 0.7,
+                                "contrast": 0.08,
+                                "saturation": 0.08,
+                                "warmth": 0.0,
+                                "symmetry": 0.96,
+                                "edge_density": 0.02,
+                                "upper_band_darkness": 0.2,
+                                "middle_luminance": 0.72,
+                                "lower_luminance": 0.68,
+                            }
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            agencies.write_text(
+                json.dumps(
+                    {
+                        "retrieved_at": "2026-06-15",
+                        "agencies": [
+                            {
+                                "slug": "seju",
+                                "name": "seju",
+                                "official_sources": [{"url": "https://seju.tokyo/"}],
+                                "public_examples": ["example"],
+                                "positioning": ["SNS-native"],
+                                "descriptor_offsets": {},
+                            },
+                            {
+                                "slug": "styled",
+                                "name": "Styled Agency",
+                                "official_sources": [{"url": "https://example.com/"}],
+                                "public_examples": ["example"],
+                                "positioning": ["model"],
+                                "descriptor_offsets": {"contrast": 0.04, "saturation": 0.02},
+                            },
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                main(["review-agencies", "--model", str(model), "--agencies", str(agencies), "--out", str(out)]),
+                0,
+            )
+
+            report = json.loads((out / "agency_average_params.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["rankings"]["by_descriptor_similarity"][0]["slug"], "seju")
+            self.assertEqual(len(report["agencies"]), 2)
+            self.assertTrue((out / "prompts" / "seju.txt").exists())
+            self.assertIn("fictional young adult", (out / "prompts" / "styled.txt").read_text(encoding="utf-8"))
+            self.assertIn("Analysis Logic", (out / "agency_average_params.md").read_text(encoding="utf-8"))
+            self.assertIn("axis_vector", report["agencies"][0])
+            self.assertIn("axis_distribution", report["agencies"][0])
+
+    def test_face_axes_maps_images_to_8_axis_distribution(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            images = root / "images"
+            out = root / "axis"
+            images.mkdir()
+            _write_face_like_image(images / "bright.png", (235, 205, 190), eye_offset=0)
+            _write_face_like_image(images / "defined.png", (170, 145, 130), eye_offset=7)
+
+            self.assertEqual(main(["face-axes", "--images", str(images), "--out", str(out)]), 0)
+
+            report = json.loads((out / "face_axis_report.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["image_count"], 2)
+            self.assertEqual(set(report["summary"]["axis_means"]), {
+                "soft_defined",
+                "cool_warm",
+                "deep_bright",
+                "natural_styled",
+                "muted_vivid",
+                "soft_crisp",
+                "light_dark_hair",
+                "dynamic_symmetric",
+            })
+            self.assertIn(report["summary"]["distribution"]["quadrant"], {
+                "defined_bright",
+                "soft_bright",
+                "soft_deep",
+                "defined_deep",
+            })
+            self.assertIn("outlier_score", report["summary"]["distribution"])
+            self.assertIn("presentation_flags", report["summary"]["distribution"])
+            self.assertTrue((out / "face_axis_scores.csv").exists())
+            self.assertIn("Axis Definitions", (out / "face_axis_report.md").read_text(encoding="utf-8"))
+            self.assertIn("presentation_flags", (out / "face_axis_scores.csv").read_text(encoding="utf-8-sig"))
+
     def test_compare_backends_writes_rank_agreement(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

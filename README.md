@@ -63,6 +63,19 @@ Decompose aggregate face ingredients into face parts, color tone, makeup texture
 python -m seju_face_lab ingredients-report --model outputs/seju_model --out outputs/face_ingredients
 ```
 
+Build agency-level average face parameters from official-source agency research config:
+
+```powershell
+python -m seju_face_lab review-agencies --model outputs/seju_model --agencies configs/agencies/seju_like_agencies.json --out outputs/agency_reviews/seju_like
+```
+
+Map generated or local images onto 4+4 visual axes with quadrant, corner, cross-axis, outlier,
+and presentation-state flags:
+
+```powershell
+python -m seju_face_lab face-axes --images outputs/generated --out outputs/face_axes
+```
+
 Export the full mean/median embedding vectors for external analysis or generation tooling:
 
 ```powershell
