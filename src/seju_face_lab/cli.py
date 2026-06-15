@@ -705,6 +705,8 @@ def _run_pipeline(args: argparse.Namespace) -> int:
         "review-subjects": _run_pipeline_review_subjects,
         "compare-backends": _run_pipeline_compare_backends,
         "compare-subject-backends": _run_pipeline_compare_subject_backends,
+        "explore-batch": _run_pipeline_explore_batch,
+        "analyze-correlation": _run_pipeline_analyze_correlation,
         "precision-report": _run_pipeline_precision_report,
     }
     plan = run_pipeline_config(args.config, args.out, handlers)
@@ -848,6 +850,32 @@ def _run_pipeline_compare_subject_backends(config: dict) -> int:
             out=Path(comparison["out"]),
             backends=[str(name) for name in comparison.get("backends", ["deterministic", "opencv-face"])],
             crop=str(comparison.get("crop", config.get("crop", "center"))),
+        )
+    )
+
+
+def _run_pipeline_explore_batch(config: dict) -> int:
+    engagement = _pipeline_sns_engagement_config(config)
+    return _explore_batch(
+        argparse.Namespace(
+            handles=Path(engagement["handles"]),
+            out=Path(engagement["out"]),
+            cache=Path(engagement["cache"]) if engagement.get("cache") else None,
+            remote_host=engagement.get("remote_host"),
+            platforms=[str(platform) for platform in engagement.get("platforms", ["instagram", "twitter", "tiktok"])],
+            delay=float(engagement.get("delay", engagement.get("delay_between", 1.5))),
+            force=bool(engagement.get("force", False)),
+        )
+    )
+
+
+def _run_pipeline_analyze_correlation(config: dict) -> int:
+    correlation = _pipeline_correlation_config(config)
+    return _analyze_correlation(
+        argparse.Namespace(
+            face_scores=Path(correlation["face_scores"]),
+            engagement=Path(correlation["engagement"]),
+            out=Path(correlation["out"]),
         )
     )
 
@@ -1077,6 +1105,52 @@ def _pipeline_subject_backend_comparison_out(config: dict) -> Path | None:
     if comparison.get("out"):
         return Path(comparison["out"])
     return None
+
+
+def _pipeline_sns_engagement_config(config: dict) -> dict:
+    engagement = config.get("sns_engagement")
+    if isinstance(engagement, dict):
+        merged = dict(engagement)
+    else:
+        merged = {}
+    if "handles" not in merged and config.get("sns_handles"):
+        merged["handles"] = config["sns_handles"]
+    if "out" not in merged and config.get("sns_engagement_out"):
+        merged["out"] = config["sns_engagement_out"]
+    if "cache" not in merged and config.get("sns_cache"):
+        merged["cache"] = config["sns_cache"]
+    if "platforms" not in merged and config.get("sns_platforms"):
+        merged["platforms"] = config["sns_platforms"]
+    if not merged.get("handles") or not merged.get("out"):
+        raise SystemExit("Pipeline config requires sns_engagement.handles and sns_engagement.out")
+    return merged
+
+
+def _pipeline_correlation_config(config: dict) -> dict:
+    correlation = config.get("correlation")
+    if isinstance(correlation, dict):
+        merged = dict(correlation)
+    else:
+        merged = {}
+    if "face_scores" not in merged and config.get("correlation_face_scores"):
+        merged["face_scores"] = config["correlation_face_scores"]
+    if "face_scores" not in merged:
+        subject_review_out = config.get("subject_review_out") or config.get("subject_out")
+        if subject_review_out:
+            merged["face_scores"] = str(Path(subject_review_out) / "subject_reviews.json")
+    if "engagement" not in merged and config.get("correlation_engagement"):
+        merged["engagement"] = config["correlation_engagement"]
+    if "engagement" not in merged:
+        sns_engagement = config.get("sns_engagement")
+        if isinstance(sns_engagement, dict) and sns_engagement.get("out"):
+            merged["engagement"] = sns_engagement["out"]
+        elif config.get("sns_engagement_out"):
+            merged["engagement"] = config["sns_engagement_out"]
+    if "out" not in merged and config.get("correlation_out"):
+        merged["out"] = config["correlation_out"]
+    if not merged.get("face_scores") or not merged.get("engagement") or not merged.get("out"):
+        raise SystemExit("Pipeline config requires correlation face_scores, engagement, and out")
+    return merged
 
 
 def _qa_images(images: Path, out: Path) -> int:

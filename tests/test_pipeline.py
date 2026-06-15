@@ -688,6 +688,102 @@ class PipelineTests(unittest.TestCase):
             precision = json.loads((precision_dir / "precision_report.json").read_text(encoding="utf-8"))
             self.assertEqual(precision["backend_comparison"]["completed_backends"], ["deterministic"])
 
+    def test_run_pipeline_executes_sns_engagement_and_correlation(self) -> None:
+        from seju_face_lab.sns_explorer import SnsProfile
+
+        class FakeRouter:
+            def fetch_batch(self, items, delay_between=1.5, force=False):
+                self.items = items
+                self.delay_between = delay_between
+                self.force = force
+                return [
+                    SnsProfile(
+                        platform=platform,
+                        handle=handle,
+                        profile_url=f"https://example.test/{platform}/{handle}",
+                        followers=10_000,
+                        posts=120,
+                        total_engagement=1_200,
+                        engagement_rate=0.001,
+                        source="test",
+                    )
+                    for platform, handle in items
+                ]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "raw"
+            subjects = root / "subjects"
+            model_dir = root / "model"
+            subject_review_dir = root / "subject_review"
+            handles = root / "sns_handles.jsonl"
+            engagement = root / "sns_engagement.jsonl"
+            correlation = root / "correlation"
+            pipeline_dir = root / "pipeline_run"
+            config_path = root / "pipeline.json"
+            raw.mkdir()
+            (subjects / "near_subject").mkdir(parents=True)
+            _write_face_like_image(raw / "a.png", (235, 205, 190), eye_offset=0)
+            _write_face_like_image(raw / "b.png", (225, 198, 184), eye_offset=2)
+            _write_face_like_image(subjects / "near_subject" / "near.png", (232, 202, 188), eye_offset=1)
+            handles.write_text(
+                json.dumps(
+                    {
+                        "talent_slug": "near_subject",
+                        "name": "Near Subject",
+                        "profile_url": "https://example.test/near_subject",
+                        "sns_handles": {"instagram": "near_subject_ig"},
+                        "retrieved_at": "2026-06-15T00:00:00+00:00",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "name": "sns_correlation_pipeline",
+                        "reference_images": str(raw),
+                        "model_out": str(model_dir),
+                        "subjects": str(subjects),
+                        "subject_review_out": str(subject_review_dir),
+                        "sns_engagement": {
+                            "handles": str(handles),
+                            "out": str(engagement),
+                            "platforms": ["instagram"],
+                            "delay": 0.0,
+                            "force": True,
+                        },
+                        "correlation": {"out": str(correlation)},
+                        "vector_backend": "deterministic",
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            fake_router = FakeRouter()
+            with patch("seju_face_lab.sns_explorer.build_router", return_value=fake_router):
+                self.assertEqual(
+                    main(["run-pipeline", "--config", str(config_path), "--out", str(pipeline_dir)]),
+                    0,
+                )
+
+            pipeline_run = json.loads((pipeline_dir / "pipeline_run.json").read_text(encoding="utf-8"))
+            self.assertEqual(
+                [step["name"] for step in pipeline_run["steps"]],
+                ["build", "review-subjects", "explore-batch", "analyze-correlation"],
+            )
+            self.assertEqual([step["status"] for step in pipeline_run["steps"]], ["completed"] * 4)
+            self.assertEqual(fake_router.items, [("instagram", "near_subject_ig")])
+            self.assertEqual(fake_router.delay_between, 0.0)
+            self.assertTrue(fake_router.force)
+            self.assertTrue(engagement.exists())
+            self.assertTrue((correlation / "correlation_summary.json").exists())
+            summary = json.loads((correlation / "correlation_summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["talent_count"], 1)
+            self.assertEqual(summary["with_face_score"], 1)
+            self.assertEqual(summary["with_ig"], 1)
+
     def test_run_pipeline_writes_manifest_when_step_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

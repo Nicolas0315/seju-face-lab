@@ -1,0 +1,25 @@
+{
+  "name": "sns_correlation_review",
+  "reference_images": "data/raw/seju_official",
+  "model_out": "outputs/seju_model_official",
+  "subjects": "data/subjects",
+  "subject_review_out": "outputs/subject_reviews",
+  "sns_engagement": {
+    "handles": "data/processed/sns_handles.jsonl",
+    "out": "data/processed/sns_engagement.jsonl",
+    "cache": "data/processed/sns_cache.db",
+    "platforms": ["instagram", "twitter", "tiktok"],
+    "delay": 1.5,
+    "force": false
+  },
+  "correlation": {
+    "out": "outputs/correlation"
+  },
+  "vector_backend": "deterministic",
+  "crop": "center",
+  "notes": [
+    "Run only after reviewed local subject image folders and sns_handles.jsonl exist.",
+    "SNS values are best-effort public metadata; cache and processed manifests remain local/Git-ignored.",
+    "Correlation reports are exploratory and do not imply causation."
+  ]
+}

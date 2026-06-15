@@ -151,12 +151,15 @@ Run a reproducible local pipeline from a JSON config:
 python -m seju_face_lab run-pipeline --config configs/pipelines/full-local-review.example.json --out outputs/local_pipeline_run
 ```
 
-The runner executes the configured build/audit-model/evaluate/review/backend-comparison/
-subject-backend-comparison/precision steps and writes `pipeline_run.json` plus `pipeline_run.md`.
+The runner executes configured build/audit-model/evaluate/review/backend-comparison/
+subject-backend-comparison/SNS/correlation/precision steps and writes `pipeline_run.json`
+plus `pipeline_run.md`.
 Add a `style_evaluation` config block after installing `.[clip]` to include the optional
 `style-evaluate` OpenCLIP scoring step in the same run.
 Use `configs/pipelines/full-retinaface-review.example.json` when the same run should include
 the audited `deepface-retinaface` rank-agreement backend in the final precision bundle.
+Use `configs/pipelines/sns-correlation.example.json` when a run should review local
+subject folders, refresh cached SNS engagement, and write a face-score/SNS correlation report.
 
 To track multiple generation settings as one experiment, use a generation sweep:
 
@@ -261,6 +264,12 @@ python -m seju_face_lab analyze correlation --face-scores outputs/subject_review
 ```
 
 This writes `correlation_dataset.csv`, `correlations.csv`, `correlation_report.md`, and `correlation_summary.json`.
+
+The same join can be run through a pipeline config:
+
+```powershell
+python -m seju_face_lab run-pipeline --config configs/pipelines/sns-correlation.example.json --out outputs/sns_correlation_pipeline
+```
 
 ## Analysis Backends
 

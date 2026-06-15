@@ -94,6 +94,14 @@ def build_pipeline_plan(config: dict[str, Any], config_path: Path) -> PipelinePl
     if subject_backend_comparison:
         steps.append(PipelineStep("compare-subject-backends", "planned", str(subject_backend_comparison["out"])))
 
+    sns_engagement = _sns_engagement_config(config)
+    if sns_engagement:
+        steps.append(PipelineStep("explore-batch", "planned", str(sns_engagement["out"])))
+
+    correlation = _correlation_config(config)
+    if correlation:
+        steps.append(PipelineStep("analyze-correlation", "planned", str(correlation["out"])))
+
     precision_out = _path_value(config, "precision_out")
     if model_out and precision_out:
         steps.append(PipelineStep("precision-report", "planned", str(precision_out)))
@@ -245,6 +253,48 @@ def _subject_backend_comparison_config(config: dict[str, Any]) -> dict[str, Path
     if not out or not subjects or not reference_images:
         return None
     return {"out": out, "subjects": subjects, "reference_images": reference_images}
+
+
+def _sns_engagement_config(config: dict[str, Any]) -> dict[str, Path] | None:
+    engagement = config.get("sns_engagement")
+    handles = None
+    out = None
+    if isinstance(engagement, dict):
+        handles = _path_value(engagement, "handles")
+        out = _path_value(engagement, "out")
+    handles = handles or _path_value(config, "sns_handles")
+    out = out or _path_value(config, "sns_engagement_out")
+    if not handles or not out:
+        return None
+    return {"handles": handles, "out": out}
+
+
+def _correlation_config(config: dict[str, Any]) -> dict[str, Path] | None:
+    correlation = config.get("correlation")
+    face_scores = None
+    engagement = None
+    out = None
+    if isinstance(correlation, dict):
+        face_scores = _path_value(correlation, "face_scores")
+        engagement = _path_value(correlation, "engagement")
+        out = _path_value(correlation, "out")
+
+    subject_review_out = _path_value(config, "subject_review_out") or _path_value(config, "subject_out")
+    face_scores = face_scores or _path_value(config, "correlation_face_scores")
+    if face_scores is None and subject_review_out:
+        face_scores = subject_review_out / "subject_reviews.json"
+
+    sns_engagement = _sns_engagement_config(config)
+    engagement = (
+        engagement
+        or _path_value(config, "correlation_engagement")
+        or (sns_engagement["out"] if sns_engagement else None)
+    )
+    out = out or _path_value(config, "correlation_out")
+
+    if not face_scores or not engagement or not out:
+        return None
+    return {"face_scores": face_scores, "engagement": engagement, "out": out}
 
 
 def _default_out_dir(config: dict[str, Any], config_path: Path) -> Path:
