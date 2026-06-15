@@ -29,7 +29,7 @@ Retrieval/design date: 2026-06-14.
 - `precision-report` consolidates centroid, optional `model_audit.json` mean/median vector distance metadata, generated-image mean/median score components, QA, subject-review, backend-comparison, and subject-backend-comparison evidence into a review bundle.
 - `audit-model` writes standalone mean/median vector hashes, norms, distance metrics, and descriptor deltas for centroid-model review.
 - `export-vectors` writes full mean/median centroid embedding values as JSON or CSV for external analysis and generation tooling.
-- `run-pipeline` executes JSON-configured build/audit-model/evaluate/style-evaluate/review/backend-comparison/subject-backend-comparison/precision steps and records a pipeline run manifest.
+- `run-pipeline` executes JSON-configured build/audit-model/export-vectors/evaluate/style-evaluate/review/backend-comparison/subject-backend-comparison/precision steps and records a pipeline run manifest.
 - `generation_sweep` pipeline configs execute repeatable multi-seed/multi-profile generation experiments with per-run manifests and optional shared generated-run comparison.
 - `configs/pipelines/full-retinaface-review.example.json` captures the current full review path with deterministic continuity plus `deepface-retinaface` backend rank agreement.
 - `worker-diagnostics` records local RTX 4090 and optional SSH remote-GPU Python/CUDA/torch/package readiness without remote writes.
@@ -67,8 +67,8 @@ Create and track these issues:
 9. Run `style-evaluate` so generated candidates have both face-geometry and style-axis scores.
 10. Run `qa-images` or `review-generated` before visual review so collages/extreme crops do not win on score alone.
 11. Rank evaluated generated batches with `compare-runs`, including QA-gated and combined face/style scores when available.
-12. Write a `precision-report` for the model, model audit, best generation review, QA, subject-review, backend-comparison, and subject-backend-comparison outputs.
-13. Use `run-pipeline` for repeatable local build/audit-model/evaluate/style-evaluate/review/backend-agreement/precision runs from config.
+12. Write a `precision-report` for the model, model audit, vector export, best generation review, QA, subject-review, backend-comparison, and subject-backend-comparison outputs.
+13. Use `run-pipeline` for repeatable local build/audit-model/export-vectors/evaluate/style-evaluate/review/backend-agreement/precision runs from config.
 14. Run SNS handle/engagement manifests and `analyze correlation` for reviewable metric joins.
 15. Run `backend-diagnostics` and `worker-diagnostics --include-remote` on RTX nodes and archive the ignored output paths in the Issue comment.
 16. Compare deterministic scores against InsightFace/DeepFace on the same ignored image sets with `compare-backends`.

@@ -45,7 +45,7 @@ Retrieval/design date: 2026-06-14.
 11. `precision-report`
    - consolidates centroid metadata, generated-image review, QA, subject-review, backend-comparison, and subject-backend-comparison summaries for tracking
 12. `run-pipeline`
-   - executes configured build, generation, evaluation, style evaluation, review, backend comparison, subject backend comparison, and precision-report steps from JSON
+   - executes configured build, vector export, generation, evaluation, style evaluation, review, backend comparison, subject backend comparison, and precision-report steps from JSON
    - can execute `generation_sweep` configs to track multiple seed/profile generation attempts under one experiment folder
    - writes `pipeline_run.json` and `pipeline_run.md` as the orchestration trace
 13. `review-subjects`
@@ -86,10 +86,11 @@ reference acceptance counts and generated-image ranks can be audited before trus
 Use `--reuse-existing` when a long detector sweep has completed some per-detector folders already.
 Use `--max-reference-images` and `--max-images` for slow detector smoke audits before committing
 to a full reference-set run.
-Pass comparison outputs into `precision-report --backend-comparison` and
-`--subject-backend-comparison`, or set `backend_comparison.out` and
+Pass vector export and comparison outputs into `precision-report --vector-export`,
+`--backend-comparison`, and `--subject-backend-comparison`, or set `vector_export.out`,
+`backend_comparison.out`, and
 `subject_backend_comparison.out` in a pipeline config so final precision bundles include
-generated-image and per-subject backend agreement.
+centroid-vector export evidence plus generated-image and per-subject backend agreement.
 
 ## Subject Review Contract
 
