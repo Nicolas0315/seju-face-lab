@@ -50,6 +50,12 @@ def main(argv: list[str] | None = None) -> int:
         default="deterministic",
         help="vector backend name; currently deterministic is built in",
     )
+    build_parser.add_argument(
+        "--balance",
+        choices=["image", "subject"],
+        default="image",
+        help="centroid aggregation mode; subject balances one folder/person as one template",
+    )
 
     prompt_parser = subparsers.add_parser("prompt", help="print a generation prompt from a built model")
     prompt_parser.add_argument("--model", type=Path, required=True)
@@ -495,7 +501,7 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
     if args.command == "build":
-        return _build(args.images, args.out, args.crop, args.backend)
+        return _build(args.images, args.out, args.crop, args.backend, args.balance)
     if args.command == "prompt":
         return _prompt(args.model, args.kind)
     if args.command == "generate":
@@ -573,7 +579,7 @@ def main(argv: list[str] | None = None) -> int:
     return 2
 
 
-def _build(images: Path, out: Path, crop: str, backend_name: str) -> int:
+def _build(images: Path, out: Path, crop: str, backend_name: str, balance: str = "image") -> int:
     paths = iter_image_paths(images)
     if not paths:
         raise SystemExit(f"No supported images found under {images}")
@@ -590,11 +596,15 @@ def _build(images: Path, out: Path, crop: str, backend_name: str) -> int:
         raise SystemExit(f"No usable images found under {images}")
     embeddings = np.stack([vector.embedding for vector in vectors])
     appearances = np.stack([vector.appearance for vector in vectors])
+    centroid_mode = "subject_balanced" if balance == "subject" else "image_weighted"
+    subject_ids = [_subject_id_for_path(images, vector.path) for vector in vectors] if balance == "subject" else None
     model = build_centroid_model(
         image_ids=[vector.image_id for vector in vectors],
         source_paths=[str(vector.path) for vector in vectors],
         embeddings=embeddings,
         appearances=appearances,
+        centroid_mode=centroid_mode,
+        subject_ids=subject_ids,
     )
     save_model(model, out)
 
@@ -612,6 +622,11 @@ def _build(images: Path, out: Path, crop: str, backend_name: str) -> int:
         json.dumps(descriptor_payload, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+    if subject_ids is not None:
+        (vector_dir / "subject_counts.json").write_text(
+            json.dumps(model.subject_counts or {}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
     if failed_vectors:
         (vector_dir / "image_vector_failures.json").write_text(
             json.dumps({"failed_count": len(failed_vectors), "failures": failed_vectors}, indent=2),
@@ -622,9 +637,22 @@ def _build(images: Path, out: Path, crop: str, backend_name: str) -> int:
     print(f"images: {len(vectors)}")
     print(f"failed images: {len(failed_vectors)}")
     print(f"backend: {backend.name}")
+    print(f"centroid_mode: {model.centroid_mode}")
+    print(f"subjects: {model.subject_count}")
     print(f"embedding_dim: {model.embedding_dim}")
     print(f"prompt: {out / 'prompt.txt'}")
     return 0
+
+
+def _subject_id_for_path(root: Path, image_path: Path) -> str:
+    try:
+        relative = image_path.resolve().relative_to(root.resolve())
+    except ValueError:
+        return image_path.parent.name or image_path.stem
+    parts = relative.parts
+    if len(parts) > 1:
+        return parts[0]
+    return image_path.stem
 
 
 def _prompt(model_dir: Path, kind: str) -> int:
@@ -874,6 +902,7 @@ def _run_pipeline_build(config: dict) -> int:
         _pipeline_model(config),
         str(config.get("crop", "center")),
         str(config.get("vector_backend", config.get("backend", "deterministic"))),
+        str(config.get("balance", "image")),
     )
 
 

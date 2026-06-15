@@ -28,6 +28,7 @@ def main() -> int:
     parser.add_argument("--average-params", type=Path, default=Path("outputs/agency_reviews/seju_like/agency_average_params.json"))
     parser.add_argument("--enhancement", type=Path, default=Path("outputs/agency_enhancement/agency_enhancement_report.json"))
     parser.add_argument("--calibration", type=Path, default=Path("outputs/agency_generation_calibration/generation_calibration.json"))
+    parser.add_argument("--data-quality", type=Path, default=Path("outputs/data_quality_audit_v1/data_quality_audit.json"))
     parser.add_argument("--images", type=Path, default=Path("outputs/agency_imagegen_samples"))
     parser.add_argument("--out", type=Path, default=Path("outputs/agency_site"))
     args = parser.parse_args()
@@ -36,7 +37,8 @@ def main() -> int:
     params = _read_json(args.average_params)
     enhancement = _read_json(args.enhancement)
     calibration = _read_json(args.calibration) if args.calibration.exists() else {}
-    build_site(config, params, enhancement, calibration, args.images, args.out)
+    data_quality = _read_json(args.data_quality) if args.data_quality.exists() else {}
+    build_site(config, params, enhancement, calibration, data_quality, args.images, args.out)
     print(f"site: {args.out / 'index.html'}")
     return 0
 
@@ -46,6 +48,7 @@ def build_site(
     params: dict[str, Any],
     enhancement: dict[str, Any],
     calibration: dict[str, Any],
+    data_quality: dict[str, Any],
     images_dir: Path,
     out_dir: Path,
 ) -> None:
@@ -53,14 +56,18 @@ def build_site(
     assets_dir = out_dir / "assets"
     assets_dir.mkdir(exist_ok=True)
     _copy_images(images_dir, assets_dir)
-    agencies = _merge_agencies(config, params, enhancement, calibration)
-    (out_dir / "index.html").write_text(_render_html(config, enhancement, calibration, agencies), encoding="utf-8")
+    agencies = _merge_agencies(config, params, enhancement, calibration, data_quality)
+    (out_dir / "index.html").write_text(
+        _render_html(config, enhancement, calibration, data_quality, agencies),
+        encoding="utf-8",
+    )
     (out_dir / "data.json").write_text(
         json.dumps(
             {
                 "agencies": agencies,
                 "summary": enhancement.get("summary", {}),
                 "calibration_summary": calibration.get("summary", {}),
+                "data_quality_summary": data_quality.get("summary", {}),
             },
             ensure_ascii=False,
             indent=2,
@@ -75,10 +82,16 @@ def _merge_agencies(
     params: dict[str, Any],
     enhancement: dict[str, Any],
     calibration: dict[str, Any],
+    data_quality: dict[str, Any],
 ) -> list[dict[str, Any]]:
     config_by_slug = {agency["slug"]: agency for agency in config.get("agencies", [])}
     params_by_slug = {agency["slug"]: agency for agency in params.get("agencies", [])}
     calibration_by_slug = {agency["slug"]: agency for agency in calibration.get("agencies", [])}
+    evidence_by_slug = {
+        agency.get("slug"): agency
+        for agency in data_quality.get("agency_evidence", {}).get("agencies", [])
+        if agency.get("slug")
+    }
     enhanced = enhancement.get("agencies", [])
     rows = []
     for agency in enhanced:
@@ -86,6 +99,7 @@ def _merge_agencies(
         cfg = config_by_slug.get(slug, {})
         param = params_by_slug.get(slug, {})
         calibrated = calibration_by_slug.get(slug, {})
+        evidence = evidence_by_slug.get(slug, {})
         rows.append(
             {
                 "slug": slug,
@@ -105,6 +119,12 @@ def _merge_agencies(
                 "average_descriptors": param.get("average_descriptors", {}),
                 "axis_vector": param.get("axis_vector", {}),
                 "calibration": calibrated,
+                "evidence": {
+                    "type": evidence.get("evidence_type", "unverified"),
+                    "real_image_count": evidence.get("real_image_count", 0),
+                    "generated_image_count": evidence.get("generated_image_count", 0),
+                    "quality_risk": data_quality.get("summary", {}).get("risk_level", "unknown"),
+                },
                 "image": f"assets/{slug}.png",
             }
         )
@@ -115,6 +135,7 @@ def _render_html(
     config: dict[str, Any],
     enhancement: dict[str, Any],
     calibration: dict[str, Any],
+    data_quality: dict[str, Any],
     agencies: list[dict[str, Any]],
 ) -> str:
     cards = "\n".join(_agency_card(agency) for agency in agencies)
@@ -126,6 +147,7 @@ def _render_html(
     retrieved_at = config.get("retrieved_at", "unknown")
     summary = enhancement.get("summary", {})
     calibration_summary = calibration.get("summary", {})
+    data_quality_summary = data_quality.get("summary", {})
     return f"""<!doctype html>
 <html lang="ja">
 <head>
@@ -150,6 +172,7 @@ def _render_html(
         <span>source retrieved: {escape(str(retrieved_at))}</span>
         <span>top: {escape(str(summary.get("top_slug", "")))} {escape(str(summary.get("top_score", "")))}</span>
         <span>regen first: {escape(", ".join(calibration_summary.get("regenerate_first", [])))}</span>
+        <span>data quality: {escape(str(data_quality_summary.get("risk_level", "unknown")))}</span>
       </div>
     </div>
   </header>
@@ -177,6 +200,7 @@ def _render_html(
               <th>image</th>
               <th>axis</th>
               <th>quadrant</th>
+              <th>evidence</th>
             </tr>
           </thead>
           <tbody>
@@ -355,6 +379,11 @@ def _agency_card(agency: dict[str, Any]) -> str:
     image_alt = f"{agency['name']} fictional aggregate average face sample"
     components = agency["components"]
     distribution = agency["distribution"]
+    evidence = agency.get("evidence", {})
+    evidence_type = str(evidence.get("type", "unverified"))
+    evidence_label = evidence_type.replace("_", " ")
+    evidence_class = evidence_type.replace("_", "-")
+    real_images = evidence.get("real_image_count", 0)
     return f"""
 <article class="card" id="{escape(agency["slug"])}">
   <div class="portrait">
@@ -364,8 +393,10 @@ def _agency_card(agency: dict[str, Any]) -> str:
     <div class="card-head">
       <span class="rank">#{escape(str(agency["rank"]))}</span>
       <h2>{escape(agency["name"])}</h2>
+      <span class="evidence evidence-{escape(evidence_class)}">{escape(evidence_label)}</span>
     </div>
     <p class="positioning">{positioning}</p>
+    <p class="evidence-note">real images: {escape(str(real_images))} / risk: {escape(str(evidence.get("quality_risk", "unknown")))}</p>
     <dl class="metrics">
       <div><dt>enhancement</dt><dd>{_fmt(agency["enhancement_score"])}</dd></div>
       <div><dt>descriptor</dt><dd>{_fmt(components.get("descriptor_similarity"))}</dd></div>
@@ -409,6 +440,7 @@ def _agency_card(agency: dict[str, Any]) -> str:
 def _ranking_row(agency: dict[str, Any]) -> str:
     components = agency["components"]
     distribution = agency["distribution"]
+    evidence = agency.get("evidence", {})
     return f"""
 <tr>
   <td>{escape(str(agency["rank"]))}</td>
@@ -417,6 +449,7 @@ def _ranking_row(agency: dict[str, Any]) -> str:
   <td>{_fmt(components.get("image_centroid_score"))}</td>
   <td>{_fmt(components.get("axis_alignment"))}</td>
   <td>{escape(str(distribution.get("quadrant", "")))}</td>
+  <td>{escape(str(evidence.get("type", "unverified")).replace("_", " "))}</td>
 </tr>
 """
 
@@ -692,10 +725,26 @@ td:nth-child(1), td:nth-child(3), td:nth-child(4), td:nth-child(5) {
 .portrait { background: #e9eceb; min-height: 320px; }
 .portrait img { display: block; width: 100%; height: 100%; object-fit: cover; aspect-ratio: 4 / 5; }
 .card-body { padding: 18px; }
-.card-head { display: flex; align-items: baseline; gap: 10px; }
+.card-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .card-head h2 { margin: 0; }
 .rank { color: var(--rose); font-weight: 700; font-variant-numeric: tabular-nums; }
 .positioning { color: var(--muted); margin: 8px 0 14px; }
+.evidence {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: #164640;
+  background: var(--accent-soft);
+  font-size: 12px;
+  font-weight: 700;
+}
+.evidence-hypothesis-and-generated { color: var(--gold); background: #f6ead1; }
+.evidence-real-and-generated { color: #164640; background: #d9f0ec; }
+.evidence-real-centroid-baseline { color: #123b6d; background: #dfeafb; }
+.evidence-unverified { color: var(--muted); background: #eef0f2; }
+.evidence-note { margin: -8px 0 14px; color: var(--muted); font-size: 12px; }
 .metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

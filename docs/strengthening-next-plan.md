@@ -27,6 +27,7 @@ Items:
    - output: `outputs/data_quality_audit_v*/`
    - page badge: show `real_centroid_baseline`, `hypothesis_and_generated`, or `real_and_generated`
    - done when: public page and `data.json` expose evidence type per agency.
+   - status 2026-06-15: implemented in `scripts/build_agency_site.py` via optional `--data-quality`.
 
 2. Source manifest
    - target file shape: `source_manifest.jsonl`
@@ -42,6 +43,7 @@ Items:
    - target behavior: average per subject first, then average subjects.
    - reason: current seju subject image imbalance is 3.6, so image-heavy subjects can overweight the centroid.
    - done when: model build can emit `centroid_mode=image_weighted|subject_balanced`.
+   - status 2026-06-15: implemented as `python -m seju_face_lab build --balance subject`.
 
 Verification:
 
@@ -78,6 +80,11 @@ Items:
    - backend: OpenCLIP via `style-evaluate`
    - rule: style score stays separate from face-vector score.
    - done when: page and reports show face, style, QA, and combined candidate evidence separately.
+
+5. SOTA benchmark adoption map
+   - source: `docs/sota-benchmark-research.md`
+   - implemented now: IJB-C-style subject-balanced templates and page evidence badges.
+   - next: AdaFace/MagFace-inspired quality confidence, MegaFace/FRTE-inspired distractor-gallery reports.
 
 Verification:
 

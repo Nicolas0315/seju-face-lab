@@ -82,6 +82,8 @@ Verification:
 - subject-review-format comparison: `outputs/agency_subject_reviews_v2_contrast/subject_reviews.html`
 - page build: `outputs/agency_site/index.html`
 - deployment URL: `https://19b8ac6a.seju-face-lab-agency-research.pages.dev/`
+- evidence-badge deployment URL: `https://bb8af4e9.seju-face-lab-agency-research.pages.dev/`
+- verification screenshots: `outputs/agency_site/browser_verify.png`, `outputs/agency_site/deploy_verify.png`
 - current top enhancement ranking: `sgmedia`, `seju`, `platinum`, `lvs`, `lespros`, `twin-planet`, `asia-promotion`, `trustar`
 - largest visible axis spread: `lvs` has stronger vivid/styled/outlier signals than the close seju-like set.
 - evidence boundary: v2 contrast agencies are official-source descriptor hypotheses plus generated aggregate image scoring; they are not real per-talent image averages yet.

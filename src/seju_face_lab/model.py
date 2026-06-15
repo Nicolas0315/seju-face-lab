@@ -21,9 +21,19 @@ class CentroidModel:
     descriptors: dict[str, dict[str, float]]
     embedding_dim: int
     appearance_shape: tuple[int, int, int]
+    centroid_mode: str = "image_weighted"
+    subject_count: int | None = None
+    subject_counts: dict[str, int] | None = None
 
 
-def build_centroid_model(image_ids: list[str], source_paths: list[str], embeddings: np.ndarray, appearances: np.ndarray) -> CentroidModel:
+def build_centroid_model(
+    image_ids: list[str],
+    source_paths: list[str],
+    embeddings: np.ndarray,
+    appearances: np.ndarray,
+    centroid_mode: str = "image_weighted",
+    subject_ids: list[str] | None = None,
+) -> CentroidModel:
     if embeddings.ndim != 2:
         raise ValueError("embeddings must be a 2D array")
     if appearances.ndim != 4:
@@ -31,10 +41,28 @@ def build_centroid_model(image_ids: list[str], source_paths: list[str], embeddin
     if embeddings.shape[0] == 0:
         raise ValueError("at least one image is required")
 
-    mean_embedding = _l2_normalize(np.mean(embeddings, axis=0))
-    median_embedding = _l2_normalize(np.median(embeddings, axis=0))
-    mean_appearance = np.mean(appearances, axis=0)
-    median_appearance = np.median(appearances, axis=0)
+    active_embeddings = embeddings
+    active_appearances = appearances
+    subject_counts = None
+    if centroid_mode == "subject_balanced":
+        if subject_ids is None or len(subject_ids) != embeddings.shape[0]:
+            raise ValueError("subject_ids must match embeddings when centroid_mode=subject_balanced")
+        subject_counts = {subject: subject_ids.count(subject) for subject in sorted(set(subject_ids))}
+        subject_embeddings = []
+        subject_appearances = []
+        for subject in sorted(subject_counts):
+            indices = [index for index, value in enumerate(subject_ids) if value == subject]
+            subject_embeddings.append(_l2_normalize(np.mean(embeddings[indices], axis=0)))
+            subject_appearances.append(np.mean(appearances[indices], axis=0))
+        active_embeddings = np.stack(subject_embeddings)
+        active_appearances = np.stack(subject_appearances)
+    elif centroid_mode != "image_weighted":
+        raise ValueError(f"Unsupported centroid_mode: {centroid_mode}")
+
+    mean_embedding = _l2_normalize(np.mean(active_embeddings, axis=0))
+    median_embedding = _l2_normalize(np.median(active_embeddings, axis=0))
+    mean_appearance = np.mean(active_appearances, axis=0)
+    median_appearance = np.median(active_appearances, axis=0)
     descriptors = {
         "mean": descriptors_from_appearance(mean_appearance),
         "median": descriptors_from_appearance(median_appearance),
@@ -49,6 +77,9 @@ def build_centroid_model(image_ids: list[str], source_paths: list[str], embeddin
         descriptors=descriptors,
         embedding_dim=int(embeddings.shape[1]),
         appearance_shape=tuple(int(x) for x in appearances.shape[1:]),
+        centroid_mode=centroid_mode,
+        subject_count=len(subject_counts) if subject_counts is not None else None,
+        subject_counts=subject_counts,
     )
 
 
@@ -68,6 +99,9 @@ def save_model(model: CentroidModel, out_dir: Path) -> None:
 
     profile = {
         "image_count": len(model.image_ids),
+        "centroid_mode": model.centroid_mode,
+        "subject_count": model.subject_count,
+        "subject_counts": model.subject_counts or {},
         "embedding_dim": model.embedding_dim,
         "appearance_shape": list(model.appearance_shape),
         "descriptors": model.descriptors,
@@ -142,6 +176,9 @@ def load_model(model_dir: Path) -> CentroidModel:
         descriptors=profile["descriptors"],
         embedding_dim=int(profile["embedding_dim"]),
         appearance_shape=tuple(int(x) for x in profile["appearance_shape"]),
+        centroid_mode=str(profile.get("centroid_mode", "image_weighted")),
+        subject_count=profile.get("subject_count"),
+        subject_counts=profile.get("subject_counts") or {},
     )
 
 
@@ -150,6 +187,8 @@ def _render_report(profile: dict, prompt: str) -> str:
         "# seju-face centroid report",
         "",
         f"- image_count: {profile['image_count']}",
+        f"- centroid_mode: {profile.get('centroid_mode', 'image_weighted')}",
+        f"- subject_count: {profile.get('subject_count')}",
         f"- embedding_dim: {profile['embedding_dim']}",
         f"- appearance_shape: {profile['appearance_shape']}",
         "",

@@ -13,7 +13,7 @@ from PIL import Image, ImageDraw
 
 import bootstrap  # noqa: F401
 from seju_face_lab import backends
-from seju_face_lab.cli import _sources_download, main
+from seju_face_lab.cli import _sources_download, _subject_id_for_path, main
 from seju_face_lab.model import load_model
 from seju_face_lab.pipeline import build_pipeline_plan, load_pipeline_config
 from seju_face_lab.sources import DownloadResult
@@ -370,6 +370,35 @@ class PipelineTests(unittest.TestCase):
             self.assertIn("Vector Analysis", review_html)
             self.assertIn("Stable Mean Leaders", review_html)
             self.assertIn((subjects / "near_subject" / "near.png").resolve(strict=False).as_uri(), review_html)
+
+    def test_build_supports_subject_balanced_centroid(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "raw"
+            (raw / "subject-a").mkdir(parents=True)
+            (raw / "subject-b").mkdir(parents=True)
+            model_dir = root / "model"
+
+            _write_face_like_image(raw / "subject-a" / "a1.png", (235, 205, 190), eye_offset=0)
+            _write_face_like_image(raw / "subject-a" / "a2.png", (230, 200, 188), eye_offset=1)
+            _write_face_like_image(raw / "subject-b" / "b1.png", (175, 150, 132), eye_offset=7)
+
+            result = main(["build", "--images", str(raw), "--out", str(model_dir), "--balance", "subject"])
+
+            self.assertEqual(result, 0)
+            model = load_model(model_dir)
+            profile = json.loads((model_dir / "profile.json").read_text(encoding="utf-8"))
+            subject_counts = json.loads((model_dir / "vectors" / "subject_counts.json").read_text(encoding="utf-8"))
+            self.assertEqual(model.centroid_mode, "subject_balanced")
+            self.assertEqual(model.subject_count, 2)
+            self.assertEqual(profile["subject_counts"], {"subject-a": 2, "subject-b": 1})
+            self.assertEqual(subject_counts, {"subject-a": 2, "subject-b": 1})
+
+    def test_subject_id_fallback_uses_parent_for_external_paths(self) -> None:
+        root = Path("dataset")
+        external = Path("external") / "subject-x" / "face.png"
+
+        self.assertEqual(_subject_id_for_path(root, external), "subject-x")
 
     def test_run_pipeline_config_builds_reviews_and_precision_report(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1027,8 +1056,12 @@ class PipelineTests(unittest.TestCase):
             report = json.loads((out / "benchmark_research.json").read_text(encoding="utf-8"))
             source_names = {item["name"] for item in report["sources"]}
             self.assertIn("NIST FRTE/FATE", source_names)
+            self.assertIn("IJB-C", source_names)
+            self.assertIn("MegaFace", source_names)
+            self.assertIn("AdaFace", source_names)
             self.assertIn("InsightFace", source_names)
             self.assertIn("Worldcoin Open IRIS", source_names)
+            self.assertIn("subject-balanced", report["vectorization_strategy"]["centroid_aggregation"])
             self.assertEqual(report["vectorization_strategy"]["iris_axis"], "out of scope for face-vector scoring; separate modality only")
             self.assertTrue((out / "benchmark_research.md").exists())
 
@@ -1272,14 +1305,30 @@ class PipelineTests(unittest.TestCase):
                     }
                 ],
             }
+            data_quality = {
+                "summary": {"risk_level": "medium"},
+                "agency_evidence": {
+                    "agencies": [
+                        {
+                            "slug": "seju",
+                            "evidence_type": "real_centroid_baseline",
+                            "real_image_count": 3,
+                            "generated_image_count": 1,
+                        }
+                    ]
+                },
+            }
 
-            site.build_site(config, params, enhancement, {}, images, out)
+            site.build_site(config, params, enhancement, {}, data_quality, images, out)
 
             html = (out / "index.html").read_text(encoding="utf-8")
             data = json.loads((out / "data.json").read_text(encoding="utf-8"))
             self.assertIn("8軸方向性マップ", html)
             self.assertIn('class="axis-map"', html)
             self.assertIn("soft defined", html)
+            self.assertIn("real centroid baseline", html)
+            self.assertEqual(data["data_quality_summary"]["risk_level"], "medium")
+            self.assertEqual(data["agencies"][0]["evidence"]["real_image_count"], 3)
             self.assertEqual(data["agencies"][0]["observed_axis_vector"]["dynamic_symmetric"], 0.6)
 
     def test_data_quality_audit_flags_hypothesis_agencies_and_image_quality(self) -> None:
