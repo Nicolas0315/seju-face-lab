@@ -194,6 +194,8 @@ def main(argv: list[str] | None = None) -> int:
     precision_parser.add_argument("--correlation", type=Path, default=None)
     precision_parser.add_argument("--model-audit", type=Path, default=None)
     precision_parser.add_argument("--vector-export", type=Path, default=None)
+    precision_parser.add_argument("--face-ingredients", type=Path, default=None)
+    precision_parser.add_argument("--benchmark-research", type=Path, default=None)
 
     run_pipeline_parser = subparsers.add_parser(
         "run-pipeline",
@@ -761,6 +763,8 @@ def _precision_report(args: argparse.Namespace) -> int:
         correlation=args.correlation,
         model_audit=args.model_audit,
         vector_export=args.vector_export,
+        face_ingredients=args.face_ingredients,
+        benchmark_research=args.benchmark_research,
     )
     print(f"precision report: {args.out / 'precision_report.md'}")
     print(f"model images: {report['model']['image_count']}")
@@ -985,6 +989,8 @@ def _run_pipeline_precision_report(config: dict) -> int:
             correlation=_pipeline_correlation_out(config),
             model_audit=_pipeline_model_audit_out_or_none(config),
             vector_export=_pipeline_vector_export_out(config),
+            face_ingredients=_pipeline_ingredients_report_out_or_none(config),
+            benchmark_research=_pipeline_benchmark_research_out_or_none(config),
         )
     )
 
@@ -1132,6 +1138,16 @@ def _pipeline_ingredients_report_out(config: dict) -> Path:
     raise SystemExit("Pipeline config requires ingredients_report.out or face_ingredients_out")
 
 
+def _pipeline_ingredients_report_out_or_none(config: dict) -> Path | None:
+    if (
+        isinstance(config.get("ingredients_report"), dict)
+        or config.get("face_ingredients_out")
+        or config.get("ingredients_out")
+    ):
+        return _pipeline_ingredients_report_out(config)
+    return None
+
+
 def _pipeline_benchmark_research_out(config: dict) -> Path:
     research = config.get("benchmark_research")
     if isinstance(research, dict) and research.get("out"):
@@ -1141,6 +1157,12 @@ def _pipeline_benchmark_research_out(config: dict) -> Path:
     if isinstance(research, dict):
         return Path("outputs") / "benchmark_research"
     raise SystemExit("Pipeline config requires benchmark_research.out or benchmark_research_out")
+
+
+def _pipeline_benchmark_research_out_or_none(config: dict) -> Path | None:
+    if isinstance(config.get("benchmark_research"), dict) or config.get("benchmark_research_out"):
+        return _pipeline_benchmark_research_out(config)
+    return None
 
 
 def _pipeline_default_vector_export_path(config: dict, export: dict) -> Path:

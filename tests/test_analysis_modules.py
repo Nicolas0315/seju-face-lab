@@ -291,6 +291,8 @@ class AnalysisModuleTests(unittest.TestCase):
             correlation = root / "correlation"
             model_audit = root / "model_audit"
             vector_export = root / "vectors.json"
+            face_ingredients = root / "face_ingredients"
+            benchmark_research = root / "benchmark_research"
             out = root / "precision"
             model.mkdir()
             generation.mkdir()
@@ -300,6 +302,8 @@ class AnalysisModuleTests(unittest.TestCase):
             subject_backend_comparison.mkdir()
             correlation.mkdir()
             model_audit.mkdir()
+            face_ingredients.mkdir()
+            benchmark_research.mkdir()
             np.savez_compressed(
                 model / "centroids.npz",
                 mean_embedding=np.asarray([0.6, 0.8], dtype=np.float32),
@@ -571,6 +575,54 @@ class AnalysisModuleTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            (face_ingredients / "face_ingredients.json").write_text(
+                json.dumps(
+                    {
+                        "image_count": 3,
+                        "ingredients": {
+                            "overall": {
+                                "summary": "bright, soft aggregate face impression",
+                                "evidence": {"luminance": 0.74},
+                            },
+                            "face_parts": {
+                                "summary": "strong left-right balance",
+                                "evidence": {"symmetry": 0.96},
+                            },
+                            "color_tone": {
+                                "summary": "slightly cool/neutral palette",
+                                "evidence": {"warmth": -0.01},
+                            },
+                            "makeup_texture": {
+                                "summary": "natural, sheer-looking makeup",
+                                "evidence": {"contrast": 0.08},
+                            },
+                            "hair": {
+                                "summary": "dark natural hair signal",
+                                "evidence": {"upper_band_darkness": 0.25},
+                            },
+                        },
+                        "prompt_guidance": ["bright portrait lighting"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (benchmark_research / "benchmark_research.json").write_text(
+                json.dumps(
+                    {
+                        "retrieved_at": "2026-06-15",
+                        "sources": [{"name": "NIST FRTE/FATE"}, {"name": "InsightFace"}],
+                        "vectorization_strategy": {
+                            "primary_face_embedding": "insightface ArcFace-family 512D embeddings",
+                            "face_analysis_axis": "FATE-style analysis kept separate",
+                            "iris_axis": "separate modality only",
+                        },
+                        "recommendations": [
+                            {"title": "Make InsightFace/ArcFace the primary neural cross-check"}
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
 
             report = write_precision_report(
                 model_dir=model,
@@ -583,6 +635,8 @@ class AnalysisModuleTests(unittest.TestCase):
                 correlation=correlation,
                 model_audit=model_audit,
                 vector_export=vector_export,
+                face_ingredients=face_ingredients,
+                benchmark_research=benchmark_research,
             )
 
             self.assertEqual(report["model"]["image_count"], 3)
@@ -598,11 +652,22 @@ class AnalysisModuleTests(unittest.TestCase):
             self.assertEqual(report["model"]["model_audit"]["descriptor_delta"]["brightness"], 0.1)
             self.assertEqual(report["workflow_readiness"]["ready_count"], 8)
             self.assertEqual(report["workflow_readiness"]["total_count"], 8)
-            self.assertEqual(report["workflow_readiness"]["optional_ready_count"], 3)
-            self.assertEqual(report["workflow_readiness"]["optional_total_count"], 3)
+            self.assertEqual(report["workflow_readiness"]["optional_ready_count"], 5)
+            self.assertEqual(report["workflow_readiness"]["optional_total_count"], 5)
             self.assertEqual(report["workflow_readiness"]["missing"], [])
             self.assertEqual(report["workflow_readiness"]["optional_missing"], [])
             self.assertIsNone(report["workflow_readiness"]["next_action"])
+            self.assertTrue(report["face_ingredients"]["available"])
+            self.assertEqual(
+                report["face_ingredients"]["overall"]["summary"],
+                "bright, soft aggregate face impression",
+            )
+            self.assertTrue(report["benchmark_research"]["available"])
+            self.assertEqual(report["benchmark_research"]["source_count"], 2)
+            self.assertEqual(
+                report["benchmark_research"]["primary_face_embedding"],
+                "insightface ArcFace-family 512D embeddings",
+            )
             self.assertEqual(report["generation"]["provider"], "diffusers")
             self.assertEqual(report["generation"]["model_id"], "local/test-model")
             self.assertEqual(report["generation"]["centroid_kind"], "mean")
@@ -702,6 +767,18 @@ class AnalysisModuleTests(unittest.TestCase):
             )
             self.assertIn(
                 "mean_median_embedding_cosine: 0.6",
+                (out / "precision_report.md").read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                "Face Ingredients",
+                (out / "precision_report.md").read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                "Benchmark Research",
+                (out / "precision_report.md").read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                "primary_face_embedding: insightface ArcFace-family 512D embeddings",
                 (out / "precision_report.md").read_text(encoding="utf-8"),
             )
             self.assertIn(

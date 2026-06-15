@@ -156,16 +156,17 @@ python -m seju_face_lab review-generated --model outputs/seju_model --images out
 This writes `evaluation/`, `quality/`, and a one-run `generation_run_reviews.*` report.
 
 Summarize the centroid model, generated-image precision review, QA gate, optional
-subject-review evidence, and backend agreement into one reviewable bundle:
+subject-review evidence, face ingredients, benchmark research, and backend agreement
+into one reviewable bundle:
 
 ```powershell
-python -m seju_face_lab precision-report --model outputs/seju_model --model-audit outputs/model_audit --vector-export outputs/seju_vectors.json --generation-review outputs/generated_detector/review --subject-review outputs/subject_reviews --backend-comparison outputs/backend_compare --subject-backend-comparison outputs/subject_backend_compare --correlation outputs/correlation --out outputs/precision_report
+python -m seju_face_lab precision-report --model outputs/seju_model --model-audit outputs/model_audit --vector-export outputs/seju_vectors.json --face-ingredients outputs/face_ingredients --benchmark-research outputs/benchmark_research --generation-review outputs/generated_detector/review --subject-review outputs/subject_reviews --backend-comparison outputs/backend_compare --subject-backend-comparison outputs/subject_backend_compare --correlation outputs/correlation --out outputs/precision_report
 ```
 
 This writes `precision_report.json` and `precision_report.md`, including a workflow
 readiness checklist plus optional mean/median vector audit, vector-export evidence,
-and face-score/SNS correlation summary when `--correlation` is provided
-when `--model-audit` and `--vector-export` point at files or directories.
+face ingredient decomposition, benchmark/OSS research, and face-score/SNS correlation
+summary when those optional inputs point at files or directories.
 
 Run a reproducible local pipeline from a JSON config:
 
@@ -409,7 +410,7 @@ See `docs/gpu-generation-log.md` for RTX 4090 generation smoke results.
 - evaluation `scores.csv`: similarity of candidate generated images to the centroid vectors.
 - evaluation `summary.json`: best/mean/median generated-image similarity for quick comparisons.
 - generated review `generation_run_reviews.csv`: one-command generated-image evaluation + QA + run review via `review-generated`, or directly after Diffusers generation with `generate --review`; includes provider, model, centroid kind, prompt profile, seed, count, steps, size, device, and dtype when `generation_run.json` is present.
-- precision report `precision_report.json`: workflow readiness checklist, model centroid, optional `model_audit.json` mean/median vector distance summary, generation settings, generated-image mean/median score components, mean-vs-median generation grouping, QA, subject-review vector analysis, backend-comparison, subject-backend-comparison, and optional correlation summary via `precision-report`.
+- precision report `precision_report.json`: workflow readiness checklist, model centroid, optional `model_audit.json` mean/median vector distance summary, vector export, face ingredients, benchmark/OSS research, generation settings, generated-image mean/median score components, mean-vs-median generation grouping, QA, subject-review vector analysis, backend-comparison, subject-backend-comparison, and optional correlation summary via `precision-report`.
 - pipeline run `pipeline_run.json`: configured build/audit-model/export-vectors/ingredients-report/benchmark-research/evaluate/style-evaluate/review/backend-comparison/subject-backend-comparison/precision orchestration via `run-pipeline`.
 - generation sweep `configs/pipelines/generation-sweep.example.json`: repeatable seed/profile generation experiments with per-run manifests and optional shared run comparison.
 - pipeline config `configs/pipelines/full-retinaface-review.example.json`: deterministic continuity plus `deepface-retinaface` neural rank agreement for the precision bundle.

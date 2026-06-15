@@ -97,10 +97,13 @@ reference acceptance counts and generated-image ranks can be audited before trus
 Use `--reuse-existing` when a long detector sweep has completed some per-detector folders already.
 Use `--max-reference-images` and `--max-images` for slow detector smoke audits before committing
 to a full reference-set run.
-Pass vector export and comparison outputs into `precision-report --vector-export`,
-`--backend-comparison`, `--subject-backend-comparison`, and `--correlation`, or set `vector_export.out`,
-`backend_comparison.out`, `subject_backend_comparison.out`, and `correlation.out` in a pipeline config so final precision bundles include
-centroid-vector export evidence plus generated-image, per-subject backend agreement, and face-score/SNS correlation evidence.
+Pass vector export, research, and comparison outputs into `precision-report --vector-export`,
+`--face-ingredients`, `--benchmark-research`, `--backend-comparison`, `--subject-backend-comparison`,
+and `--correlation`, or set `vector_export.out`, `face_ingredients_out`, `benchmark_research.out`,
+`backend_comparison.out`, `subject_backend_comparison.out`, and `correlation.out` in a pipeline config so
+final precision bundles include centroid-vector export evidence, face-part/color/makeup/hair ingredients,
+benchmark/OSS vectorization guidance, generated-image evidence, per-subject backend agreement, and
+face-score/SNS correlation evidence.
 
 ## Subject Review Contract
 

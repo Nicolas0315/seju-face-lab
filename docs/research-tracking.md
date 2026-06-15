@@ -11,7 +11,7 @@ Retrieval/design date: 2026-06-14.
 - InsightFace adapter code is dependency-gated and has a sample-verified 512D comparison path when `insightface` and ONNXRuntime providers are available.
 - DeepFace adapter code is dependency-gated and uses `DeepFace.represent` for neural cross-checking.
 - `backend-diagnostics` records optional dependency, CUDA, and ONNXRuntime provider visibility.
-- `benchmark-research` records benchmark/OSS adoption notes for NIST FRTE/FATE, NEC context, InsightFace, DeepFace, OpenCLIP, and Worldcoin Open IRIS.
+- `benchmark-research` records benchmark/OSS adoption notes for NIST FRTE/FATE, NEC context, InsightFace, DeepFace, OpenCLIP, and Worldcoin Open IRIS; Open IRIS remains separate-modality architecture guidance, not a face-vector backend.
 - `compare-backends` builds/evaluates multiple vector backends on the same local image sets and reports rank agreement.
 - `compare-deepface-detectors` sweeps DeepFace detector choices on the same local image sets and reports detector acceptance/rank agreement.
 - Per-subject similarity review is implemented through `review-subjects`.
@@ -32,7 +32,7 @@ Retrieval/design date: 2026-06-14.
 - `review-generated` runs generated-image evaluation, QA, and one-run comparison as the standard precision-review shortcut.
 - `generate --review` now chains real Diffusers generation into the same generated-image review shortcut.
 - `generate --review` also chains OpenAI Image API generation into the same generated-image review shortcut.
-- `precision-report` consolidates a workflow readiness checklist, centroid, optional `model_audit.json` mean/median vector distance metadata, generated-image mean/median score components, QA, subject-review, backend-comparison, subject-backend-comparison, and optional correlation evidence into a review bundle.
+- `precision-report` consolidates a workflow readiness checklist, centroid, optional `model_audit.json` mean/median vector distance metadata, vector export, face-ingredient decomposition, benchmark/OSS research, generated-image mean/median score components, QA, subject-review, backend-comparison, subject-backend-comparison, and optional correlation evidence into a review bundle.
 - `audit-model` writes standalone mean/median vector hashes, norms, distance metrics, and descriptor deltas for centroid-model review.
 - `ingredients-report` decomposes mean/median descriptors into face-part, color-tone, makeup-texture, hair-signal, and generation-guidance notes.
 - `export-vectors` writes full mean/median centroid embedding values as JSON or CSV for external analysis and generation tooling.

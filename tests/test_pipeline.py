@@ -483,6 +483,10 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(precision["subject_backend_comparison"]["completed_backends"], ["deterministic"])
             self.assertIsNotNone(precision["generation"]["best_style_score"])
             self.assertIsNotNone(precision["generation"]["best_combined_score"])
+            self.assertTrue(precision["face_ingredients"]["available"])
+            self.assertIn("overall", precision["face_ingredients"])
+            self.assertTrue(precision["benchmark_research"]["available"])
+            self.assertIn("InsightFace", precision["benchmark_research"]["source_names"])
 
     def test_run_pipeline_uses_nested_generation_output_for_evaluation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

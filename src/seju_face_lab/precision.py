@@ -23,6 +23,8 @@ def write_precision_report(
     correlation: Path | None = None,
     model_audit: Path | None = None,
     vector_export: Path | None = None,
+    face_ingredients: Path | None = None,
+    benchmark_research: Path | None = None,
 ) -> dict[str, Any]:
     """Write a compact review bundle for centroid, generation, QA, and subject evidence."""
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -37,6 +39,8 @@ def write_precision_report(
         correlation=correlation,
         model_audit=model_audit,
         vector_export=vector_export,
+        face_ingredients=face_ingredients,
+        benchmark_research=benchmark_research,
     )
     report = _json_safe(report)
     (out_dir / "precision_report.json").write_text(
@@ -58,6 +62,8 @@ def build_precision_report(
     correlation: Path | None = None,
     model_audit: Path | None = None,
     vector_export: Path | None = None,
+    face_ingredients: Path | None = None,
+    benchmark_research: Path | None = None,
 ) -> dict[str, Any]:
     profile = _load_optional_json(model_dir / "profile.json")
     model_audit_summary = _load_optional_json(_resolve_model_audit_path(model_audit))
@@ -72,6 +78,8 @@ def build_precision_report(
         _resolve_subject_backend_comparison_path(subject_backend_comparison)
     )
     correlation_summary_raw = _load_optional_json(_resolve_correlation_path(correlation))
+    face_ingredients_raw = _load_optional_json(_resolve_face_ingredients_path(face_ingredients))
+    benchmark_research_raw = _load_optional_json(_resolve_benchmark_research_path(benchmark_research))
     model = _model_summary(model_dir, profile, model_audit_summary, vector_export_summary)
     generation_summary = _generation_summary(
         generation,
@@ -83,6 +91,8 @@ def build_precision_report(
     backend_summary = _backend_comparison_summary(backend_comparison_summary)
     subject_backend_summary = _backend_comparison_summary(subject_backend_comparison_summary)
     correlation_summary = _correlation_summary(correlation_summary_raw)
+    face_ingredients_summary = _face_ingredients_summary(face_ingredients_raw)
+    benchmark_research_summary = _benchmark_research_summary(benchmark_research_raw)
     return {
         "workflow_readiness": _workflow_readiness(
             model,
@@ -91,6 +101,8 @@ def build_precision_report(
             backend_summary,
             subject_backend_summary,
             correlation_summary,
+            face_ingredients_summary,
+            benchmark_research_summary,
             bool(evaluation_summary or evaluation_scores),
             bool(quality_summary),
         ),
@@ -100,6 +112,8 @@ def build_precision_report(
         "backend_comparison": backend_summary,
         "subject_backend_comparison": subject_backend_summary,
         "correlation": correlation_summary,
+        "face_ingredients": face_ingredients_summary,
+        "benchmark_research": benchmark_research_summary,
         "inputs": {
             "model_dir": str(model_dir),
             "generation_review": str(generation_review) if generation_review else None,
@@ -113,6 +127,8 @@ def build_precision_report(
             "correlation": str(correlation) if correlation else None,
             "model_audit": str(model_audit) if model_audit else None,
             "vector_export": str(vector_export) if vector_export else None,
+            "face_ingredients": str(face_ingredients) if face_ingredients else None,
+            "benchmark_research": str(benchmark_research) if benchmark_research else None,
         },
         "boundary": (
             "Approximate local precision review only. Scores are model-relative vector "
@@ -430,6 +446,74 @@ def _correlation_summary(summary: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _face_ingredients_summary(report: dict[str, Any]) -> dict[str, Any]:
+    if not report:
+        return {"available": False}
+    ingredients = report.get("ingredients")
+    if not isinstance(ingredients, dict):
+        ingredients = {}
+    return {
+        "available": True,
+        "image_count": report.get("image_count"),
+        "overall": _ingredient_section_summary(ingredients.get("overall")),
+        "face_parts": _ingredient_section_summary(ingredients.get("face_parts")),
+        "color_tone": _ingredient_section_summary(ingredients.get("color_tone")),
+        "makeup_texture": _ingredient_section_summary(ingredients.get("makeup_texture")),
+        "hair": _ingredient_section_summary(ingredients.get("hair")),
+        "prompt_guidance": _string_list(report.get("prompt_guidance")),
+    }
+
+
+def _ingredient_section_summary(section: Any) -> dict[str, Any]:
+    if not isinstance(section, dict):
+        return {"summary": None, "evidence": {}}
+    evidence = section.get("evidence")
+    if not isinstance(evidence, dict):
+        evidence = {}
+    return {
+        "summary": section.get("summary"),
+        "evidence": evidence,
+    }
+
+
+def _benchmark_research_summary(report: dict[str, Any]) -> dict[str, Any]:
+    if not report:
+        return {"available": False}
+    sources = report.get("sources")
+    if not isinstance(sources, list):
+        sources = []
+    strategy = report.get("vectorization_strategy")
+    if not isinstance(strategy, dict):
+        strategy = {}
+    recommendations = report.get("recommendations")
+    if not isinstance(recommendations, list):
+        recommendations = []
+    return {
+        "available": True,
+        "retrieved_at": report.get("retrieved_at"),
+        "source_count": len([source for source in sources if isinstance(source, dict)]),
+        "source_names": [
+            str(source.get("name"))
+            for source in sources
+            if isinstance(source, dict) and source.get("name")
+        ],
+        "primary_face_embedding": strategy.get("primary_face_embedding"),
+        "face_analysis_axis": strategy.get("face_analysis_axis"),
+        "iris_axis": strategy.get("iris_axis"),
+        "recommendations": [
+            str(item.get("title"))
+            for item in recommendations
+            if isinstance(item, dict) and item.get("title")
+        ][:6],
+    }
+
+
+def _string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value if item is not None]
+
+
 def _workflow_readiness(
     model: dict[str, Any],
     generation: dict[str, Any],
@@ -437,6 +521,8 @@ def _workflow_readiness(
     backend_comparison: dict[str, Any],
     subject_backend_comparison: dict[str, Any],
     correlation: dict[str, Any],
+    face_ingredients: dict[str, Any],
+    benchmark_research: dict[str, Any],
     has_evaluation: bool,
     has_quality: bool,
 ) -> dict[str, Any]:
@@ -501,6 +587,18 @@ def _workflow_readiness(
             "Run analyze correlation for face-score/SNS engagement review",
             required=False,
         ),
+        _readiness_check(
+            "face_ingredients",
+            bool(face_ingredients.get("available")),
+            "Run ingredients-report for face-part/color/makeup/hair decomposition",
+            required=False,
+        ),
+        _readiness_check(
+            "benchmark_research",
+            bool(benchmark_research.get("available")),
+            "Run benchmark-research for OSS and benchmark vectorization guidance",
+            required=False,
+        ),
     ]
     required_checks = [check for check in checks if check["required"]]
     optional_checks = [check for check in checks if not check["required"]]
@@ -550,6 +648,8 @@ def _render_precision_report(report: dict[str, Any]) -> str:
     backend_comparison = report["backend_comparison"]
     subject_backend_comparison = report["subject_backend_comparison"]
     correlation = report["correlation"]
+    face_ingredients = report["face_ingredients"]
+    benchmark_research = report["benchmark_research"]
     lines = [
         "# seju-face precision report",
         "",
@@ -582,6 +682,28 @@ def _render_precision_report(report: dict[str, Any]) -> str:
         f"- mean_median_embedding_euclidean: {_value(_audit_field(model, 'mean_median_embedding', 'euclidean'))}",
         f"- mean_median_appearance_cosine: {_value(_audit_field(model, 'mean_median_appearance', 'cosine'))}",
         f"- mean_median_appearance_euclidean: {_value(_audit_field(model, 'mean_median_appearance', 'euclidean'))}",
+        "",
+        "## Face Ingredients",
+        "",
+        f"- available: {face_ingredients['available']}",
+        f"- image_count: {_value(face_ingredients.get('image_count'))}",
+        f"- overall: {_value(face_ingredients.get('overall', {}).get('summary'))}",
+        f"- face_parts: {_value(face_ingredients.get('face_parts', {}).get('summary'))}",
+        f"- color_tone: {_value(face_ingredients.get('color_tone', {}).get('summary'))}",
+        f"- makeup_texture: {_value(face_ingredients.get('makeup_texture', {}).get('summary'))}",
+        f"- hair: {_value(face_ingredients.get('hair', {}).get('summary'))}",
+        f"- prompt_guidance: {_value(', '.join(face_ingredients.get('prompt_guidance', [])))}",
+        "",
+        "## Benchmark Research",
+        "",
+        f"- available: {benchmark_research['available']}",
+        f"- retrieved_at: {_value(benchmark_research.get('retrieved_at'))}",
+        f"- source_count: {_value(benchmark_research.get('source_count'))}",
+        f"- sources: {_value(', '.join(benchmark_research.get('source_names', [])))}",
+        f"- primary_face_embedding: {_value(benchmark_research.get('primary_face_embedding'))}",
+        f"- face_analysis_axis: {_value(benchmark_research.get('face_analysis_axis'))}",
+        f"- iris_axis: {_value(benchmark_research.get('iris_axis'))}",
+        f"- recommendations: {_value(', '.join(benchmark_research.get('recommendations', [])))}",
         "",
         "## Generated Image Review",
         "",
@@ -840,6 +962,22 @@ def _resolve_vector_export_path(path: Path | None) -> Path | None:
         if csv_path.exists():
             return csv_path
         return json_path
+    return path
+
+
+def _resolve_face_ingredients_path(path: Path | None) -> Path | None:
+    if path is None:
+        return None
+    if path.is_dir():
+        return path / "face_ingredients.json"
+    return path
+
+
+def _resolve_benchmark_research_path(path: Path | None) -> Path | None:
+    if path is None:
+        return None
+    if path.is_dir():
+        return path / "benchmark_research.json"
     return path
 
 
