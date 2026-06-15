@@ -1,0 +1,114 @@
+{
+  "version": "agency-refinement-v1",
+  "created_at": "2026-06-15",
+  "source_calibration": "outputs/agency_generation_calibration/generation_calibration.json",
+  "source_enhancement": "outputs/agency_enhancement/agency_enhancement_report.json",
+  "model_dir": "outputs/seju_model_official",
+  "baseline_images": "outputs/agency_imagegen_samples",
+  "updated_images": "outputs/agency_generation_refined/v1/images",
+  "evaluation_out": "outputs/agency_generation_refined/v1/evaluation",
+  "axis_out": "outputs/agency_generation_refined/v1/face_axes",
+  "enhancement_out": "outputs/agency_generation_refined/v1/enhancement",
+  "site_source_images": "outputs/agency_site/assets",
+  "status": {
+    "generated": true,
+    "evaluated": true,
+    "promoted_to_site": true,
+    "generated_at": "2026-06-15",
+    "deployed_at": "2026-06-15",
+    "production_url": "https://seju-face-lab-agency-research.pages.dev/",
+    "deployment_url": "https://302d751d.seju-face-lab-agency-research.pages.dev/",
+    "source_generated_images_cache_id": "019ec65e-dcff-7ef2-a906-a2501156d96e",
+    "note": "Generated image binaries are kept under outputs/ and are not committed; this manifest tracks stable paths and measured scores."
+  },
+  "targets": {
+    "image_centroid_score": 0.35,
+    "axis_alignment": 0.62,
+    "enhancement_score": 0.76
+  },
+  "selected_for_update": [
+    {
+      "slug": "seju",
+      "name": "seju / GROVE",
+      "priority": "regenerate",
+      "current_image_centroid_score": 0.073247,
+      "current_axis_alignment": 0.449757,
+      "current_enhancement_score": 0.681432,
+      "v1_image_centroid_score": 0.416191,
+      "v1_axis_alignment": 0.573396,
+      "v1_enhancement_score": 0.783322,
+      "delta_enhancement_score": 0.10189,
+      "prompt_path": "outputs/agency_generation_calibration/prompts/seju_calibrated.txt",
+      "output_image": "outputs/agency_generation_refined/v1/images/seju.png"
+    },
+    {
+      "slug": "asia-promotion",
+      "name": "ASIA PROMOTION",
+      "priority": "regenerate",
+      "current_image_centroid_score": -0.27003,
+      "current_axis_alignment": 0.370557,
+      "current_enhancement_score": 0.581166,
+      "v1_image_centroid_score": 0.094086,
+      "v1_axis_alignment": 0.591781,
+      "v1_enhancement_score": 0.707412,
+      "delta_enhancement_score": 0.126246,
+      "prompt_path": "outputs/agency_generation_calibration/prompts/asia-promotion_calibrated.txt",
+      "output_image": "outputs/agency_generation_refined/v1/images/asia-promotion.png"
+    }
+  ],
+  "carry_forward": [
+    {
+      "slug": "platinum",
+      "source_image": "outputs/agency_imagegen_samples/platinum.png",
+      "output_image": "outputs/agency_generation_refined/v1/images/platinum.png"
+    },
+    {
+      "slug": "lespros",
+      "source_image": "outputs/agency_imagegen_samples/lespros.png",
+      "output_image": "outputs/agency_generation_refined/v1/images/lespros.png"
+    },
+    {
+      "slug": "trustar",
+      "source_image": "outputs/agency_imagegen_samples/trustar.png",
+      "output_image": "outputs/agency_generation_refined/v1/images/trustar.png"
+    }
+  ],
+  "evaluation_summary": [
+    {
+      "slug": "seju",
+      "baseline_enhancement_score": 0.681432,
+      "v1_enhancement_score": 0.783322,
+      "delta": 0.10189,
+      "result": "target_met"
+    },
+    {
+      "slug": "asia-promotion",
+      "baseline_enhancement_score": 0.581166,
+      "v1_enhancement_score": 0.707412,
+      "delta": 0.126246,
+      "result": "improved_below_target"
+    },
+    {
+      "slug": "platinum",
+      "baseline_enhancement_score": 0.754879,
+      "v1_enhancement_score": 0.754879,
+      "delta": 0.0,
+      "result": "carried_forward"
+    },
+    {
+      "slug": "lespros",
+      "baseline_enhancement_score": 0.716674,
+      "v1_enhancement_score": 0.716674,
+      "delta": 0.0,
+      "result": "carried_forward"
+    },
+    {
+      "slug": "trustar",
+      "baseline_enhancement_score": 0.689821,
+      "v1_enhancement_score": 0.689821,
+      "delta": 0.0,
+      "result": "carried_forward"
+    }
+  ],
+  "boundary": "All generated images are fictional aggregate research samples. Do not imitate real people or use scores as identity, attractiveness, popularity, ethnicity, or personal-value labels."
+}
