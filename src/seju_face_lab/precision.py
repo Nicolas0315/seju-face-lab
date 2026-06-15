@@ -19,6 +19,7 @@ def write_precision_report(
     quality: Path | None = None,
     backend_comparison: Path | None = None,
     subject_backend_comparison: Path | None = None,
+    correlation: Path | None = None,
     model_audit: Path | None = None,
     vector_export: Path | None = None,
 ) -> dict[str, Any]:
@@ -32,6 +33,7 @@ def write_precision_report(
         quality=quality,
         backend_comparison=backend_comparison,
         subject_backend_comparison=subject_backend_comparison,
+        correlation=correlation,
         model_audit=model_audit,
         vector_export=vector_export,
     )
@@ -51,6 +53,7 @@ def build_precision_report(
     quality: Path | None = None,
     backend_comparison: Path | None = None,
     subject_backend_comparison: Path | None = None,
+    correlation: Path | None = None,
     model_audit: Path | None = None,
     vector_export: Path | None = None,
 ) -> dict[str, Any]:
@@ -66,6 +69,7 @@ def build_precision_report(
     subject_backend_comparison_summary = _load_optional_json(
         _resolve_subject_backend_comparison_path(subject_backend_comparison)
     )
+    correlation_summary_raw = _load_optional_json(_resolve_correlation_path(correlation))
     model = _model_summary(model_dir, profile, model_audit_summary, vector_export_summary)
     generation_summary = _generation_summary(
         generation,
@@ -76,6 +80,7 @@ def build_precision_report(
     subjects_summary = _subject_summary(subjects)
     backend_summary = _backend_comparison_summary(backend_comparison_summary)
     subject_backend_summary = _backend_comparison_summary(subject_backend_comparison_summary)
+    correlation_summary = _correlation_summary(correlation_summary_raw)
     return {
         "workflow_readiness": _workflow_readiness(
             model,
@@ -83,6 +88,7 @@ def build_precision_report(
             subjects_summary,
             backend_summary,
             subject_backend_summary,
+            correlation_summary,
             bool(evaluation_summary or evaluation_scores),
             bool(quality_summary),
         ),
@@ -91,6 +97,7 @@ def build_precision_report(
         "subjects": subjects_summary,
         "backend_comparison": backend_summary,
         "subject_backend_comparison": subject_backend_summary,
+        "correlation": correlation_summary,
         "inputs": {
             "model_dir": str(model_dir),
             "generation_review": str(generation_review) if generation_review else None,
@@ -101,6 +108,7 @@ def build_precision_report(
             "subject_backend_comparison": (
                 str(subject_backend_comparison) if subject_backend_comparison else None
             ),
+            "correlation": str(correlation) if correlation else None,
             "model_audit": str(model_audit) if model_audit else None,
             "vector_export": str(vector_export) if vector_export else None,
         },
@@ -353,12 +361,45 @@ def _backend_comparison_summary(comparison: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _correlation_summary(summary: dict[str, Any]) -> dict[str, Any]:
+    if not summary:
+        return {"available": False}
+    correlations = summary.get("correlations")
+    if not isinstance(correlations, list):
+        correlations = []
+    ranked = sorted(
+        [row for row in correlations if isinstance(row, dict) and row.get("spearman_r") is not None],
+        key=lambda row: -abs(float(row.get("spearman_r", 0.0))),
+    )
+    top = ranked[0] if ranked else {}
+    return {
+        "available": True,
+        "talent_count": summary.get("talent_count"),
+        "with_face_score": summary.get("with_face_score"),
+        "with_ig": summary.get("with_ig"),
+        "with_twitter": summary.get("with_twitter"),
+        "with_tiktok": summary.get("with_tiktok"),
+        "correlation_count": len(correlations),
+        "top_pair": {
+            "a": top.get("a"),
+            "b": top.get("b"),
+            "n": top.get("n"),
+            "spearman_r": top.get("spearman_r"),
+            "spearman_p": top.get("spearman_p"),
+            "pearson_r": top.get("pearson_r"),
+            "interpretation": top.get("interpretation"),
+        } if top else None,
+        "correlations": correlations[:10],
+    }
+
+
 def _workflow_readiness(
     model: dict[str, Any],
     generation: dict[str, Any],
     subjects: dict[str, Any],
     backend_comparison: dict[str, Any],
     subject_backend_comparison: dict[str, Any],
+    correlation: dict[str, Any],
     has_evaluation: bool,
     has_quality: bool,
 ) -> dict[str, Any]:
@@ -417,6 +458,12 @@ def _workflow_readiness(
             bool(subject_backend_comparison.get("completed_backends")),
             "Run compare-subject-backends for subject-ranking backend agreement",
         ),
+        _readiness_check(
+            "correlation_report",
+            bool(correlation.get("available")),
+            "Run analyze correlation for face-score/SNS engagement review",
+            required=False,
+        ),
     ]
     required_checks = [check for check in checks if check["required"]]
     optional_checks = [check for check in checks if not check["required"]]
@@ -465,6 +512,7 @@ def _render_precision_report(report: dict[str, Any]) -> str:
     subjects = report["subjects"]
     backend_comparison = report["backend_comparison"]
     subject_backend_comparison = report["subject_backend_comparison"]
+    correlation = report["correlation"]
     lines = [
         "# seju-face precision report",
         "",
@@ -543,6 +591,17 @@ def _render_precision_report(report: dict[str, Any]) -> str:
         f"- run_count: {_value(subject_backend_comparison['run_count'])}",
         f"- completed_backends: {', '.join(subject_backend_comparison['completed_backends'])}",
         f"- failed_backends: {', '.join(subject_backend_comparison['failed_backends'])}",
+        "",
+        "## Correlation Review",
+        "",
+        f"- available: {correlation['available']}",
+        f"- talent_count: {_value(correlation.get('talent_count'))}",
+        f"- with_face_score: {_value(correlation.get('with_face_score'))}",
+        f"- with_instagram: {_value(correlation.get('with_ig'))}",
+        f"- with_twitter: {_value(correlation.get('with_twitter'))}",
+        f"- with_tiktok: {_value(correlation.get('with_tiktok'))}",
+        f"- correlation_count: {_value(correlation.get('correlation_count'))}",
+        f"- top_pair: {_format_correlation_pair(correlation.get('top_pair'))}",
     ]
     if readiness["checks"]:
         lines.extend(["", "## Workflow Readiness Checks", "", "| check | required | ready | next_action |"])
@@ -641,6 +700,14 @@ def _resolve_subject_backend_comparison_path(path: Path | None) -> Path | None:
         return None
     if path.is_dir():
         return path / "subject_backend_comparison.json"
+    return path
+
+
+def _resolve_correlation_path(path: Path | None) -> Path | None:
+    if path is None:
+        return None
+    if path.is_dir():
+        return path / "correlation_summary.json"
     return path
 
 
@@ -782,6 +849,17 @@ def _value(value: Any) -> str:
     if value is None:
         return ""
     return str(value)
+
+
+def _format_correlation_pair(pair: Any) -> str:
+    if not isinstance(pair, dict):
+        return ""
+    return (
+        f"{_value(pair.get('a'))} x {_value(pair.get('b'))} "
+        f"rho={_value(pair.get('spearman_r'))} "
+        f"n={_value(pair.get('n'))} "
+        f"{_value(pair.get('interpretation'))}"
+    ).strip()
 
 
 def _vector_field(model: dict[str, Any], vector_name: str, field: str) -> Any:

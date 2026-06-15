@@ -719,6 +719,7 @@ class PipelineTests(unittest.TestCase):
             handles = root / "sns_handles.jsonl"
             engagement = root / "sns_engagement.jsonl"
             correlation = root / "correlation"
+            precision = root / "precision"
             pipeline_dir = root / "pipeline_run"
             config_path = root / "pipeline.json"
             raw.mkdir()
@@ -755,6 +756,7 @@ class PipelineTests(unittest.TestCase):
                             "force": True,
                         },
                         "correlation": {"out": str(correlation)},
+                        "precision_out": str(precision),
                         "vector_backend": "deterministic",
                     }
                 ),
@@ -771,9 +773,9 @@ class PipelineTests(unittest.TestCase):
             pipeline_run = json.loads((pipeline_dir / "pipeline_run.json").read_text(encoding="utf-8"))
             self.assertEqual(
                 [step["name"] for step in pipeline_run["steps"]],
-                ["build", "review-subjects", "explore-batch", "analyze-correlation"],
+                ["build", "review-subjects", "explore-batch", "analyze-correlation", "precision-report"],
             )
-            self.assertEqual([step["status"] for step in pipeline_run["steps"]], ["completed"] * 4)
+            self.assertEqual([step["status"] for step in pipeline_run["steps"]], ["completed"] * 5)
             self.assertEqual(fake_router.items, [("instagram", "near_subject_ig")])
             self.assertEqual(fake_router.delay_between, 0.0)
             self.assertTrue(fake_router.force)
@@ -783,6 +785,9 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(summary["talent_count"], 1)
             self.assertEqual(summary["with_face_score"], 1)
             self.assertEqual(summary["with_ig"], 1)
+            precision_summary = json.loads((precision / "precision_report.json").read_text(encoding="utf-8"))
+            self.assertTrue(precision_summary["correlation"]["available"])
+            self.assertEqual(precision_summary["correlation"]["talent_count"], 1)
 
     def test_run_pipeline_writes_manifest_when_step_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

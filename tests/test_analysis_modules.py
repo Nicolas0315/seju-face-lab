@@ -194,6 +194,7 @@ class AnalysisModuleTests(unittest.TestCase):
             subjects = root / "subject_review"
             backend_comparison = root / "backend_compare"
             subject_backend_comparison = root / "subject_backend_compare"
+            correlation = root / "correlation"
             model_audit = root / "model_audit"
             vector_export = root / "vectors.json"
             out = root / "precision"
@@ -203,6 +204,7 @@ class AnalysisModuleTests(unittest.TestCase):
             subjects.mkdir()
             backend_comparison.mkdir()
             subject_backend_comparison.mkdir()
+            correlation.mkdir()
             model_audit.mkdir()
             np.savez_compressed(
                 model / "centroids.npz",
@@ -344,6 +346,30 @@ class AnalysisModuleTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            (correlation / "correlation_summary.json").write_text(
+                json.dumps(
+                    {
+                        "talent_count": 3,
+                        "with_face_score": 3,
+                        "with_ig": 2,
+                        "with_twitter": 1,
+                        "with_tiktok": 1,
+                        "correlations": [
+                            {
+                                "a": "face_mean_centroid_score",
+                                "b": "ig_followers",
+                                "n": 3,
+                                "spearman_r": 0.75,
+                                "spearman_p": 0.1,
+                                "pearson_r": 0.7,
+                                "pearson_p": 0.12,
+                                "interpretation": "strong_positive",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
             (model_audit / "model_audit.json").write_text(
                 json.dumps(
                     {
@@ -408,6 +434,7 @@ class AnalysisModuleTests(unittest.TestCase):
                 subject_review=subjects,
                 backend_comparison=backend_comparison,
                 subject_backend_comparison=subject_backend_comparison,
+                correlation=correlation,
                 model_audit=model_audit,
                 vector_export=vector_export,
             )
@@ -425,8 +452,8 @@ class AnalysisModuleTests(unittest.TestCase):
             self.assertEqual(report["model"]["model_audit"]["descriptor_delta"]["brightness"], 0.1)
             self.assertEqual(report["workflow_readiness"]["ready_count"], 8)
             self.assertEqual(report["workflow_readiness"]["total_count"], 8)
-            self.assertEqual(report["workflow_readiness"]["optional_ready_count"], 2)
-            self.assertEqual(report["workflow_readiness"]["optional_total_count"], 2)
+            self.assertEqual(report["workflow_readiness"]["optional_ready_count"], 3)
+            self.assertEqual(report["workflow_readiness"]["optional_total_count"], 3)
             self.assertEqual(report["workflow_readiness"]["missing"], [])
             self.assertEqual(report["workflow_readiness"]["optional_missing"], [])
             self.assertIsNone(report["workflow_readiness"]["next_action"])
@@ -459,6 +486,10 @@ class AnalysisModuleTests(unittest.TestCase):
                 report["subject_backend_comparison"]["rank_agreement"][0]["common_subject_count"],
                 1,
             )
+            self.assertTrue(report["correlation"]["available"])
+            self.assertEqual(report["correlation"]["talent_count"], 3)
+            self.assertEqual(report["correlation"]["top_pair"]["b"], "ig_followers")
+            self.assertEqual(report["correlation"]["top_pair"]["spearman_r"], 0.75)
             self.assertTrue((out / "precision_report.json").exists())
             self.assertIn(
                 "Backend Comparison",
@@ -494,6 +525,14 @@ class AnalysisModuleTests(unittest.TestCase):
             )
             self.assertIn(
                 "mean_median_embedding_cosine: 0.6",
+                (out / "precision_report.md").read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                "Correlation Review",
+                (out / "precision_report.md").read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                "top_pair: face_mean_centroid_score x ig_followers rho=0.75 n=3 strong_positive",
                 (out / "precision_report.md").read_text(encoding="utf-8"),
             )
 

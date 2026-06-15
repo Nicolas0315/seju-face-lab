@@ -156,6 +156,7 @@ def main(argv: list[str] | None = None) -> int:
     precision_parser.add_argument("--quality", type=Path, default=None)
     precision_parser.add_argument("--backend-comparison", type=Path, default=None)
     precision_parser.add_argument("--subject-backend-comparison", type=Path, default=None)
+    precision_parser.add_argument("--correlation", type=Path, default=None)
     precision_parser.add_argument("--model-audit", type=Path, default=None)
     precision_parser.add_argument("--vector-export", type=Path, default=None)
 
@@ -682,6 +683,7 @@ def _precision_report(args: argparse.Namespace) -> int:
         quality=args.quality,
         backend_comparison=args.backend_comparison,
         subject_backend_comparison=args.subject_backend_comparison,
+        correlation=args.correlation,
         model_audit=args.model_audit,
         vector_export=args.vector_export,
     )
@@ -895,6 +897,7 @@ def _run_pipeline_precision_report(config: dict) -> int:
             quality=Path(config["quality_out"]) if config.get("quality_out") else None,
             backend_comparison=_pipeline_backend_comparison_out(config),
             subject_backend_comparison=_pipeline_subject_backend_comparison_out(config),
+            correlation=_pipeline_correlation_out(config),
             model_audit=_pipeline_model_audit_out_or_none(config),
             vector_export=_pipeline_vector_export_out(config),
         )
@@ -1151,6 +1154,15 @@ def _pipeline_correlation_config(config: dict) -> dict:
     if not merged.get("face_scores") or not merged.get("engagement") or not merged.get("out"):
         raise SystemExit("Pipeline config requires correlation face_scores, engagement, and out")
     return merged
+
+
+def _pipeline_correlation_out(config: dict) -> Path | None:
+    correlation = config.get("correlation")
+    if isinstance(correlation, dict) and correlation.get("out"):
+        return Path(correlation["out"])
+    if config.get("correlation_out"):
+        return Path(config["correlation_out"])
+    return None
 
 
 def _qa_images(images: Path, out: Path) -> int:
