@@ -12,6 +12,7 @@ from .agency import write_agency_average_params
 from .backend_compare import compare_deepface_detectors, compare_subject_backends, compare_vector_backends
 from .backend_diagnostics import write_backend_diagnostics
 from .benchmark_research import write_benchmark_research
+from .calibration import write_generation_calibration
 from .embeddings import iter_image_paths, render_appearance
 from .enhancement import write_agency_enhancement_bundle
 from .face_axes import write_face_axis_report
@@ -276,6 +277,19 @@ def main(argv: list[str] | None = None) -> int:
     enhance_agency_parser.add_argument("--crop", choices=["center", "none"], default="center")
     enhance_agency_parser.add_argument("--backend", default="deterministic")
 
+    calibrate_agency_parser = subparsers.add_parser(
+        "calibrate-agency-generation",
+        help="turn agency enhancement measurements into refined generation prompts",
+    )
+    calibrate_agency_parser.add_argument("--enhancement", type=Path, required=True)
+    calibrate_agency_parser.add_argument("--agency-params", type=Path, required=True)
+    calibrate_agency_parser.add_argument("--out", type=Path, required=True)
+    calibrate_agency_parser.add_argument("--target-image-score", type=float, default=0.35)
+    calibrate_agency_parser.add_argument("--target-axis-alignment", type=float, default=0.62)
+    calibrate_agency_parser.add_argument("--target-enhancement-score", type=float, default=0.76)
+    calibrate_agency_parser.add_argument("--seed-start", type=int, default=260623)
+    calibrate_agency_parser.add_argument("--variants-per-agency", type=int, default=3)
+
     worker_diag_parser = subparsers.add_parser(
         "worker-diagnostics",
         help="write local/SSH worker readiness diagnostics for GPU split-run planning",
@@ -525,6 +539,8 @@ def main(argv: list[str] | None = None) -> int:
         return _review_agencies(args)
     if args.command == "enhance-agencies":
         return _enhance_agencies(args)
+    if args.command == "calibrate-agency-generation":
+        return _calibrate_agency_generation(args)
     if args.command == "worker-diagnostics":
         return _worker_diagnostics(args.out, args.include_remote, args.timeout_seconds)
     if args.command == "compare-backends":
@@ -1424,6 +1440,23 @@ def _enhance_agencies(args: argparse.Namespace) -> int:
     print(f"agency enhancement report: {args.out / 'agency_enhancement_report.md'}")
     print(f"agencies: {len(report['agencies'])}")
     print(f"top enhanced match: {report['summary'].get('top_slug')} {report['summary'].get('top_score')}")
+    return 0
+
+
+def _calibrate_agency_generation(args: argparse.Namespace) -> int:
+    report = write_generation_calibration(
+        enhancement_report=args.enhancement,
+        agency_params=args.agency_params,
+        out_dir=args.out,
+        target_image_score=args.target_image_score,
+        target_axis_alignment=args.target_axis_alignment,
+        target_enhancement_score=args.target_enhancement_score,
+        seed_start=args.seed_start,
+        variants_per_agency=args.variants_per_agency,
+    )
+    print(f"agency generation calibration: {args.out / 'generation_calibration.md'}")
+    print(f"agencies: {len(report['agencies'])}")
+    print(f"regenerate first: {', '.join(report['summary']['regenerate_first'])}")
     return 0
 
 

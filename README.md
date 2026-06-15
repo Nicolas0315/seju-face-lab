@@ -156,6 +156,13 @@ Fuse agency hypotheses with generated-image vector scores and 8-axis observation
 python -m seju_face_lab enhance-agencies --model outputs/seju_model --agencies configs/agencies/seju_like_agencies.json --images outputs/agency_imagegen_samples --out outputs/agency_enhancement
 ```
 
+Generate calibrated next-round prompts from the measured precision gaps /
+計測した精度ギャップから次回生成プロンプトを補正:
+
+```powershell
+python -m seju_face_lab calibrate-agency-generation --enhancement outputs/agency_enhancement/agency_enhancement_report.json --agency-params outputs/agency_reviews/seju_like/agency_average_params.json --out outputs/agency_generation_calibration
+```
+
 ## Common Commands / よく使うコマンド
 
 Backend visibility / バックエンド確認:

@@ -1216,6 +1216,86 @@ class PipelineTests(unittest.TestCase):
             self.assertTrue((out / "face_axes" / "face_axis_report.json").exists())
             self.assertIn("agency enhancement report", (out / "agency_enhancement_report.md").read_text(encoding="utf-8"))
 
+    def test_calibrate_agency_generation_writes_refined_prompts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            enhancement = root / "enhancement.json"
+            params = root / "params.json"
+            out = root / "calibration"
+            enhancement.write_text(
+                json.dumps(
+                    {
+                        "agencies": [
+                            {
+                                "slug": "seju",
+                                "name": "seju",
+                                "rank": 1,
+                                "enhancement_score": 0.42,
+                                "components": {
+                                    "image_centroid_score": 0.05,
+                                    "axis_alignment": 0.38,
+                                },
+                                "hypothesis_axis_vector": {
+                                    "soft_defined": -0.8,
+                                    "deep_bright": 0.8,
+                                    "dynamic_symmetric": 0.9,
+                                },
+                                "observed_axis_vector": {
+                                    "soft_defined": 0.8,
+                                    "deep_bright": -0.4,
+                                    "dynamic_symmetric": -0.2,
+                                },
+                                "presentation_flags": [
+                                    "dark_or_underlit_image",
+                                    "high_texture_or_messy_edges",
+                                ],
+                                "improvement_actions": [
+                                    "regenerate_with_detector_friendly_prompt",
+                                    "increase_even_front_lighting",
+                                ],
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            params.write_text(
+                json.dumps(
+                    {
+                        "agencies": [
+                            {
+                                "slug": "seju",
+                                "imagegen_prompt": "Base fictional aggregate prompt.",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                main(
+                    [
+                        "calibrate-agency-generation",
+                        "--enhancement",
+                        str(enhancement),
+                        "--agency-params",
+                        str(params),
+                        "--out",
+                        str(out),
+                    ]
+                ),
+                0,
+            )
+
+            report = json.loads((out / "generation_calibration.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["summary"]["priority_counts"]["regenerate"], 1)
+            self.assertEqual(report["agencies"][0]["priority"], "regenerate")
+            self.assertIn("Axis corrections", report["agencies"][0]["calibrated_prompt"])
+            self.assertIn("underexposed face", report["agencies"][0]["negative_prompt"])
+            self.assertTrue((out / "prompts" / "seju_calibrated.txt").exists())
+            self.assertTrue((out / "generation_calibration.csv").exists())
+
     def test_compare_backends_writes_rank_agreement(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
