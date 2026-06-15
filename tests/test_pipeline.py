@@ -1146,6 +1146,76 @@ class PipelineTests(unittest.TestCase):
             self.assertIn("Axis Definitions", (out / "face_axis_report.md").read_text(encoding="utf-8"))
             self.assertIn("presentation_flags", (out / "face_axis_scores.csv").read_text(encoding="utf-8-sig"))
 
+    def test_enhance_agencies_fuses_hypothesis_scores_and_image_axes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "raw"
+            images = root / "generated"
+            model = root / "model"
+            agencies = root / "agencies.json"
+            out = root / "enhanced"
+            raw.mkdir()
+            images.mkdir()
+            _write_face_like_image(raw / "ref_a.png", (235, 205, 190), eye_offset=0)
+            _write_face_like_image(raw / "ref_b.png", (225, 198, 184), eye_offset=2)
+            _write_face_like_image(images / "seju.png", (232, 202, 188), eye_offset=1)
+            _write_face_like_image(images / "styled.png", (170, 145, 130), eye_offset=7)
+            agencies.write_text(
+                json.dumps(
+                    {
+                        "retrieved_at": "2026-06-15",
+                        "agencies": [
+                            {
+                                "slug": "seju",
+                                "name": "seju",
+                                "official_sources": [{"url": "https://seju.tokyo/"}],
+                                "public_examples": ["example"],
+                                "positioning": ["SNS-native"],
+                                "descriptor_offsets": {},
+                            },
+                            {
+                                "slug": "styled",
+                                "name": "Styled Agency",
+                                "official_sources": [{"url": "https://example.com/"}],
+                                "public_examples": ["example"],
+                                "positioning": ["model"],
+                                "descriptor_offsets": {"contrast": 0.04, "saturation": 0.02},
+                            },
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(main(["build", "--images", str(raw), "--out", str(model)]), 0)
+            self.assertEqual(
+                main(
+                    [
+                        "enhance-agencies",
+                        "--model",
+                        str(model),
+                        "--agencies",
+                        str(agencies),
+                        "--images",
+                        str(images),
+                        "--out",
+                        str(out),
+                    ]
+                ),
+                0,
+            )
+
+            report = json.loads((out / "agency_enhancement_report.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["image_count"], 2)
+            self.assertEqual(report["summary"]["measured_count"], 2)
+            self.assertEqual(len(report["agencies"]), 2)
+            self.assertEqual(report["agencies"][0]["confidence"], "measured")
+            self.assertIn("axis_alignment", report["agencies"][0]["components"])
+            self.assertIn("improvement_actions", report["agencies"][0])
+            self.assertTrue((out / "image_scores" / "scores.csv").exists())
+            self.assertTrue((out / "face_axes" / "face_axis_report.json").exists())
+            self.assertIn("agency enhancement report", (out / "agency_enhancement_report.md").read_text(encoding="utf-8"))
+
     def test_compare_backends_writes_rank_agreement(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

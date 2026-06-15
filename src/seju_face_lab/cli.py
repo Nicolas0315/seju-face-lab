@@ -13,6 +13,7 @@ from .backend_compare import compare_deepface_detectors, compare_subject_backend
 from .backend_diagnostics import write_backend_diagnostics
 from .benchmark_research import write_benchmark_research
 from .embeddings import iter_image_paths, render_appearance
+from .enhancement import write_agency_enhancement_bundle
 from .face_axes import write_face_axis_report
 from .generation import (
     build_generation_config,
@@ -264,6 +265,17 @@ def main(argv: list[str] | None = None) -> int:
     agency_parser.add_argument("--agencies", type=Path, required=True)
     agency_parser.add_argument("--out", type=Path, required=True)
 
+    enhance_agency_parser = subparsers.add_parser(
+        "enhance-agencies",
+        help="fuse agency hypotheses, image centroid scores, and 8-axis observations",
+    )
+    enhance_agency_parser.add_argument("--model", type=Path, required=True)
+    enhance_agency_parser.add_argument("--agencies", type=Path, required=True)
+    enhance_agency_parser.add_argument("--images", type=Path, required=True)
+    enhance_agency_parser.add_argument("--out", type=Path, required=True)
+    enhance_agency_parser.add_argument("--crop", choices=["center", "none"], default="center")
+    enhance_agency_parser.add_argument("--backend", default="deterministic")
+
     worker_diag_parser = subparsers.add_parser(
         "worker-diagnostics",
         help="write local/SSH worker readiness diagnostics for GPU split-run planning",
@@ -511,6 +523,8 @@ def main(argv: list[str] | None = None) -> int:
         return _benchmark_research(args.out)
     if args.command == "review-agencies":
         return _review_agencies(args)
+    if args.command == "enhance-agencies":
+        return _enhance_agencies(args)
     if args.command == "worker-diagnostics":
         return _worker_diagnostics(args.out, args.include_remote, args.timeout_seconds)
     if args.command == "compare-backends":
@@ -1395,6 +1409,21 @@ def _review_agencies(args: argparse.Namespace) -> int:
     print(f"agencies: {len(report['agencies'])}")
     top = report["rankings"]["by_descriptor_similarity"][0] if report["agencies"] else {}
     print(f"top descriptor match: {top.get('name')} {top.get('descriptor_similarity')}")
+    return 0
+
+
+def _enhance_agencies(args: argparse.Namespace) -> int:
+    report = write_agency_enhancement_bundle(
+        model_dir=args.model,
+        agencies_config=args.agencies,
+        images=args.images,
+        out_dir=args.out,
+        crop=args.crop,
+        backend_name=args.backend,
+    )
+    print(f"agency enhancement report: {args.out / 'agency_enhancement_report.md'}")
+    print(f"agencies: {len(report['agencies'])}")
+    print(f"top enhanced match: {report['summary'].get('top_slug')} {report['summary'].get('top_score')}")
     return 0
 
 

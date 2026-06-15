@@ -19,7 +19,11 @@ flowchart TD
     H --> I[Evaluate against seju centroid]
     H --> J[QA face gate]
     H --> K[Optional OpenCLIP style axis]
-    I --> L[Agency precision review]
+    I --> N[Enhancement engine]
+    H --> O[8-axis observed distribution]
+    O --> N
+    F --> N
+    N --> L[Agency precision review]
     J --> L
     K --> L
     L --> M[Commit docs, configs, tests, and workflow evidence]
@@ -39,12 +43,15 @@ flowchart TD
 - `presentation_guard`: if a sample is dark, off-center, high-contrast, messy-edged, or otherwise
   far from the descriptor center, record image-state flags and an outlier score instead of applying
   insulting labels to a person.
+- `enhancement_engine`: combine descriptor similarity, generated-image centroid score, and 8-axis
+  alignment into a ranked action list for the next prompt or data-collection pass.
 
 ## Current Command Shape
 
 ```powershell
 python -m seju_face_lab review-agencies --model outputs/seju_model_official --agencies configs/agencies/seju_like_agencies.json --out outputs/agency_reviews/seju_like
 python -m seju_face_lab evaluate --model outputs/seju_model_official --images outputs/agency_imagegen_samples --out outputs/agency_imagegen_eval
+python -m seju_face_lab enhance-agencies --model outputs/seju_model_official --agencies configs/agencies/seju_like_agencies.json --images outputs/agency_imagegen_samples --out outputs/agency_enhancement
 ```
 
 ## Boundaries
