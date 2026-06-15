@@ -3,10 +3,16 @@ __pycache__/
 .venv/
 .ruff_cache/
 .pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
 uv.lock
 data/raw/
 data/subjects/
 data/processed/
 outputs/
+.tmp/
+.worker_tmp/
+*.egg-info/
 *.npz
 *.npy

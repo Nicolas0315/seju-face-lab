@@ -1,44 +1,119 @@
 # seju-face-lab
 
-`seju-face-lab` is a local pipeline for approximating a "seju face" profile from a curated image set.
+**EN**: Local research pipeline for building an approximate aggregate "seju-face" profile from
+consented image sets, then evaluating generated or comparison images against that local centroid.
 
-It can:
+**JA**: 許諾済みの顔画像セットから「seju顔」風のローカルな平均特徴を作り、生成画像や比較対象画像との
+近似度を検証する研究用パイプラインです。
 
-- extract deterministic image vectors from input portraits
-- compute mean and median centroid vectors
-- render approximate mean/median face images
-- decompose aggregate face ingredients from mean/median descriptors
-- discover official seju profile image candidates into a source manifest
-- write generation prompts from centroid descriptors
-- score generated images against the mean/median vectors
-- score generated images on a separate OpenCLIP style axis
-- review per-person image folders against the seju centroid
-- extract SNS handles/engagement manifests and correlate them with face-score outputs
-- track benchmark/OSS adoption notes for face-vector backends
+This project does **not** identify people, score attractiveness, or judge personal value.
+Scores only mean similarity to a centroid built from the images you provide.
 
-The current implementation is intentionally local and dependency-light: Python + `numpy` + `Pillow`. It does not identify people, infer identity, or claim that the result is a universal definition of "seju face"; it only summarizes the images you provide.
+このプロジェクトは、本人識別・魅力度判定・人格評価を目的にしていません。出力スコアは
+「投入した画像セットから作った重心にどれくらい近いか」を示す実験値です。
 
-## Quick Start
+## Contents / 目次
 
-From this repo root, expose the local `src` package:
+- [What It Does / できること](#what-it-does--できること)
+- [Safety Boundary / 重要な境界](#safety-boundary--重要な境界)
+- [Setup / セットアップ](#setup--セットアップ)
+- [Quick Start / 最短実行](#quick-start--最短実行)
+- [Common Commands / よく使うコマンド](#common-commands--よく使うコマンド)
+- [Repository Layout / ディレクトリ構成](#repository-layout--ディレクトリ構成)
+- [Development / 開発](#development--開発)
+- [Docs / 関連ドキュメント](#docs--関連ドキュメント)
+
+## What It Does / できること
+
+**EN**
+
+- Build mean and median face-vector centroids from a local image set.
+- Render approximate mean/median face images and generation prompts.
+- Decompose aggregate features into face parts, color tone, makeup texture, and hair signals.
+- Score generated or candidate images against the local centroid.
+- Map images onto 4+4 visual axes: quadrant, corner, cross-axis, outlier score, and presentation flags.
+- Build agency-level average-face parameter hypotheses and Image Gen prompts.
+- Extend validation with optional DeepFace, InsightFace, OpenCV, OpenCLIP, Diffusers, and OpenAI Images backends.
+
+**JA**
+
+- ローカル画像セットから平均・中央値の顔ベクトル重心を作る
+- 平均顔・中央値顔の近似画像と生成プロンプトを出力する
+- 顔パーツ、色味、メイク質感、髪まわりの集約特徴を分解する
+- 生成画像や候補画像をローカル重心に対してスコアリングする
+- 4+4の8軸で、象限・四隅・十字軸・外れ値・画像状態フラグを出す
+- 事務所別の平均顔パラメータ仮説と Image Gen 用プロンプトを作る
+- DeepFace、InsightFace、OpenCV、OpenCLIP、Diffusers、OpenAI Images で検証を拡張する
+
+## Safety Boundary / 重要な境界
+
+**EN**
+
+- Use only images you have rights and consent to analyze.
+- Do not commit private images, generated portraits, embeddings, SNS data, or model outputs.
+- Do not generate or request a specific real person's likeness.
+- Do not use insulting labels such as ugly, dirty, or unclean. Record neutral image-state flags instead:
+  underlit, occluded, high contrast, strong hair shadow, off-center, high texture, strong styling.
+- Do not merge face vectors, style vectors, SNS metrics, and iris templates into one identity-like score.
+
+**JA**
+
+- 解析する画像は、権利・利用許諾・同意を確認したものだけを使ってください。
+- 個人画像、生成画像、埋め込み、SNSデータ、モデル出力をコミットしないでください。
+- 実在人物の似顔コピーや、特定個人の再現を目的にした生成は扱いません。
+- 「ブス」「不潔」など人を傷つけるラベルは使いません。暗い、顔が隠れている、コントラストが強い、
+  髪影が強い、中心からずれている、質感が強い、スタイリングが強い、といった中立的な画像状態として扱います。
+- 顔ベクトル、スタイルベクトル、SNS指標、虹彩テンプレートを、単一の人物評価スコアに混ぜません。
+
+## Setup / セットアップ
+
+PowerShell:
 
 ```powershell
-$env:PYTHONPATH=(Resolve-Path .\src)
+git clone https://github.com/Nicolas0315/seju-face-lab.git
+cd seju-face-lab
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -U pip
+python -m pip install -e .
 ```
 
-Put consented reference images here:
+Development tools / 開発ツール:
+
+```powershell
+python -m pip install -e . ruff
+```
+
+Optional extras / 任意バックエンド:
+
+```powershell
+python -m pip install -e ".[vision]"      # OpenCV face crop / OpenCV 顔クロップ
+python -m pip install -e ".[deepface]"    # DeepFace / ArcFace
+python -m pip install -e ".[face]"        # InsightFace + ONNXRuntime GPU
+python -m pip install -e ".[clip]"        # OpenCLIP style axis / スタイル軸
+python -m pip install -e ".[generation]"  # Diffusers local generation / ローカル生成
+python -m pip install -e ".[openai]"      # OpenAI Images API
+```
+
+## Quick Start / 最短実行
+
+Place consented reference images under `data/raw/`.
+
+許諾済みの参照画像を `data/raw/` に置きます。
 
 ```text
 data/raw/
+  sample_001.jpg
+  sample_002.jpg
 ```
 
-Build a centroid model:
+Build a centroid model / 平均・中央値ベクトルを作成:
 
 ```powershell
 python -m seju_face_lab build --images data/raw --out outputs/seju_model
 ```
 
-This writes:
+Main outputs / 主な出力:
 
 ```text
 outputs/seju_model/centroids.npz
@@ -46,169 +121,70 @@ outputs/seju_model/profile.json
 outputs/seju_model/mean_face.png
 outputs/seju_model/median_face.png
 outputs/seju_model/prompt.txt
-outputs/seju_model/generation_manifest.json
 outputs/seju_model/report.md
-outputs/seju_model/vectors/image_vector_failures.json  # only when some images fail
 ```
 
-Audit mean/median centroid vectors and descriptor deltas:
+Audit and decompose / 監査と要素分解:
 
 ```powershell
 python -m seju_face_lab audit-model --model outputs/seju_model --out outputs/model_audit
-```
-
-Decompose aggregate face ingredients into face parts, color tone, makeup texture, and hair signal:
-
-```powershell
 python -m seju_face_lab ingredients-report --model outputs/seju_model --out outputs/face_ingredients
 ```
 
-Build agency-level average face parameters from official-source agency research config:
-
-```powershell
-python -m seju_face_lab review-agencies --model outputs/seju_model --agencies configs/agencies/seju_like_agencies.json --out outputs/agency_reviews/seju_like
-```
-
-Map generated or local images onto 4+4 visual axes with quadrant, corner, cross-axis, outlier,
-and presentation-state flags:
-
-```powershell
-python -m seju_face_lab face-axes --images outputs/generated --out outputs/face_axes
-```
-
-Export the full mean/median embedding vectors for external analysis or generation tooling:
-
-```powershell
-python -m seju_face_lab export-vectors --model outputs/seju_model --out outputs/seju_vectors.json
-python -m seju_face_lab export-vectors --model outputs/seju_model --out outputs/seju_vectors.csv --format csv
-```
-
-After generating candidate images with any image generator, place them in `outputs/generated/` and evaluate:
+Evaluate generated or candidate images / 生成画像・候補画像を評価:
 
 ```powershell
 python -m seju_face_lab evaluate --model outputs/seju_model --images outputs/generated --out outputs/evaluation
 ```
 
-Evaluate the same generated images on a separate OpenCLIP image-style axis after installing `.[clip]`:
+Map images onto 8 visual axes / 8軸の象限・外れ値・画像状態フラグ:
 
 ```powershell
-python -m pip install -e ".[clip]"
-python -m seju_face_lab style-evaluate --model outputs/seju_model --images outputs/generated --out outputs/style_evaluation
+python -m seju_face_lab face-axes --images outputs/generated --out outputs/face_axes
 ```
 
-Compare evaluated generation runs:
+Build agency-level average-face parameters / 事務所別平均顔パラメータ仮説:
 
 ```powershell
-python -m seju_face_lab evaluate --model outputs/seju_model --images outputs/generated_a --out outputs/generated_a/evaluation
-python -m seju_face_lab style-evaluate --model outputs/seju_model --images outputs/generated_a --out outputs/generated_a/style_evaluation
-python -m seju_face_lab evaluate --model outputs/seju_model --images outputs/generated_b --out outputs/generated_b/evaluation
-python -m seju_face_lab style-evaluate --model outputs/seju_model --images outputs/generated_b --out outputs/generated_b/style_evaluation
-python -m seju_face_lab compare-runs --runs outputs/generated_a outputs/generated_b --out outputs/run_reviews
+python -m seju_face_lab review-agencies --model outputs/seju_model --agencies configs/agencies/seju_like_agencies.json --out outputs/agency_reviews/seju_like
 ```
 
-`compare-runs` also accepts evaluation output directories that contain `summary.json`. When a run has
-`style_evaluation/style_summary.json` and `style_evaluation/style_scores.csv`, the report includes
-face, style, and per-image combined scores with the matched image path.
-When a run has `quality/image_quality.json` and `quality/image_quality.csv`, the report also includes
-QA pass counts and the best centroid score among QA-passing generated images.
+## Common Commands / よく使うコマンド
 
-Plan a reproducible generation batch without downloading or running a model:
+Backend visibility / バックエンド確認:
+
+```powershell
+python -m seju_face_lab backends
+python -m seju_face_lab backend-diagnostics --out outputs/backend_diagnostics
+```
+
+Generation dry-run / 生成計画だけを作る:
 
 ```powershell
 python -m seju_face_lab generate --model outputs/seju_model --out outputs/generated --provider dry-run --count 8
 ```
 
-Run a Diffusers batch after installing a CUDA-enabled PyTorch build and `.[generation]`.
-`--variant auto` uses the `fp16` model variant when `--dtype float16` is selected:
+Diffusers generation / Diffusers 生成:
 
 ```powershell
 python -m seju_face_lab generate --model outputs/seju_model --out outputs/generated --provider diffusers --hf-model runwayml/stable-diffusion-v1-5 --count 8 --negative-prompt "copied identity"
 ```
 
-Generate from the mean centroid descriptor instead of the default median descriptor:
+OpenAI Images API generation / OpenAI Images API 生成:
 
 ```powershell
-python -m seju_face_lab generate --model outputs/seju_model --out outputs/generated_mean --provider dry-run --centroid-kind mean --count 4
-```
-
-Run a GPT Image batch through the OpenAI Images API after installing `.[openai]` and exporting
-`OPENAI_API_KEY`:
-
-```powershell
+$env:OPENAI_API_KEY="op://... or an exported environment variable"
 python -m seju_face_lab generate --model outputs/seju_model --out outputs/generated_openai --provider openai-image --image-model gpt-image-2 --width 1024 --height 1024 --quality medium --count 4 --review
 ```
 
-For batches meant to pass face detectors before scoring, use the detector-friendly prompt profile:
+Generated-image QA and review / 生成画像QAとレビュー:
 
 ```powershell
-python -m seju_face_lab generate --model outputs/seju_model --out outputs/generated_detector --provider diffusers --prompt-profile detector-friendly --count 8
+python -m seju_face_lab qa-images --images outputs/generated --out outputs/generated/quality
+python -m seju_face_lab review-generated --model outputs/seju_model --images outputs/generated --out outputs/generated/review
 ```
 
-To generate and immediately run the standard review after a real Diffusers batch, add `--review`.
-Dry-run plans still only write the plan:
-
-```powershell
-python -m seju_face_lab generate --model outputs/seju_model --out outputs/generated_detector --provider diffusers --prompt-profile detector-friendly --count 8 --review --review-out outputs/generated_detector/review
-```
-
-Run the OpenCV generated-image QA gate before trusting a high score from a generated batch:
-
-```powershell
-python -m seju_face_lab qa-images --images outputs/generated_detector --out outputs/generated_detector/quality
-```
-
-This writes `image_quality.csv`, `image_quality.md`, and `image_quality.json`. A candidate passes only
-when OpenCV sees one centered frontal face with a usable crop size.
-
-Or run the standard generated-image review in one command:
-
-```powershell
-python -m seju_face_lab review-generated --model outputs/seju_model --images outputs/generated_detector --out outputs/generated_detector/review
-```
-
-This writes `evaluation/`, `quality/`, and a one-run `generation_run_reviews.*` report.
-
-Summarize the centroid model, generated-image precision review, QA gate, optional
-subject-review evidence, face ingredients, benchmark research, and backend agreement
-into one reviewable bundle:
-
-```powershell
-python -m seju_face_lab precision-report --model outputs/seju_model --model-audit outputs/model_audit --vector-export outputs/seju_vectors.json --face-ingredients outputs/face_ingredients --benchmark-research outputs/benchmark_research --generation-review outputs/generated_detector/review --subject-review outputs/subject_reviews --backend-comparison outputs/backend_compare --subject-backend-comparison outputs/subject_backend_compare --correlation outputs/correlation --out outputs/precision_report
-```
-
-This writes `precision_report.json` and `precision_report.md`, including a workflow
-readiness checklist plus optional mean/median vector audit, vector-export evidence,
-face ingredient decomposition, benchmark/OSS research, and face-score/SNS correlation
-summary when those optional inputs point at files or directories.
-
-Run a reproducible local pipeline from a JSON config:
-
-```powershell
-python -m seju_face_lab run-pipeline --config configs/pipelines/full-local-review.example.json --out outputs/local_pipeline_run
-```
-
-The runner executes configured build/audit-model/export-vectors/ingredients-report/
-benchmark-research/evaluate/review/backend-comparison/subject-backend-comparison/SNS/correlation/precision steps and writes `pipeline_run.json`
-plus `pipeline_run.md`.
-Add a `style_evaluation` config block after installing `.[clip]` to include the optional
-`style-evaluate` OpenCLIP scoring step in the same run.
-Use `configs/pipelines/full-retinaface-review.example.json` when the same run should include
-the audited `deepface-retinaface` rank-agreement backend in the final precision bundle.
-Use `configs/pipelines/sns-correlation.example.json` when a run should review local
-subject folders, refresh cached SNS engagement, write a face-score/SNS correlation report,
-and bundle that summary into `precision-report`.
-
-To track multiple generation settings as one experiment, use a generation sweep:
-
-```powershell
-python -m seju_face_lab run-pipeline --config configs/pipelines/generation-sweep.example.json --out outputs/generation_sweep_pipeline
-```
-
-Each sweep run writes `outputs/generation_sweep/<run-name>/generation_run.json`.
-When `review=true` and `compare_runs=true`, the pipeline reviews each generated batch and writes
-a shared `generation_run_reviews.*` bundle for the precision report.
-
-Review other public-figure or celebrity image sets by folder:
+Subject-folder review / 人物フォルダ別レビュー:
 
 ```text
 data/subjects/
@@ -222,227 +198,51 @@ data/subjects/
 python -m seju_face_lab review-subjects --model outputs/seju_model --subjects data/subjects --out outputs/subject_reviews
 ```
 
-This writes `subject_reviews.csv`, `subject_reviews.md`, `subject_reviews.json`, and
-`subject_reviews.html` with local thumbnail cards for reviewing each subject's nearest image.
-The JSON/Markdown reports include stable mean-score leaders, peak best-image leaders,
-single-image lift, and mean/median centroid affinity tables for member-level vector analysis.
-
-## Recommended Data
-
-- Use images you have permission to analyze.
-- Keep the dataset source-consistent: similar crop, lighting, camera distance, and expression.
-- Start with 30+ images. The tool works with fewer, but the centroid is fragile.
-- If full-body or crowded images are used, crop faces manually first. The default crop is a center crop, not a neural face detector.
-
-## Web Source Discovery
-
-The source discovery command creates a URL manifest first. It does not download images by default.
+Run a JSON pipeline / JSON設定で一括実行:
 
 ```powershell
-python -m seju_face_lab sources discover --out data/processed/seju_sources.jsonl --as-of 2026-06-14
+python -m seju_face_lab run-pipeline --config configs/pipelines/full-local-review.example.json --out outputs/local_pipeline_run
 ```
 
-The manifest records:
+## Repository Layout / ディレクトリ構成
 
-- official profile page URL
-- candidate image URL
-- profile name and birth date when visible
-- `eligible_for_analysis`, defaulting to `false` for under-18 or age-unknown profiles
-- retrieval timestamp and source notes
+- `configs/`: reproducible source, agency, and pipeline configs / ソース・事務所・パイプライン設定
+- `data/`: local data only; private and ignored / ローカルデータ置き場、Git管理外
+- `docs/`: design notes, research logs, runbooks / 設計、研究ログ、運用メモ
+- `outputs/`: models, generated images, evaluations; ignored / モデル、生成画像、評価結果、Git管理外
+- `scripts/`: helper scripts / 補助スクリプト
+- `src/seju_face_lab/`: package code / パッケージ本体
+- `tests/`: deterministic unit tests / 決定論的ユニットテスト
 
-Use this as a review queue. Download/analyze only images you have rights and consent to use.
+## Development / 開発
 
-See `docs/web-source-strategy.md` for the current site-structure analysis and extraction boundaries.
-
-After reviewing the manifest, stage eligible images locally:
-
-```powershell
-python -m seju_face_lab sources download --manifest data/processed/seju_sources.jsonl --out data/raw/seju_official --max-count 50
-```
-
-Use `--dry-run` first to inspect planned local file names without downloading.
-
-To reorganize downloaded official images into per-talent folders for subject review:
+Minimum checks / 最小検証:
 
 ```powershell
-python scripts/organize_by_talent.py --src data/raw/seju_official --dst data/raw/seju_by_talent --dry-run
-```
-
-SNS handle and public engagement collection are separate, reviewable manifests:
-
-```powershell
-python -m seju_face_lab sources scrape-handles --manifest data/processed/seju_sources.jsonl --out data/processed/sns_handles.jsonl
-python -m seju_face_lab sources fetch-engagement --handles data/processed/sns_handles.jsonl --out data/processed/sns_engagement.jsonl --platforms instagram tiktok
-```
-
-The SNS fetchers are best-effort public-page readers. Treat blocked/partial rows as expected data quality signals.
-For repeatable exploration with a local SQLite cache, use the SNS router:
-
-```powershell
-python -m seju_face_lab explore profile --platform instagram --handle example_handle
-python -m seju_face_lab explore batch --handles data/processed/sns_handles.jsonl --out data/processed/sns_engagement.jsonl --platforms instagram twitter tiktok
-python -m seju_face_lab explore load-cache --engagement data/processed/sns_engagement.jsonl
-```
-
-`explore` stays local by default. Pass `--remote-host <ssh-host>` only when you explicitly want
-Instagram fetches to run through a trusted SSH host; cache files remain local and ignored.
-
-When public pages are blocked, create a manual CSV template and import reviewed values:
-
-```powershell
-python scripts/generate_engagement_csv_template.py --handles data/processed/sns_handles.jsonl --out data/processed/sns_engagement_manual.csv
-python -m seju_face_lab sources import-engagement --csv data/processed/sns_engagement_manual.csv --out data/processed/sns_engagement.jsonl
-```
-
-## Correlation Analysis
-
-After running `review-subjects`, join those face scores to SNS engagement:
-
-```powershell
-python -m seju_face_lab analyze correlation --face-scores outputs/subject_reviews/subject_reviews.json --engagement data/processed/sns_engagement.jsonl --out outputs/correlation
-```
-
-This writes `correlation_dataset.csv`, `correlations.csv`, `correlation_report.md`, and `correlation_summary.json`.
-
-The same join can be run through a pipeline config:
-
-```powershell
-python -m seju_face_lab run-pipeline --config configs/pipelines/sns-correlation.example.json --out outputs/sns_correlation_pipeline
-```
-
-## Analysis Backends
-
-```powershell
-python -m seju_face_lab backends
-python -m seju_face_lab backend-diagnostics --out outputs/backend_diagnostics
-python -m seju_face_lab benchmark-research --out outputs/benchmark_research
-```
-
-Implemented now:
-
-- `deterministic`: no neural dependency, good for local smoke tests and rough visual centroids
-- `opencv-face`: optional `.[vision]` backend for OpenCV face crop normalization
-- `insightface`: optional `.[face]` backend; shown as ready only when `insightface` and `onnxruntime-gpu` are installed
-- `deepface`: optional `.[deepface]` backend using `DeepFace.represent`, defaulting to ArcFace
-- `deepface-retinaface`: optional `.[deepface]` backend using ArcFace embeddings with the RetinaFace detector; current DeepFace face-validated cross-check candidate after the v7 detector audit
-- `clip-style`: optional `.[clip]` image-style scoring via `style-evaluate`; kept separate from face geometry
-
-On Windows, the InsightFace backend automatically adds torch's bundled CUDA DLL directory
-to the process search path when it exists, so ONNXRuntime-GPU can use `CUDAExecutionProvider`
-without hand-editing `PATH`.
-The DeepFace extra includes `tf-keras` for TensorFlow/Keras 3 compatibility and the
-backend switches Windows console streams to UTF-8 before importing DeepFace, avoiding
-Unicode logging failures during first-time weight downloads.
-
-Use the OpenCV face-crop backend after installing the optional vision dependencies:
-
-```powershell
-python -m pip install -e ".[vision]"
-python -m seju_face_lab build --images data/raw --out outputs/seju_model_facecrop --backend opencv-face
-python -m seju_face_lab evaluate --model outputs/seju_model_facecrop --images outputs/generated --out outputs/evaluation_facecrop --backend opencv-face
-```
-
-Use the DeepFace backend as a neural cross-check after installing its optional dependencies:
-
-```powershell
-python -m pip install -e ".[deepface]"
-python -m seju_face_lab build --images data/raw --out outputs/seju_model_deepface --backend deepface
-python -m seju_face_lab evaluate --model outputs/seju_model_deepface --images outputs/generated --out outputs/evaluation_deepface --backend deepface
-python -m seju_face_lab build --images data/raw --out outputs/seju_model_deepface_retinaface --backend deepface-retinaface
-python -m seju_face_lab evaluate --model outputs/seju_model_deepface_retinaface --images outputs/generated --out outputs/evaluation_deepface_retinaface --backend deepface-retinaface
-```
-
-Compare multiple backend rankings on the same local reference and target image sets:
-
-```powershell
-python -m seju_face_lab compare-backends --reference-images data/raw/seju_official --images outputs/generated_detector --out outputs/backend_compare --backends deterministic opencv-face insightface deepface deepface-retinaface
-python -m seju_face_lab compare-subject-backends --reference-images data/raw/seju_official --subjects data/subjects --out outputs/subject_backend_compare --backends deterministic opencv-face insightface deepface-retinaface
-```
-
-This writes one model/evaluation folder per backend plus `backend_comparison.json` and
-`backend_comparison.md`. Score scales are backend-specific; use the rank-agreement section to
-review whether deterministic, face-crop, InsightFace, and DeepFace detector variants choose the same candidates.
-For celebrity/public-figure folders under `data/subjects`, `compare-subject-backends` writes one
-subject review per backend plus `subject_backend_comparison.json` and `.md` so per-subject
-near-face rankings can be reviewed across deterministic and neural embeddings.
-
-When DeepFace rejects many reference images, sweep its detector choices directly:
-
-```powershell
-python -m seju_face_lab compare-deepface-detectors --reference-images data/raw/seju_official --images outputs/generated_detector --out outputs/deepface_detector_compare --detectors opencv mtcnn retinaface skip
-```
-
-This writes `deepface_detector_comparison.json` and `.md`, plus per-detector model/evaluation
-folders. Use it to compare detector acceptance counts before interpreting DeepFace rank divergence.
-For long sweeps, rerun with `--reuse-existing` so completed detector folders are kept and only
-missing detector outputs are computed.
-For slow detectors, start with `--max-reference-images 50 --max-images 6`, then rerun without
-limits once the detector looks useful.
-
-Record local RTX 4090 and optional SSH remote-GPU readiness before split-run planning:
-
-```powershell
-python -m seju_face_lab worker-diagnostics --out outputs/worker_diagnostics
-python -m seju_face_lab worker-diagnostics --out outputs/worker_diagnostics_fleet --include-remote
-```
-
-Run local explicit-worker evaluation when you want an auditable chunk assignment before
-trying remote split runs:
-
-```powershell
-python -m seju_face_lab distributed-evaluate --model outputs/seju_model --images outputs/generated --out outputs/distributed_evaluation --backend deterministic
-```
-
-This writes merged `scores.csv`, `summary.json`, `distributed_scores.json`, and per-worker
-assignment/output files under `.worker_tmp/`. `--include-remote` remains a readiness guard
-until a reviewed shared-path or sync manifest is configured.
-
-Implemented generation providers:
-
-- `dry-run`: writes prompt, seed, and evaluation plan without running an image model.
-- `diffusers`: runs local image generation through `generate --provider diffusers` with `.[generation]`.
-- `openai-image`: runs GPT Image generation through `generate --provider openai-image` with `.[openai]`
-  and `OPENAI_API_KEY`; generated images remain local outputs and are not committed.
-
-See `docs/architecture.md` for the folder contract and backend plan.
-See `docs/research-tracking.md` for the current GitHub Issue / ToDo breakdown.
-See `docs/gpu-generation-log.md` for RTX 4090 generation smoke results.
-
-## Output Meaning
-
-- `mean_face.png`: pixel-wise mean of the normalized image crops.
-- `median_face.png`: pixel-wise median, often more robust to outliers.
-- `profile.json`: compact descriptor values and vector metadata.
-- model audit `model_audit.json`: mean/median vector hashes, norms, cosine/euclidean distance, and descriptor deltas.
-- face ingredients `face_ingredients.json`: aggregate face-part, color-tone, makeup-texture, and hair-signal interpretation from mean/median descriptors.
-- vector export `export-vectors`: full mean/median embedding values as JSON or UTF-8 BOM CSV for external generation/scoring workflows.
-- `prompt.txt`: a generation prompt based on observed centroid descriptors.
-- generation `generation_run.json`: prompt, seed, provider, output paths, and evaluation command/argv.
-- generation `centroid_kind`: `median` by default, or `mean` to generate from the mean centroid descriptor.
-- generation `prompt_profile`: `balanced` by default, or `detector-friendly` for frontal, unobscured candidate batches.
-- evaluation `scores.csv`: similarity of candidate generated images to the centroid vectors.
-- evaluation `summary.json`: best/mean/median generated-image similarity for quick comparisons.
-- generated review `generation_run_reviews.csv`: one-command generated-image evaluation + QA + run review via `review-generated`, or directly after Diffusers generation with `generate --review`; includes provider, model, centroid kind, prompt profile, seed, count, steps, size, device, and dtype when `generation_run.json` is present.
-- precision report `precision_report.json`: workflow readiness checklist, model centroid, optional `model_audit.json` mean/median vector distance summary, vector export, face ingredients, benchmark/OSS research, generation settings, generated-image mean/median score components, mean-vs-median generation grouping, QA, subject-review vector analysis, backend-comparison, subject-backend-comparison, and optional correlation summary via `precision-report`.
-- pipeline run `pipeline_run.json`: configured build/audit-model/export-vectors/ingredients-report/benchmark-research/evaluate/style-evaluate/review/backend-comparison/subject-backend-comparison/precision orchestration via `run-pipeline`.
-- generation sweep `configs/pipelines/generation-sweep.example.json`: repeatable seed/profile generation experiments with per-run manifests and optional shared run comparison.
-- pipeline config `configs/pipelines/full-retinaface-review.example.json`: deterministic continuity plus `deepface-retinaface` neural rank agreement for the precision bundle.
-- backend diagnostics `backend_diagnostics.json`: optional dependency, CUDA, vector backend, and generation-provider visibility.
-- benchmark research `benchmark_research.json`: NIST/NEC/InsightFace/DeepFace/OpenCLIP/World IRIS adoption notes and vectorization priorities.
-- worker diagnostics `worker_diagnostics.json`: local/SSH Python, CUDA, torch, and package readiness for GPU split-run planning.
-- backend comparison `backend_comparison.json`: per-backend model/evaluation outputs and same-image rank agreement.
-- subject backend comparison `subject_backend_comparison.json`: per-backend celebrity/public-figure subject rankings and rank agreement.
-- subject review `subject_reviews.html`: local thumbnail cards plus stable/peak/lift/centroid-affinity tables for per-person approximate similarity review.
-- style evaluation `style_scores.csv`: OpenCLIP image-style similarity to mean/median renderings.
-- style evaluation `style_summary.json`: best/mean/median style-axis scores.
-- image quality `image_quality.csv`: OpenCV single-face QA for generated candidates.
-- generation run reviews: rank evaluated candidate batches by local centroid scores.
-- generation run review `generation_run_reviews.html`: local thumbnail review cards with face/style/combined/QA evidence.
-- generation run reviews include QA-gated face scores, style scores, per-image combined scores, and `centroid_kind` grouped summaries when those outputs exist.
-- subject review outputs: per-person approximate similarity rankings.
-
-## Verification
-
-```powershell
+ruff check .
+python -m compileall -q src tests scripts
 python -m unittest discover -s tests
+git diff --check
 ```
+
+GitHub Actions runs the same class of checks. See [`CONTRIBUTING.md`](CONTRIBUTING.md)
+and [`docs/development.md`](docs/development.md) for the contributor workflow.
+
+GitHub Actions でも同系統の検証を走らせます。開発手順は
+[`CONTRIBUTING.md`](CONTRIBUTING.md) と [`docs/development.md`](docs/development.md) を見てください。
+
+## Docs / 関連ドキュメント
+
+- [`docs/architecture.md`](docs/architecture.md): pipeline and backend design / パイプラインとバックエンド設計
+- [`docs/agency-research-flow.md`](docs/agency-research-flow.md): agency average-face research flow / 事務所別平均顔研究フロー
+- [`docs/research-tracking.md`](docs/research-tracking.md): issues, TODO, evidence / 研究Issue、ToDo、検証ログ
+- [`docs/web-source-strategy.md`](docs/web-source-strategy.md): web source boundaries / Webソース収集境界
+- [`docs/gpu-generation-log.md`](docs/gpu-generation-log.md): GPU generation logs / GPU生成・評価ログ
+
+## License and Data / ライセンスとデータ
+
+This repository is for code, configs, and documentation. Keep images, generated portraits,
+vectors, SNS artifacts, credentials, and private notes local.
+
+このリポジトリではコード、設定、ドキュメントだけを共有します。画像、生成物、ベクトル、
+SNS収集結果、認証情報、私的メモはローカルに保持してください。
