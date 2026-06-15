@@ -13,6 +13,14 @@ class GenerationRunReview:
     provider: str
     model_id: str
     status: str
+    prompt_profile: str
+    seed: int | None
+    planned_count: int | None
+    steps: int | None
+    guidance_scale: float | None
+    size: str
+    device: str
+    dtype: str
     image_count: int
     failed_count: int
     best_image_id: str | None
@@ -107,6 +115,14 @@ def _review_generation_run(run_dir: Path) -> GenerationRunReview:
         provider=str(config.get("provider", "")),
         model_id=str(config.get("model_id", "")),
         status=str(result.get("status", "")),
+        prompt_profile=str(config.get("prompt_profile", "")),
+        seed=_optional_int(config.get("seed")),
+        planned_count=_optional_int(config.get("count")),
+        steps=_optional_int(config.get("steps")),
+        guidance_scale=_optional_float(config.get("guidance_scale")),
+        size=_generation_size(config),
+        device=str(config.get("device", "")),
+        dtype=str(config.get("dtype", "")),
         image_count=int(summary.get("image_count", 0)),
         failed_count=int(summary.get("failed_count", 0)),
         best_image_id=summary.get("best_image_id"),
@@ -204,7 +220,8 @@ def _render_generation_run_reviews_csv(reviews: list[GenerationRunReview]) -> st
         "failed_count,best_centroid_score,mean_centroid_score,median_centroid_score,"
         "best_style_score,mean_style_score,median_style_score,best_combined_image_id,"
         "best_combined_path,best_combined_score,qa_pass_count,qa_fail_count,qa_pass_rate,"
-        "best_qa_image_id,best_qa_path,best_qa_centroid_score,prompt_words"
+        "best_qa_image_id,best_qa_path,best_qa_centroid_score,prompt_profile,seed,"
+        "planned_count,steps,guidance_scale,size,device,dtype,prompt_words"
     ]
     for rank, review in enumerate(reviews, start=1):
         lines.append(
@@ -233,6 +250,14 @@ def _render_generation_run_reviews_csv(reviews: list[GenerationRunReview]) -> st
                     _csv(review.best_qa_image_id or ""),
                     _csv(review.best_qa_path or ""),
                     _format_optional(review.best_qa_centroid_score),
+                    _csv(review.prompt_profile),
+                    "" if review.seed is None else str(review.seed),
+                    "" if review.planned_count is None else str(review.planned_count),
+                    "" if review.steps is None else str(review.steps),
+                    _format_optional(review.guidance_scale),
+                    _csv(review.size),
+                    _csv(review.device),
+                    _csv(review.dtype),
                     "" if review.prompt_words is None else str(review.prompt_words),
                 ]
             )
@@ -246,12 +271,13 @@ def _render_generation_run_reviews_md(reviews: list[GenerationRunReview]) -> str
         lines.extend(["No generation runs provided.", ""])
         return "\n".join(lines)
     lines.append(
-        "| rank | run | images | failed | qa_pass | best_face | qa_face | best_style | combined | best_image | qa_image |"
+        "| rank | run | provider | profile | seed | images | failed | qa_pass | best_face | qa_face | best_style | combined | best_image | qa_image |"
     )
-    lines.append("| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |")
+    lines.append("| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |")
     for rank, review in enumerate(reviews, start=1):
         lines.append(
-            f"| {rank} | {review.run_dir} | {review.image_count} | {review.failed_count} | "
+            f"| {rank} | {review.run_dir} | {review.provider} | {review.prompt_profile} | "
+            f"{'' if review.seed is None else review.seed} | {review.image_count} | {review.failed_count} | "
             f"{'' if review.qa_pass_count is None else review.qa_pass_count} | "
             f"{_format_optional(review.best_centroid_score)} | "
             f"{_format_optional(review.best_qa_centroid_score)} | "
@@ -325,6 +351,9 @@ def _render_run_card(rank: int, review: GenerationRunReview) -> str:
             '<div class="meta">',
             f'<span class="pill">images {review.image_count}</span>',
             f'<span class="pill">failed {review.failed_count}</span>',
+            f'<span class="pill">provider {escape(review.provider)}</span>',
+            f'<span class="pill">profile {escape(review.prompt_profile)}</span>',
+            f'<span class="pill">seed {"" if review.seed is None else review.seed}</span>',
             f'<span class="pill">best face {_format_optional(review.best_centroid_score)}</span>',
             f'<span class="pill">QA face {_format_optional(review.best_qa_centroid_score)}</span>',
             f'<span class="pill">style {_format_optional(review.best_style_score)}</span>',
@@ -432,6 +461,7 @@ def _generation_run_reviews_summary(reviews: list[GenerationRunReview]) -> dict:
         "best_qa_image_id": best.best_qa_image_id if best else None,
         "best_qa_path": best.best_qa_path if best else None,
         "best_qa_centroid_score": _round_optional(best.best_qa_centroid_score) if best else None,
+        "best_generation": _generation_config_summary(best),
         "runs": [
             {
                 **asdict(review),
@@ -448,6 +478,7 @@ def _generation_run_reviews_summary(reviews: list[GenerationRunReview]) -> dict:
                 "best_qa_image_id": review.best_qa_image_id,
                 "best_qa_path": review.best_qa_path,
                 "best_qa_centroid_score": _round_optional(review.best_qa_centroid_score),
+                "guidance_scale": _round_optional(review.guidance_scale),
             }
             for review in reviews
         ],
@@ -463,6 +494,33 @@ def _quality_summary(run_dir: Path) -> dict:
     if not path.exists():
         return {}
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _generation_config_summary(review: GenerationRunReview | None) -> dict[str, object] | None:
+    if review is None:
+        return None
+    return {
+        "provider": review.provider,
+        "model_id": review.model_id,
+        "status": review.status,
+        "prompt_profile": review.prompt_profile,
+        "seed": review.seed,
+        "planned_count": review.planned_count,
+        "steps": review.steps,
+        "guidance_scale": _round_optional(review.guidance_scale),
+        "size": review.size,
+        "device": review.device,
+        "dtype": review.dtype,
+        "prompt_words": review.prompt_words,
+    }
+
+
+def _generation_size(config: dict) -> str:
+    width = config.get("width")
+    height = config.get("height")
+    if width is None or height is None:
+        return ""
+    return f"{width}x{height}"
 
 
 def _best_quality_centroid_score(run_dir: Path) -> tuple[str | None, str | None, float | None]:

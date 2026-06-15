@@ -200,9 +200,24 @@ def _generation_summary(
         evaluation.get("best_image_id"),
     )
     best_image = _matching_image(evaluation, best_image_id, evaluation_scores)
+    generation_config = generation.get("best_generation")
+    if not isinstance(generation_config, dict):
+        generation_config = _generation_config_from_run(top_run)
     return {
         "reviewed_run_count": generation.get("run_count"),
         "best_run_dir": generation.get("best_run_dir"),
+        "provider": generation_config.get("provider"),
+        "model_id": generation_config.get("model_id"),
+        "status": generation_config.get("status"),
+        "prompt_profile": generation_config.get("prompt_profile"),
+        "seed": generation_config.get("seed"),
+        "planned_count": generation_config.get("planned_count"),
+        "steps": generation_config.get("steps"),
+        "guidance_scale": generation_config.get("guidance_scale"),
+        "size": generation_config.get("size"),
+        "device": generation_config.get("device"),
+        "dtype": generation_config.get("dtype"),
+        "prompt_words": generation_config.get("prompt_words"),
         "best_centroid_score": _first_present(
             generation.get("best_qa_centroid_score"),
             generation.get("best_centroid_score"),
@@ -227,6 +242,23 @@ def _generation_summary(
         "qa_pass_rate": _first_present(top_run.get("qa_pass_rate"), _pass_rate(qa_pass_count, qa_total)),
         "evaluated_image_count": _first_present(top_run.get("image_count"), evaluation.get("image_count")),
         "failed_image_count": _first_present(top_run.get("failed_count"), evaluation.get("failed_count")),
+    }
+
+
+def _generation_config_from_run(run: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "provider": run.get("provider"),
+        "model_id": run.get("model_id"),
+        "status": run.get("status"),
+        "prompt_profile": run.get("prompt_profile"),
+        "seed": run.get("seed"),
+        "planned_count": _first_present(run.get("planned_count"), run.get("count")),
+        "steps": run.get("steps"),
+        "guidance_scale": run.get("guidance_scale"),
+        "size": run.get("size"),
+        "device": run.get("device"),
+        "dtype": run.get("dtype"),
+        "prompt_words": run.get("prompt_words"),
     }
 
 
@@ -295,6 +327,18 @@ def _render_precision_report(report: dict[str, Any]) -> str:
         "",
         f"- reviewed_run_count: {_value(generation['reviewed_run_count'])}",
         f"- best_run_dir: {_value(generation['best_run_dir'])}",
+        f"- provider: {_value(generation['provider'])}",
+        f"- model_id: {_value(generation['model_id'])}",
+        f"- status: {_value(generation['status'])}",
+        f"- prompt_profile: {_value(generation['prompt_profile'])}",
+        f"- seed: {_value(generation['seed'])}",
+        f"- planned_count: {_value(generation['planned_count'])}",
+        f"- steps: {_value(generation['steps'])}",
+        f"- guidance_scale: {_value(generation['guidance_scale'])}",
+        f"- size: {_value(generation['size'])}",
+        f"- device: {_value(generation['device'])}",
+        f"- dtype: {_value(generation['dtype'])}",
+        f"- prompt_words: {_value(generation['prompt_words'])}",
         f"- best_image_id: {_value(generation['best_image_id'])}",
         f"- best_centroid_score: {_value(generation['best_centroid_score'])}",
         f"- best_cosine_to_mean: {_value(generation['best_cosine_to_mean'])}",

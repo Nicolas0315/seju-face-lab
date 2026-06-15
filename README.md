@@ -329,8 +329,8 @@ See `docs/gpu-generation-log.md` for RTX 4090 generation smoke results.
 - generation `prompt_profile`: `balanced` by default, or `detector-friendly` for frontal, unobscured candidate batches.
 - evaluation `scores.csv`: similarity of candidate generated images to the centroid vectors.
 - evaluation `summary.json`: best/mean/median generated-image similarity for quick comparisons.
-- generated review `generation_run_reviews.csv`: one-command generated-image evaluation + QA + run review via `review-generated`, or directly after Diffusers generation with `generate --review`.
-- precision report `precision_report.json`: model centroid, optional `model_audit.json` mean/median vector distance summary, generated-image mean/median score components, QA, subject-review, backend-comparison, and subject-backend-comparison summary via `precision-report`.
+- generated review `generation_run_reviews.csv`: one-command generated-image evaluation + QA + run review via `review-generated`, or directly after Diffusers generation with `generate --review`; includes provider, model, prompt profile, seed, count, steps, size, device, and dtype when `generation_run.json` is present.
+- precision report `precision_report.json`: model centroid, optional `model_audit.json` mean/median vector distance summary, generation settings, generated-image mean/median score components, QA, subject-review, backend-comparison, and subject-backend-comparison summary via `precision-report`.
 - pipeline run `pipeline_run.json`: configured build/audit-model/evaluate/style-evaluate/review/backend-comparison/subject-backend-comparison/precision orchestration via `run-pipeline`.
 - pipeline config `configs/pipelines/full-retinaface-review.example.json`: deterministic continuity plus `deepface-retinaface` neural rank agreement for the precision bundle.
 - backend diagnostics `backend_diagnostics.json`: optional dependency, CUDA, vector backend, and generation-provider visibility.

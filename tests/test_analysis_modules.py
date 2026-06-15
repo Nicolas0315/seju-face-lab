@@ -228,6 +228,20 @@ class AnalysisModuleTests(unittest.TestCase):
                     {
                         "run_count": 1,
                         "best_run_dir": "outputs/generated",
+                        "best_generation": {
+                            "provider": "diffusers",
+                            "model_id": "local/test-model",
+                            "status": "generated",
+                            "prompt_profile": "detector-friendly",
+                            "seed": 260623,
+                            "planned_count": 2,
+                            "steps": 20,
+                            "guidance_scale": 7.0,
+                            "size": "512x512",
+                            "device": "cuda",
+                            "dtype": "float16",
+                            "prompt_words": 42,
+                        },
                         "best_centroid_score": 0.4,
                         "best_qa_centroid_score": 0.45,
                         "best_qa_image_id": "candidate",
@@ -376,6 +390,17 @@ class AnalysisModuleTests(unittest.TestCase):
             self.assertEqual(report["model"]["model_audit"]["mean_median_embedding"]["cosine"], 0.6)
             self.assertEqual(report["model"]["model_audit"]["mean_median_appearance"]["euclidean"], 1.1)
             self.assertEqual(report["model"]["model_audit"]["descriptor_delta"]["brightness"], 0.1)
+            self.assertEqual(report["generation"]["provider"], "diffusers")
+            self.assertEqual(report["generation"]["model_id"], "local/test-model")
+            self.assertEqual(report["generation"]["prompt_profile"], "detector-friendly")
+            self.assertEqual(report["generation"]["seed"], 260623)
+            self.assertEqual(report["generation"]["planned_count"], 2)
+            self.assertEqual(report["generation"]["steps"], 20)
+            self.assertEqual(report["generation"]["guidance_scale"], 7.0)
+            self.assertEqual(report["generation"]["size"], "512x512")
+            self.assertEqual(report["generation"]["device"], "cuda")
+            self.assertEqual(report["generation"]["dtype"], "float16")
+            self.assertEqual(report["generation"]["prompt_words"], 42)
             self.assertEqual(report["generation"]["best_centroid_score"], 0.45)
             self.assertEqual(report["generation"]["best_cosine_to_mean"], 0.41)
             self.assertEqual(report["generation"]["best_cosine_to_median"], 0.43)
@@ -409,6 +434,10 @@ class AnalysisModuleTests(unittest.TestCase):
             )
             self.assertIn(
                 "best_cosine_to_mean: 0.41",
+                (out / "precision_report.md").read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                "prompt_profile: detector-friendly",
                 (out / "precision_report.md").read_text(encoding="utf-8"),
             )
             self.assertIn(
@@ -1185,6 +1214,28 @@ class AnalysisModuleTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            (run / "generation_run.json").write_text(
+                json.dumps(
+                    {
+                        "config": {
+                            "provider": "diffusers",
+                            "model_id": "local/test-model",
+                            "prompt_profile": "detector-friendly",
+                            "prompt": "aggregate face prompt",
+                            "count": 3,
+                            "seed": 42,
+                            "steps": 20,
+                            "guidance_scale": 7.0,
+                            "width": 512,
+                            "height": 512,
+                            "device": "cuda",
+                            "dtype": "float16",
+                        },
+                        "result": {"status": "generated"},
+                    }
+                ),
+                encoding="utf-8",
+            )
             (run / "style_summary.json").write_text(
                 json.dumps(
                     {
@@ -1226,12 +1277,20 @@ class AnalysisModuleTests(unittest.TestCase):
             reviews = review_generation_runs([run])
             write_generation_run_reviews(reviews, out)
             summary = json.loads((out / "generation_run_reviews.json").read_text(encoding="utf-8"))
+            csv_text = (out / "generation_run_reviews.csv").read_text(encoding="utf-8-sig")
 
             self.assertEqual(summary["best_combined_image_id"], "balanced")
             self.assertEqual(summary["best_combined_path"], "balanced.png")
             self.assertEqual(summary["best_combined_score"], 0.7)
+            self.assertEqual(summary["best_generation"]["provider"], "diffusers")
+            self.assertEqual(summary["best_generation"]["prompt_profile"], "detector-friendly")
+            self.assertEqual(summary["best_generation"]["seed"], 42)
+            self.assertEqual(summary["best_generation"]["planned_count"], 3)
+            self.assertEqual(summary["best_generation"]["size"], "512x512")
+            self.assertIn("prompt_profile,seed,planned_count,steps", csv_text)
             self.assertEqual(summary["runs"][0]["best_combined_image_id"], "balanced")
             self.assertEqual(summary["runs"][0]["best_combined_path"], "balanced.png")
+            self.assertEqual(summary["runs"][0]["prompt_profile"], "detector-friendly")
 
     def test_generation_run_reviews_prefer_quality_passed_candidates(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
