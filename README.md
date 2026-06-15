@@ -211,6 +211,13 @@ Run a JSON pipeline / JSON設定で一括実行:
 python -m seju_face_lab run-pipeline --config configs/pipelines/full-local-review.example.json --out outputs/local_pipeline_run
 ```
 
+Build and deploy the agency research page / 事務所別リサーチページの生成とデプロイ:
+
+```powershell
+npm run build:agency-site
+npm run deploy:agency-site
+```
+
 ## Repository Layout / ディレクトリ構成
 
 - `configs/`: reproducible source, agency, and pipeline configs / ソース・事務所・パイプライン設定

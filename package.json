@@ -1,0 +1,9 @@
+{
+  "scripts": {
+    "build:agency-site": "python scripts/build_agency_site.py",
+    "deploy:agency-site": "wrangler pages deploy outputs/agency_site --project-name seju-face-lab-agency-research"
+  },
+  "devDependencies": {
+    "wrangler": "^4.100.0"
+  }
+}

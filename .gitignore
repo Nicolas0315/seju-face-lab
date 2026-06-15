@@ -13,6 +13,7 @@ data/processed/
 outputs/
 .tmp/
 .worker_tmp/
+.wrangler/
 *.egg-info/
 *.npz
 *.npy
