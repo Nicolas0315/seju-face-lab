@@ -234,6 +234,16 @@ python -m seju_face_lab sources fetch-engagement --handles data/processed/sns_ha
 ```
 
 The SNS fetchers are best-effort public-page readers. Treat blocked/partial rows as expected data quality signals.
+For repeatable exploration with a local SQLite cache, use the SNS router:
+
+```powershell
+python -m seju_face_lab explore profile --platform instagram --handle example_handle
+python -m seju_face_lab explore batch --handles data/processed/sns_handles.jsonl --out data/processed/sns_engagement.jsonl --platforms instagram twitter tiktok
+python -m seju_face_lab explore load-cache --engagement data/processed/sns_engagement.jsonl
+```
+
+`explore` stays local by default. Pass `--remote-host <ssh-host>` only when you explicitly want
+Instagram fetches to run through a trusted SSH host; cache files remain local and ignored.
 
 When public pages are blocked, create a manual CSV template and import reviewed values:
 

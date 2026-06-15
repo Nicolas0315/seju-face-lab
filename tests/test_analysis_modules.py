@@ -1142,6 +1142,249 @@ class AnalysisModuleTests(unittest.TestCase):
             loaded = read_engagement_manifest(engagement_path)
             self.assertEqual(loaded[0].engagements[0].followers, 1000)
 
+    def test_sns_explorer_store_roundtrip_and_default_local_router(self) -> None:
+        from seju_face_lab.sns_explorer import SnsProfile, SnsStore, build_router
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "sns_cache.db"
+            store = SnsStore(db_path)
+            store.put(
+                SnsProfile(
+                    platform="instagram",
+                    handle="talent_a",
+                    profile_url="https://www.instagram.com/talent_a/",
+                    followers=1200,
+                    source="test",
+                )
+            )
+
+            cached = store.get("instagram", "TALENT_A")
+            self.assertIsNotNone(cached)
+            self.assertEqual(cached.followers, 1200)
+            store.close()
+
+            router = build_router(cache_path=None)
+            self.assertIsNone(router._remote_ig)
+
+    def test_remote_instagram_fetcher_uses_stdin_script_once(self) -> None:
+        from seju_face_lab.sns_explorer import RemoteInstagramFetcher
+
+        result = subprocess.CompletedProcess(
+            args=["ssh"],
+            returncode=0,
+            stdout='noise\n{"talent_a": {"followers": 1234, "status": "ok"}}\n',
+            stderr="",
+        )
+        with patch("seju_face_lab.sns_explorer.subprocess.run", return_value=result) as run:
+            fetched = RemoteInstagramFetcher("home-mac-main").fetch_batch(["talent_a"])
+
+        self.assertEqual(fetched["talent_a"]["followers"], 1234)
+        self.assertIn("input", run.call_args.kwargs)
+        self.assertNotIn("stdin", run.call_args.kwargs)
+
+    def test_sns_router_batch_skips_remote_fetch_for_cached_instagram(self) -> None:
+        from seju_face_lab.sns_explorer import SnsProfile, SnsRouter, SnsStore
+
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SnsStore(Path(tmp) / "sns_cache.db")
+            store.put(
+                SnsProfile(
+                    platform="instagram",
+                    handle="cached",
+                    profile_url="https://www.instagram.com/cached/",
+                    followers=1000,
+                    source="cached",
+                )
+            )
+            router = SnsRouter(store=store, remote_host="home-mac-main")
+            router._remote_available = True
+            assert router._remote_ig is not None
+            with patch.object(
+                router._remote_ig,
+                "fetch_batch",
+                return_value={"fresh": {"followers": 2000, "status": "ok"}},
+            ) as fetch_batch:
+                profiles = router.fetch_batch([("instagram", "cached"), ("instagram", "fresh")], delay_between=0)
+
+            store.close()
+            fetch_batch.assert_called_once_with(["fresh"])
+            self.assertEqual([profile.handle for profile in profiles], ["cached", "fresh"])
+            self.assertEqual([profile.followers for profile in profiles], [1000, 2000])
+
+    def test_sns_router_batch_falls_back_when_remote_instagram_has_no_followers(self) -> None:
+        from seju_face_lab.sns_explorer import SnsProfile, SnsRouter
+
+        router = SnsRouter(remote_host="home-mac-main")
+        router._remote_available = True
+        assert router._remote_ig is not None
+        with patch.object(
+            router._remote_ig,
+            "fetch_batch",
+            return_value={"talent_a": {"followers": None, "status": "ssh_error"}},
+        ):
+            with patch(
+                "seju_face_lab.sns_explorer._fetch_instagram_local",
+                return_value=SnsProfile(
+                    platform="instagram",
+                    handle="talent_a",
+                    profile_url="https://www.instagram.com/talent_a/",
+                    followers=1500,
+                    source="local_ig",
+                ),
+            ) as local_fetch:
+                profiles = router.fetch_batch([("instagram", "talent_a")], delay_between=0)
+
+        local_fetch.assert_called_once_with("talent_a")
+        self.assertEqual(profiles[0].followers, 1500)
+        self.assertEqual(profiles[0].source, "local_ig")
+
+    def test_cli_explore_batch_writes_engagement_manifest(self) -> None:
+        from seju_face_lab.sns_explorer import SnsProfile
+
+        class FakeRouter:
+            def __init__(self) -> None:
+                self.force: bool | None = None
+
+            def fetch_batch(self, items: list[tuple[str, str]], delay_between: float, force: bool) -> list[SnsProfile]:
+                self.force = force
+                self.delay_between = delay_between
+                return [
+                    SnsProfile(
+                        platform=platform,
+                        handle=handle,
+                        profile_url=f"https://example.test/{handle}",
+                        followers=1000,
+                        total_engagement=120,
+                        engagement_rate=0.12,
+                        source="fake",
+                    )
+                    for platform, handle in items
+                ]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            handles = root / "handles.jsonl"
+            out = root / "engagement.jsonl"
+            fake_router = FakeRouter()
+            handles.write_text(
+                json.dumps(
+                    {
+                        "talent_slug": "talent_a",
+                        "name": "Talent A",
+                        "sns_handles": {"instagram": "talent_a", "twitter": "talent_x"},
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with patch("seju_face_lab.sns_explorer.build_router", return_value=fake_router):
+                self.assertEqual(
+                    main(
+                        [
+                            "explore",
+                            "batch",
+                            "--handles",
+                            str(handles),
+                            "--out",
+                            str(out),
+                            "--platforms",
+                            "instagram",
+                            "--force",
+                            "--delay",
+                            "0",
+                        ]
+                    ),
+                    0,
+                )
+
+            loaded = read_engagement_manifest(out)
+            self.assertTrue(fake_router.force)
+            self.assertEqual(len(loaded), 1)
+            self.assertEqual(loaded[0].talent_slug, "talent_a")
+            self.assertEqual(loaded[0].engagements[0].platform, "instagram")
+            self.assertEqual(loaded[0].engagements[0].followers, 1000)
+
+    def test_cli_explore_load_cache_reads_handle_keyed_ig_json(self) -> None:
+        from seju_face_lab.sns_explorer import SnsStore
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ig_json = root / "ig_results.json"
+            cache = root / "sns_cache.db"
+            ig_json.write_text(
+                json.dumps({"talent_a": {"followers": 1234, "status": "ok"}}),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                main(
+                    [
+                        "explore",
+                        "load-cache",
+                        "--ig-json",
+                        str(ig_json),
+                        "--cache",
+                        str(cache),
+                    ]
+                ),
+                0,
+            )
+
+            store = SnsStore(cache)
+            cached = store.get("instagram", "talent_a")
+            store.close()
+            self.assertIsNotNone(cached)
+            self.assertEqual(cached.followers, 1234)
+
+    def test_cli_explore_load_cache_maps_slug_keyed_ig_json_through_handles(self) -> None:
+        from seju_face_lab.sns_explorer import SnsStore
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            handles = root / "handles.jsonl"
+            ig_json = root / "ig_results.json"
+            cache = root / "sns_cache.db"
+            handles.write_text(
+                json.dumps(
+                    {
+                        "talent_slug": "talent_a",
+                        "name": "Talent A",
+                        "sns_handles": {"instagram": "real_handle"},
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            ig_json.write_text(
+                json.dumps({"talent_a": {"followers": 2468, "status": "ok"}}),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                main(
+                    [
+                        "explore",
+                        "load-cache",
+                        "--ig-json",
+                        str(ig_json),
+                        "--handles",
+                        str(handles),
+                        "--cache",
+                        str(cache),
+                    ]
+                ),
+                0,
+            )
+
+            store = SnsStore(cache)
+            cached = store.get("instagram", "real_handle")
+            missed_slug = store.get("instagram", "talent_a")
+            store.close()
+            self.assertIsNotNone(cached)
+            self.assertEqual(cached.followers, 2468)
+            self.assertIsNone(missed_slug)
+
     def test_import_engagement_csv_merges_manual_rows(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

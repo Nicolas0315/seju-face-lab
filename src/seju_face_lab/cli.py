@@ -365,6 +365,45 @@ def main(argv: list[str] | None = None) -> int:
     corr_parser.add_argument("--out", type=Path, required=True,
                               help="output directory for correlation report")
 
+    # explore command group
+    explore_parser = subparsers.add_parser("explore", help="SNS exploration engine (multi-source, cached)")
+    explore_sub = explore_parser.add_subparsers(dest="explore_command", required=True)
+
+    ex_profile_p = explore_sub.add_parser("profile", help="fetch a single SNS profile via the router")
+    ex_profile_p.add_argument("--platform", required=True, choices=["instagram", "twitter", "tiktok"])
+    ex_profile_p.add_argument("--handle", required=True)
+    ex_profile_p.add_argument("--cache", type=Path, default=Path("data/processed/sns_cache.db"))
+    ex_profile_p.add_argument("--remote-host", default=None, help="optional SSH host for Instagram fetches")
+    ex_profile_p.add_argument("--force", action="store_true", help="bypass cache and re-fetch")
+
+    ex_batch_p = explore_sub.add_parser("batch", help="fetch all talent handles via the router (with cache)")
+    ex_batch_p.add_argument("--handles", type=Path, required=True)
+    ex_batch_p.add_argument("--out", type=Path, required=True, help="output engagement JSONL")
+    ex_batch_p.add_argument("--cache", type=Path, default=Path("data/processed/sns_cache.db"))
+    ex_batch_p.add_argument("--remote-host", default=None, help="optional SSH host for Instagram fetches")
+    ex_batch_p.add_argument("--platforms", nargs="+",
+                             choices=["instagram", "twitter", "tiktok"],
+                             default=["instagram", "twitter", "tiktok"])
+    ex_batch_p.add_argument("--delay", type=float, default=1.5)
+    ex_batch_p.add_argument("--force", action="store_true")
+
+    ex_load_p = explore_sub.add_parser(
+        "load-cache",
+        help="pre-populate the SNS cache from existing engagement manifests/JSON files",
+    )
+    ex_load_p.add_argument("--engagement", type=Path, help="existing engagement .jsonl")
+    ex_load_p.add_argument("--ig-json", type=Path, default=None,
+                            help="Instagram result JSON from an external batch fetch")
+    ex_load_p.add_argument("--handles", type=Path, default=None,
+                            help="sns_handles.jsonl for handle→slug lookup")
+    ex_load_p.add_argument("--cache", type=Path, default=Path("data/processed/sns_cache.db"))
+
+    ex_disc_p = explore_sub.add_parser("discover", help="discover SNS handles for a talent name")
+    ex_disc_p.add_argument("--name", required=True, help="talent name to search (e.g. '森 香澄')")
+    ex_disc_p.add_argument("--platforms", nargs="+",
+                            choices=["instagram", "twitter"],
+                            default=["instagram", "twitter"])
+
     args = parser.parse_args(argv)
     if args.command == "build":
         return _build(args.images, args.out, args.crop, args.backend)
@@ -421,6 +460,14 @@ def main(argv: list[str] | None = None) -> int:
         return _sources_import_engagement(args)
     if args.command == "analyze" and args.analyze_command == "correlation":
         return _analyze_correlation(args)
+    if args.command == "explore" and args.explore_command == "profile":
+        return _explore_profile(args)
+    if args.command == "explore" and args.explore_command == "batch":
+        return _explore_batch(args)
+    if args.command == "explore" and args.explore_command == "discover":
+        return _explore_discover(args)
+    if args.command == "explore" and args.explore_command == "load-cache":
+        return _explore_load_cache(args)
     parser.error(f"Unknown command: {args.command}")
     return 2
 
@@ -1249,6 +1296,156 @@ def _sources_import_engagement(args: argparse.Namespace) -> int:
     print(f"engagement records: {total_engs}")
     print(f"records with followers: {with_followers}")
     print(f"output: {args.out}")
+    return 0
+
+
+def _explore_profile(args: argparse.Namespace) -> int:
+    from .sns_explorer import build_router
+    router = build_router(cache_path=args.cache, remote_host=args.remote_host)
+    p = router.fetch(args.platform, args.handle, force=args.force)
+    print(f"platform:      {p.platform}")
+    print(f"handle:        @{p.handle}")
+    print(f"display_name:  {p.display_name}")
+    print(f"followers:     {p.followers:,}" if p.followers else "followers:     N/A")
+    print(f"following:     {p.following}")
+    print(f"posts:         {p.posts}")
+    print(f"avg_likes:     {p.avg_likes}")
+    print(f"avg_comments:  {p.avg_comments}")
+    print(f"engagement_rate: {p.engagement_rate}")
+    print(f"source:        {p.source}")
+    print(f"status:        {p.fetch_status}")
+    if p.fetch_error:
+        print(f"error:         {p.fetch_error}")
+    return 0 if p.fetch_status in ("ok", "partial") else 1
+
+
+def _explore_batch(args: argparse.Namespace) -> int:
+    from .sns_metrics import SnsEngagement, TalentEngagementRecord, write_engagement_manifest
+    from .sns_explorer import build_router
+
+    handles_path: Path = args.handles
+    records_raw = []
+    for line in handles_path.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            records_raw.append(json.loads(line))
+
+    router = build_router(cache_path=args.cache, remote_host=args.remote_host)
+
+    # Build (platform, handle, slug) list
+    items = []
+    for rec in records_raw:
+        slug = rec["talent_slug"]
+        for plat, handle in rec.get("sns_handles", {}).items():
+            if plat in args.platforms:
+                items.append((plat, handle, slug))
+
+    pair_items = [(plat, handle) for plat, handle, _ in items]
+    profiles = router.fetch_batch(pair_items, delay_between=args.delay, force=args.force)
+
+    # Reassemble into TalentEngagementRecord structure
+    slug_to_name = {r["talent_slug"]: r.get("name") for r in records_raw}
+    slug_engs: dict[str, list[SnsEngagement]] = {}
+    for (_plat, _handle, slug), profile in zip(items, profiles):
+        slug_engs.setdefault(slug, []).append(SnsEngagement(**profile.to_engagement_dict()))
+
+    out_records: list[TalentEngagementRecord] = []
+    for rec in records_raw:
+        slug = rec["talent_slug"]
+        engs = slug_engs.get(slug, [])
+        if engs:
+            out_records.append(
+                TalentEngagementRecord(
+                    talent_slug=slug,
+                    name=slug_to_name.get(slug),
+                    engagements=engs,
+                )
+            )
+    write_engagement_manifest(out_records, args.out)
+
+    ok = sum(1 for record in out_records for engagement in record.engagements if engagement.followers)
+    total = sum(len(engs) for engs in slug_engs.values())
+    print(f"talents: {len(slug_engs)}")
+    print(f"engagements: {total}  (with followers: {ok})")
+    print(f"output: {args.out}")
+    return 0
+
+
+def _explore_load_cache(args: argparse.Namespace) -> int:
+    from .sns_explorer import SnsProfile, SnsStore
+
+    store = SnsStore(args.cache)
+    loaded = 0
+
+    # Load from engagement JSONL (any platform)
+    if args.engagement and args.engagement.exists():
+        for line in args.engagement.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            rec = json.loads(line)
+            for eng in rec.get("engagements", []):
+                fol = eng.get("followers")
+                if fol is None:
+                    continue
+                p = SnsProfile(
+                    platform=eng["platform"], handle=eng["handle"],
+                    profile_url=eng.get("profile_url", ""),
+                    followers=fol, following=eng.get("following"),
+                    posts=eng.get("posts"),
+                    total_engagement=eng.get("total_engagement"),
+                    engagement_rate=eng.get("engagement_rate"),
+                    bio=eng.get("bio"), display_name=eng.get("display_name"),
+                    source="loaded_from_jsonl",
+                    fetch_status=eng.get("fetch_status", "ok"),
+                    retrieved_at=eng.get("retrieved_at", ""),
+                )
+                store.put(p)
+                loaded += 1
+
+    # Load Instagram from an external batch result JSON.
+    if args.ig_json and args.ig_json.exists():
+        ig_data = json.loads(args.ig_json.read_text(encoding="utf-8"))
+        handle_by_slug = _instagram_handles_by_slug(args.handles) if args.handles else {}
+        for key, v in ig_data.items():
+            handle = v.get("handle") or handle_by_slug.get(key) or key
+            fol = v.get("followers")
+            if not handle or fol is None:
+                continue
+            p = SnsProfile(
+                platform="instagram", handle=handle,
+                profile_url=f"https://www.instagram.com/{handle}/",
+                followers=fol, source="loaded_from_ig_json",
+                fetch_status="ok",
+            )
+            store.put(p)
+            loaded += 1
+
+    store.close()
+    print(f"Loaded {loaded} profiles into cache: {args.cache}")
+    return 0
+
+
+def _instagram_handles_by_slug(handles_path: Path) -> dict[str, str]:
+    handle_by_slug: dict[str, str] = {}
+    for line in handles_path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        record = json.loads(line)
+        handle = record.get("sns_handles", {}).get("instagram")
+        if handle:
+            handle_by_slug[str(record["talent_slug"])] = str(handle)
+    return handle_by_slug
+
+
+def _explore_discover(args: argparse.Namespace) -> int:
+    from .sns_explorer import discover_handles_for_talent
+    results = discover_handles_for_talent(args.name, platforms=args.platforms)
+    for platform, handles in results.items():
+        print(f"\n{platform}:")
+        if not handles:
+            print("  (no results)")
+        for h in handles:
+            fol = f"{h.followers:,}" if h.followers else "?"
+            print(f"  @{h.handle} [{h.display_name}] followers={fol} score={h.relevance_score:.2f}")
     return 0
 
 

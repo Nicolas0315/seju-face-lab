@@ -16,7 +16,7 @@ Retrieval/design date: 2026-06-14.
 - Per-subject similarity review is implemented through `review-subjects`.
 - `review-subjects` writes a local HTML thumbnail review so celebrity/public-figure nearest-image evidence can be checked per subject.
 - Per-subject backend rank agreement is implemented through `compare-subject-backends`.
-- SNS handle/engagement manifests and face-score correlation reports are implemented.
+- SNS handle/engagement manifests, cache-backed SNS exploration, and face-score correlation reports are implemented.
 - OpenCLIP style-axis scoring is implemented through `style-evaluate`.
 - `compare-runs` reports style and same-image combined scores when style outputs are present.
 - `compare-runs` writes a local HTML thumbnail review so generated candidates can be visually checked beside face/style/QA evidence.

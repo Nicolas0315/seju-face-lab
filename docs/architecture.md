@@ -57,6 +57,7 @@ Retrieval/design date: 2026-06-14.
 15. SNS and correlation analysis
    - `sources scrape-handles` writes reviewed SNS handle manifests
    - `sources fetch-engagement` writes best-effort public engagement manifests
+   - `explore profile|batch|load-cache|discover` adds cache-backed local SNS exploration with optional explicit SSH routing
    - `analyze correlation` joins `subject_reviews.json` to SNS metrics
 
 ## Backends
