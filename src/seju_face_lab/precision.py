@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import math
 from pathlib import Path
 from typing import Any
 import zipfile
@@ -37,8 +38,9 @@ def write_precision_report(
         model_audit=model_audit,
         vector_export=vector_export,
     )
+    report = _json_safe(report)
     (out_dir / "precision_report.json").write_text(
-        json.dumps(report, ensure_ascii=False, indent=2),
+        json.dumps(report, ensure_ascii=False, indent=2, allow_nan=False),
         encoding="utf-8",
     )
     (out_dir / "precision_report.md").write_text(_render_precision_report(report), encoding="utf-8")
@@ -368,8 +370,12 @@ def _correlation_summary(summary: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(correlations, list):
         correlations = []
     ranked = sorted(
-        [row for row in correlations if isinstance(row, dict) and row.get("spearman_r") is not None],
-        key=lambda row: -abs(float(row.get("spearman_r", 0.0))),
+        [
+            row
+            for row in correlations
+            if isinstance(row, dict) and _finite_float(row.get("spearman_r")) is not None
+        ],
+        key=lambda row: -abs(_finite_float(row.get("spearman_r")) or 0.0),
     )
     top = ranked[0] if ranked else {}
     return {
@@ -849,6 +855,28 @@ def _value(value: Any) -> str:
     if value is None:
         return ""
     return str(value)
+
+
+def _finite_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        result = float(value)
+    except (TypeError, ValueError):
+        return None
+    return result if math.isfinite(result) else None
+
+
+def _json_safe(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: _json_safe(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, tuple):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    return value
 
 
 def _format_correlation_pair(pair: Any) -> str:

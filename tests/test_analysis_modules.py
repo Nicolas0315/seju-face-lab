@@ -565,6 +565,52 @@ class AnalysisModuleTests(unittest.TestCase):
                 (out / "precision_report.md").read_text(encoding="utf-8"),
             )
 
+    def test_precision_report_ignores_nan_correlation_top_pair(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            model = root / "model"
+            correlation = root / "correlation"
+            out = root / "precision"
+            model.mkdir()
+            correlation.mkdir()
+            (correlation / "correlation_summary.json").write_text(
+                json.dumps(
+                    {
+                        "talent_count": 4,
+                        "with_face_score": 4,
+                        "with_ig": 4,
+                        "with_twitter": 4,
+                        "with_tiktok": 0,
+                        "correlations": [
+                            {
+                                "a": "face_mean_centroid_score",
+                                "b": "ig_followers",
+                                "n": 4,
+                                "spearman_r": float("nan"),
+                                "interpretation": "negligible_positive",
+                            },
+                            {
+                                "a": "face_mean_centroid_score",
+                                "b": "tw_followers",
+                                "n": 4,
+                                "spearman_r": 0.5,
+                                "interpretation": "moderate_positive",
+                            },
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            report = write_precision_report(model_dir=model, out_dir=out, correlation=correlation)
+
+            self.assertEqual(report["correlation"]["top_pair"]["b"], "tw_followers")
+            self.assertEqual(report["correlation"]["top_pair"]["spearman_r"], 0.5)
+            report_text = (out / "precision_report.json").read_text(encoding="utf-8")
+            self.assertNotIn("NaN", report_text)
+            persisted = json.loads(report_text)
+            self.assertIsNone(persisted["correlation"]["correlations"][0]["spearman_r"])
+
     def test_model_audit_reports_mean_median_vector_distance(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
