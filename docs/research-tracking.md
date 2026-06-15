@@ -48,6 +48,7 @@ Retrieval/design date: 2026-06-14.
 - `worker-diagnostics` records local RTX 4090 and optional SSH remote-GPU Python/CUDA/torch/package readiness without remote writes.
 - `distributed-evaluate` runs explicit local worker-chunk scoring and records merged score outputs plus worker assignment artifacts before any remote split-run.
 - `audit_research_data_quality.py` checks real-vs-hypothesis evidence type, subject/image counts, image imbalance, duplicates, small images, aspect outliers, agency generated-score coverage, and quadrant separability before strong claims.
+- `docs/strengthening-next-plan.md` records the next strengthening engine execution order, output paths, promotion rules, and verification commands.
 
 ## GitHub Issue Plan
 
@@ -64,6 +65,7 @@ Create and track these issues:
 - `P0 Data quality gates`: wire `scripts/audit_research_data_quality.py` into repeatable pipelines and public page badges.
 - `P0 Real agency data collection`: collect per-talent non-seju agency image sets with source manifests before calling them real agency averages.
 - `P0 Subject-balanced centroid`: build a centroid mode that averages per subject before computing the global centroid.
+- `P0 Strengthening next plan`: execute `docs/strengthening-next-plan.md` from P0 evidence gates through P2 visualization.
 
 ## Local ToDo
 
