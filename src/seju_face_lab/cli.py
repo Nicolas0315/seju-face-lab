@@ -33,6 +33,7 @@ from .quality import review_image_quality, write_image_quality
 from .run_reviews import review_generation_runs, write_generation_run_reviews
 from .sources import discover_sources, download_source_images, read_source_manifest, write_source_manifest
 from .style import OpenClipStyleBackend, score_style_images, write_style_scores
+from .subject_vectors import vectorize_subjects, write_subject_vectors
 from .vector_export import write_vector_export
 from .workers import DEFAULT_DIAGNOSTIC_WORKERS, LOCAL_4090, distribute_vectorize, write_worker_diagnostics
 
@@ -249,6 +250,16 @@ def main(argv: list[str] | None = None) -> int:
     review_parser.add_argument("--out", type=Path, required=True)
     review_parser.add_argument("--crop", choices=["center", "none"], default="center")
     review_parser.add_argument("--backend", default="deterministic")
+
+    vectorize_subjects_parser = subparsers.add_parser(
+        "vectorize-subjects",
+        help="save one aggregate vector per person folder for later real agency centroids",
+    )
+    vectorize_subjects_parser.add_argument("--subjects", type=Path, required=True)
+    vectorize_subjects_parser.add_argument("--out", type=Path, required=True)
+    vectorize_subjects_parser.add_argument("--crop", choices=["center", "none"], default="center")
+    vectorize_subjects_parser.add_argument("--backend", default="deterministic")
+    vectorize_subjects_parser.add_argument("--workers", type=int, default=4)
 
     subparsers.add_parser("backends", help="list available vector backend plans")
 
@@ -534,6 +545,8 @@ def main(argv: list[str] | None = None) -> int:
         return _review_generated(args)
     if args.command == "review-subjects":
         return _review_subjects(args.model, args.subjects, args.out, args.crop, args.backend)
+    if args.command == "vectorize-subjects":
+        return _vectorize_subjects(args.subjects, args.out, args.crop, args.backend, args.workers)
     if args.command == "backends":
         print(backend_help())
         return 0
@@ -1433,6 +1446,21 @@ def _review_subjects(model_dir: Path, subjects: Path, out: Path, crop: str, back
     write_subject_reviews(reviews, out)
     print(f"reviewed subjects: {len(reviews)}")
     print(f"reviews: {out / 'subject_reviews.csv'}")
+    return 0
+
+
+def _vectorize_subjects(subjects: Path, out: Path, crop: str, backend_name: str, workers: int) -> int:
+    if not subjects.is_dir():
+        raise SystemExit(f"No subject directory found: {subjects}")
+    backend = get_vector_backend(backend_name)
+    subject_vectors = vectorize_subjects(subjects, backend, crop=crop, workers=max(1, workers))
+    manifest = write_subject_vectors(subject_vectors, out)
+    print(f"subjects: {manifest['subject_count']}")
+    print(
+        f"vectorized: {manifest['ok_count']} "
+        f"(empty {manifest['empty_count']}, failed {manifest['failed_count']})"
+    )
+    print(f"manifest: {out / 'manifest.json'}")
     return 0
 
 

@@ -420,6 +420,101 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(audit["stability"]["unit_count"], 3)
             self.assertIn("## Centroid Stability", (audit_dir / "model_audit.md").read_text(encoding="utf-8"))
 
+    def test_vectorize_subjects_writes_per_person_vectors_and_safe_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            subjects = root / "subjects"
+            (subjects / "alice").mkdir(parents=True)
+            (subjects / "bob").mkdir(parents=True)
+            out = root / "subject_vectors"
+
+            _write_face_like_image(subjects / "alice" / "a1.png", (235, 205, 190), eye_offset=0)
+            _write_face_like_image(subjects / "alice" / "a2.png", (230, 200, 188), eye_offset=1)
+            _write_face_like_image(subjects / "bob" / "b1.png", (175, 150, 132), eye_offset=7)
+
+            self.assertEqual(
+                main(["vectorize-subjects", "--subjects", str(subjects), "--out", str(out), "--workers", "1"]),
+                0,
+            )
+
+            with np.load(out / "alice" / "vector.npz") as data:
+                mean_embedding = data["mean_embedding"]
+            self.assertEqual(mean_embedding.shape, (1073,))
+            self.assertAlmostEqual(float(np.linalg.norm(mean_embedding)), 1.0, places=4)
+
+            profile = json.loads((out / "alice" / "profile.json").read_text(encoding="utf-8"))
+            self.assertEqual(profile["image_count"], 2)
+            self.assertEqual(profile["embedding_dim"], 1073)
+            # profile.json is a metadata sidecar: no raw vectors and no appearance-derived descriptors.
+            self.assertEqual(
+                set(profile),
+                {"subject", "image_count", "failed_count", "embedding_dim", "appearance_shape", "boundary"},
+            )
+
+            manifest_text = (out / "manifest.json").read_text(encoding="utf-8")
+            manifest = json.loads(manifest_text)
+            self.assertEqual(manifest["subject_count"], 2)
+            self.assertEqual(manifest["ok_count"], 2)
+            by_subject = {row["subject"]: row for row in manifest["subjects"]}
+            self.assertEqual(by_subject["alice"]["status"], "ok")
+            self.assertEqual(by_subject["alice"]["image_count"], 2)
+            self.assertEqual(len(by_subject["alice"]["mean_embedding_sha256"]), 64)
+            self.assertNotIn("values", manifest_text)
+            self.assertTrue((out / "manifest.csv").exists())
+            # Boundary: manifest rows surface only safe metadata keys, never raw arrays.
+            allowed_keys = {
+                "subject", "status", "image_count", "failed_count", "embedding_dim",
+                "appearance_shape", "mean_embedding_l2_norm", "mean_embedding_sha256",
+                "median_embedding_sha256", "mean_appearance_sha256", "vector_path", "profile_path",
+            }
+            for row in manifest["subjects"]:
+                self.assertLessEqual(set(row), allowed_keys)
+
+    def test_vectorize_subjects_marks_empty_subject_without_crash(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            subjects = root / "subjects"
+            (subjects / "alice").mkdir(parents=True)
+            (subjects / "empty").mkdir(parents=True)
+            out = root / "subject_vectors"
+
+            _write_face_like_image(subjects / "alice" / "a1.png", (235, 205, 190), eye_offset=0)
+
+            self.assertEqual(
+                main(["vectorize-subjects", "--subjects", str(subjects), "--out", str(out), "--workers", "1"]),
+                0,
+            )
+
+            manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["empty_count"], 1)
+            by_subject = {row["subject"]: row for row in manifest["subjects"]}
+            self.assertEqual(by_subject["empty"]["status"], "empty")
+            self.assertFalse((out / "empty" / "vector.npz").exists())
+            self.assertTrue((out / "alice" / "vector.npz").exists())
+
+    def test_vectorize_subjects_records_failed_subject_without_aborting(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            subjects = root / "subjects"
+            (subjects / "alice").mkdir(parents=True)
+            (subjects / "broken").mkdir(parents=True)
+            out = root / "subject_vectors"
+
+            _write_face_like_image(subjects / "alice" / "a1.png", (235, 205, 190), eye_offset=0)
+            (subjects / "broken" / "bad.png").write_bytes(b"not a real png")
+
+            self.assertEqual(
+                main(["vectorize-subjects", "--subjects", str(subjects), "--out", str(out), "--workers", "1"]),
+                0,
+            )
+
+            manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+            by_subject = {row["subject"]: row for row in manifest["subjects"]}
+            self.assertEqual(by_subject["broken"]["status"], "failed")
+            self.assertEqual(manifest["failed_count"], 1)
+            self.assertTrue((out / "alice" / "vector.npz").exists())
+            self.assertFalse((out / "broken" / "vector.npz").exists())
+
     def test_subject_id_fallback_uses_parent_for_external_paths(self) -> None:
         root = Path("dataset")
         external = Path("external") / "subject-x" / "face.png"
