@@ -353,7 +353,25 @@ def _subject_summary(subjects: dict[str, Any]) -> dict[str, Any]:
         "top_subject_mean_score": best.get("mean_centroid_score"),
         "top_subject_best_score": best.get("best_centroid_score"),
         "top_subject_best_image_path": best.get("best_image_path"),
+        "analysis": _subject_analysis(subjects.get("analysis")),
         "subjects": subject_rows[:10],
+    }
+
+
+def _subject_analysis(analysis: Any) -> dict[str, Any]:
+    if not isinstance(analysis, dict):
+        return {}
+    return {
+        key: value
+        for key, value in analysis.items()
+        if key in {
+            "score_stats",
+            "top_mean_subjects",
+            "top_best_subjects",
+            "single_image_lift",
+            "mean_vector_leaders",
+            "median_vector_leaders",
+        }
     }
 
 
@@ -601,6 +619,7 @@ def _render_precision_report(report: dict[str, Any]) -> str:
         f"- top_subject_mean_score: {_value(subjects['top_subject_mean_score'])}",
         f"- top_subject_best_score: {_value(subjects['top_subject_best_score'])}",
         "",
+        *_render_subject_analysis(subjects.get("analysis")),
         "## Backend Comparison",
         "",
         f"- run_count: {_value(backend_comparison['run_count'])}",
@@ -662,6 +681,52 @@ def _render_precision_report(report: dict[str, Any]) -> str:
         ]
     )
     return "\n".join(lines)
+
+
+def _render_subject_analysis(analysis: Any) -> list[str]:
+    if not isinstance(analysis, dict) or not analysis:
+        return []
+    lines: list[str] = []
+    stats = analysis.get("score_stats")
+    if isinstance(stats, dict):
+        lines.extend(
+            [
+                "### Subject Vector Analysis",
+                "",
+                f"- reviewed_images: {_value(stats.get('reviewed_image_count'))}",
+                f"- failed_images: {_value(stats.get('failed_image_count'))}",
+                f"- mean_of_subject_means: {_value(stats.get('mean_of_subject_means'))}",
+                f"- median_of_subject_means: {_value(stats.get('median_of_subject_means'))}",
+                "",
+            ]
+        )
+    lines.extend(_render_subject_analysis_table("Stable Mean Leaders", analysis.get("top_mean_subjects")))
+    lines.extend(_render_subject_analysis_table("Peak Best Leaders", analysis.get("top_best_subjects")))
+    lines.extend(_render_subject_analysis_table("Single Image Lift", analysis.get("single_image_lift")))
+    lines.extend(_render_subject_analysis_table("Mean Vector Affinity", analysis.get("mean_vector_leaders")))
+    lines.extend(_render_subject_analysis_table("Median Vector Affinity", analysis.get("median_vector_leaders")))
+    return lines
+
+
+def _render_subject_analysis_table(title: str, rows: Any) -> list[str]:
+    if not isinstance(rows, list) or not rows:
+        return []
+    lines = [
+        f"#### {title}",
+        "",
+        "| rank | subject | metric | mean | best | median |",
+        "| --- | --- | ---: | ---: | ---: | ---: |",
+    ]
+    for rank, row in enumerate(rows, start=1):
+        if isinstance(row, dict):
+            lines.append(
+                f"| {rank} | {_value(row.get('subject'))} | {_value(row.get('metric'))} | "
+                f"{_value(row.get('mean_centroid_score'))} | "
+                f"{_value(row.get('best_centroid_score'))} | "
+                f"{_value(row.get('median_centroid_score'))} |"
+            )
+    lines.append("")
+    return lines
 
 
 def _render_generation_by_centroid_kind(summary: Any) -> list[str]:

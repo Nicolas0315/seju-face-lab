@@ -405,6 +405,43 @@ class AnalysisModuleTests(unittest.TestCase):
                 json.dumps(
                     {
                         "subject_count": 1,
+                        "analysis": {
+                            "score_stats": {
+                                "reviewed_image_count": 2,
+                                "failed_image_count": 0,
+                                "mean_of_subject_means": 0.7,
+                                "median_of_subject_means": 0.7,
+                            },
+                            "top_mean_subjects": [
+                                {
+                                    "subject": "near_subject",
+                                    "metric": 0.7,
+                                    "mean_centroid_score": 0.7,
+                                    "best_centroid_score": 0.8,
+                                    "median_centroid_score": 0.75,
+                                }
+                            ],
+                            "top_best_subjects": [
+                                {
+                                    "subject": "near_subject",
+                                    "metric": 0.8,
+                                    "mean_centroid_score": 0.7,
+                                    "best_centroid_score": 0.8,
+                                    "median_centroid_score": 0.75,
+                                }
+                            ],
+                            "single_image_lift": [
+                                {
+                                    "subject": "near_subject",
+                                    "metric": 0.1,
+                                    "mean_centroid_score": 0.7,
+                                    "best_centroid_score": 0.8,
+                                    "median_centroid_score": 0.75,
+                                }
+                            ],
+                            "mean_vector_leaders": [],
+                            "median_vector_leaders": [],
+                        },
                         "subjects": [
                             {
                                 "subject": "near_subject",
@@ -590,6 +627,11 @@ class AnalysisModuleTests(unittest.TestCase):
             self.assertEqual(report["generation"]["best_euclidean_to_median"], 0.8)
             self.assertEqual(report["generation"]["qa_pass_count"], 1)
             self.assertEqual(report["subjects"]["top_subject"], "near_subject")
+            self.assertEqual(report["subjects"]["analysis"]["score_stats"]["reviewed_image_count"], 2)
+            self.assertEqual(
+                report["subjects"]["analysis"]["top_mean_subjects"][0]["subject"],
+                "near_subject",
+            )
             self.assertEqual(report["backend_comparison"]["completed_backends"], ["deterministic"])
             self.assertEqual(report["backend_comparison"]["failed_backends"], ["deepface"])
             self.assertEqual(report["backend_comparison"]["rank_agreement"][0]["spearman_rank"], 0.5)
@@ -620,6 +662,14 @@ class AnalysisModuleTests(unittest.TestCase):
             )
             self.assertIn(
                 "Subject Backend Comparison",
+                (out / "precision_report.md").read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                "Subject Vector Analysis",
+                (out / "precision_report.md").read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                "Stable Mean Leaders",
                 (out / "precision_report.md").read_text(encoding="utf-8"),
             )
             self.assertIn(
