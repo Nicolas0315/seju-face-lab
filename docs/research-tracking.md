@@ -47,6 +47,7 @@ Retrieval/design date: 2026-06-14.
 - `configs/pipelines/full-retinaface-review.example.json` captures the current full review path with deterministic continuity plus `deepface-retinaface` backend rank agreement.
 - `worker-diagnostics` records local RTX 4090 and optional SSH remote-GPU Python/CUDA/torch/package readiness without remote writes.
 - `distributed-evaluate` runs explicit local worker-chunk scoring and records merged score outputs plus worker assignment artifacts before any remote split-run.
+- `audit_research_data_quality.py` checks real-vs-hypothesis evidence type, subject/image counts, image imbalance, duplicates, small images, aspect outliers, agency generated-score coverage, and quadrant separability before strong claims.
 
 ## GitHub Issue Plan
 
@@ -60,6 +61,9 @@ Create and track these issues:
 - `P2 DeepFace adapter`: run the committed detector sweep after the default DeepFace/OpenCV detector accepted only `139/259` official references.
 - `P2 CLIP style axis`: verify optional OpenCLIP install and use `style-evaluate` alongside face geometry scores.
 - `P2 Remote worker playbook`: document RTX 4090 local worker chunking and SSH remote-GPU split-run commands.
+- `P0 Data quality gates`: wire `scripts/audit_research_data_quality.py` into repeatable pipelines and public page badges.
+- `P0 Real agency data collection`: collect per-talent non-seju agency image sets with source manifests before calling them real agency averages.
+- `P0 Subject-balanced centroid`: build a centroid mode that averages per subject before computing the global centroid.
 
 ## Local ToDo
 
@@ -121,4 +125,5 @@ Create and track these issues:
 - Agency Image Gen smoke completed with five fictional aggregate samples in `outputs/agency_imagegen_samples`: seju centroid scores were `platinum 0.346811`, `lespros 0.214772`, `trustar 0.152418`, `seju 0.073247`, `asia-promotion -0.270030`; 8-axis summary quadrant was `defined_bright`, and low-presentation cases are recorded as image-state flags such as `dark_or_underlit_image`, not as person labels.
 - Agency enhancement smoke completed at `outputs/agency_enhancement`: fused ranking was `platinum 0.754879`, `lespros 0.717206`, `trustar 0.694741`, `seju 0.681432`, `asia-promotion 0.581166`; top improvement actions were prompt-axis adjustment, second-seed/regeneration, even front lighting, centered frontal crop, and reduced hair shadow/edge noise.
 - Agency generation calibration completed at `outputs/agency_generation_calibration`: target image score `0.35`, target axis alignment `0.62`, target enhancement score `0.76`; priority counts were `baseline_control 3`, `regenerate 2`, with `seju` and `asia-promotion` selected for first regeneration because their image-score gaps were `0.276753` and `0.620030`.
+- Data quality audit v1 completed at `outputs/data_quality_audit_v1`: risk level `needs_real_data_before_strong_claims`; issues were low seju subject count for robust generalization, subject image imbalance ratio `3.6`, 34 small images, 34 aspect outliers, 7 non-seju agencies still hypothesis/generated-only, and low quadrant separability.
 - Full committed workflow notes are in `docs/gpu-generation-log.md`.

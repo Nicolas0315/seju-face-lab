@@ -1282,6 +1282,73 @@ class PipelineTests(unittest.TestCase):
             self.assertIn("soft defined", html)
             self.assertEqual(data["agencies"][0]["observed_axis_vector"]["dynamic_symmetric"], 0.6)
 
+    def test_data_quality_audit_flags_hypothesis_agencies_and_image_quality(self) -> None:
+        spec = importlib.util.spec_from_file_location(
+            "audit_research_data_quality",
+            Path("scripts/audit_research_data_quality.py"),
+        )
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        audit = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(audit)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            seju = root / "seju"
+            (seju / "subject-a").mkdir(parents=True)
+            (seju / "subject-b").mkdir()
+            Image.new("RGB", (320, 500), (230, 200, 190)).save(seju / "subject-a" / "a.png")
+            Image.new("RGB", (320, 500), (230, 200, 190)).save(seju / "subject-a" / "b.png")
+            Image.new("RGB", (800, 800), (230, 200, 190)).save(seju / "subject-b" / "c.png")
+            agencies = root / "agencies.json"
+            agencies.write_text(
+                json.dumps(
+                    {
+                        "agencies": [
+                            {"slug": "seju", "name": "seju"},
+                            {"slug": "contrast", "name": "contrast"},
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            enhancement = root / "enhancement.json"
+            enhancement.write_text(
+                json.dumps(
+                    {
+                        "agencies": [
+                            {
+                                "slug": "seju",
+                                "enhancement_score": 0.8,
+                                "components": {"image_centroid_score": 0.4, "axis_alignment": 0.5},
+                                "observed_distribution": {"quadrant": "defined_bright"},
+                            },
+                            {
+                                "slug": "contrast",
+                                "enhancement_score": 0.6,
+                                "components": {"image_centroid_score": 0.2, "axis_alignment": 0.3},
+                                "observed_distribution": {"quadrant": "defined_bright"},
+                            },
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            report = audit.build_report(
+                seju_subjects=seju,
+                agencies=agencies,
+                agency_real_root=root / "agency-real",
+                agency_enhancement=enhancement,
+                subject_review=root / "missing.json",
+            )
+
+            codes = {item["code"] for item in report["issues"]}
+            self.assertIn("non_seju_real_data_missing", codes)
+            self.assertIn("small_images_present", codes)
+            self.assertEqual(report["agency_evidence"]["agencies"][0]["real_image_count"], 3)
+            self.assertEqual(report["summary"]["risk_level"], "needs_real_data_before_strong_claims")
+
     def test_calibrate_agency_generation_writes_refined_prompts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

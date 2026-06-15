@@ -257,6 +257,7 @@ GitHub Actions でも同系統の検証を走らせます。開発手順は
 - [`docs/architecture.md`](docs/architecture.md): pipeline and backend design / パイプラインとバックエンド設計
 - [`docs/agency-research-flow.md`](docs/agency-research-flow.md): agency average-face research flow, tag layers, and prompt logic / 事務所別平均顔研究フロー、タグ層、プロンプト化ロジック
 - [`docs/research-tracking.md`](docs/research-tracking.md): issues, TODO, evidence / 研究Issue、ToDo、検証ログ
+- [`docs/strengthening-engine-review.md`](docs/strengthening-engine-review.md): data-quality weaknesses and strengthening backlog / データ品質の弱点レビューと強化項目
 - [`docs/web-source-strategy.md`](docs/web-source-strategy.md): web source boundaries / Webソース収集境界
 - [`docs/gpu-generation-log.md`](docs/gpu-generation-log.md): GPU generation logs / GPU生成・評価ログ
 
