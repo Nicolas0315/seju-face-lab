@@ -1,0 +1,41 @@
+{
+  "name": "generation_sweep_review",
+  "reference_images": "data/raw/seju_official",
+  "model_out": "outputs/seju_model_official",
+  "generation_sweep": {
+    "out": "outputs/generation_sweep",
+    "provider": "diffusers",
+    "hf_model": "runwayml/stable-diffusion-v1-5",
+    "count": 4,
+    "steps": 30,
+    "guidance_scale": 7.0,
+    "width": 512,
+    "height": 512,
+    "device": "cuda",
+    "dtype": "float16",
+    "variant": "auto",
+    "review": true,
+    "review_backend": "deterministic",
+    "compare_runs": true,
+    "review_out": "outputs/generation_sweep/run_reviews",
+    "runs": [
+      {
+        "name": "balanced_seed_260800",
+        "prompt_profile": "balanced",
+        "seed": 260800
+      },
+      {
+        "name": "detector_seed_260900",
+        "prompt_profile": "detector-friendly",
+        "seed": 260900
+      }
+    ]
+  },
+  "precision_out": "outputs/precision_report_generation_sweep",
+  "vector_backend": "deterministic",
+  "notes": [
+    "Each sweep run writes its own generation_run.json under generation_sweep.out/name.",
+    "With review=true and compare_runs=true, each generated batch is reviewed and then ranked together.",
+    "Raw, generated, and precision outputs remain Git-ignored."
+  ]
+}

@@ -20,6 +20,7 @@ Retrieval/design date: 2026-06-14.
    - `prompt.txt` and `generation_manifest.json` feed `generate`
    - `generate --provider dry-run` writes a reproducible run plan
    - `generate --provider diffusers` runs an optional local Diffusers batch
+   - `generation_sweep` pipeline configs expand multiple seed/profile runs into per-run directories
    - `--dry-run` always records `provider: dry-run`, even if the requested provider was diffusers
    - `--variant auto` maps `--dtype float16` to the Diffusers `fp16` variant
    - `--prompt-profile detector-friendly` steers aggregate prompts toward frontal, unobscured faces for detector/evaluation passes
@@ -42,6 +43,7 @@ Retrieval/design date: 2026-06-14.
    - consolidates centroid metadata, generated-image review, QA, subject-review, backend-comparison, and subject-backend-comparison summaries for tracking
 11. `run-pipeline`
    - executes configured build, generation, evaluation, style evaluation, review, backend comparison, subject backend comparison, and precision-report steps from JSON
+   - can execute `generation_sweep` configs to track multiple seed/profile generation attempts under one experiment folder
    - writes `pipeline_run.json` and `pipeline_run.md` as the orchestration trace
 12. `review-subjects`
    - per-person image folders are ranked against the local seju centroid
@@ -132,6 +134,15 @@ Detector-friendly generation pass:
 ```powershell
 python -m seju_face_lab generate --model outputs/seju_model --out outputs/generated_detector --provider diffusers --prompt-profile detector-friendly --count 8 --device cuda
 ```
+
+Generation sweep:
+
+```powershell
+python -m seju_face_lab run-pipeline --config configs/pipelines/generation-sweep.example.json --out outputs/generation_sweep_pipeline
+```
+
+When `generation_sweep.compare_runs` is true, the pipeline writes a shared run comparison at
+`generation_sweep.review_out` or `generation_sweep.out/run_reviews`.
 
 Generated-image QA:
 

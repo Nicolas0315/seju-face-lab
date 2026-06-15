@@ -150,6 +150,16 @@ Add a `style_evaluation` config block after installing `.[clip]` to include the 
 Use `configs/pipelines/full-retinaface-review.example.json` when the same run should include
 the audited `deepface-retinaface` rank-agreement backend in the final precision bundle.
 
+To track multiple generation settings as one experiment, use a generation sweep:
+
+```powershell
+python -m seju_face_lab run-pipeline --config configs/pipelines/generation-sweep.example.json --out outputs/generation_sweep_pipeline
+```
+
+Each sweep run writes `outputs/generation_sweep/<run-name>/generation_run.json`.
+When `review=true` and `compare_runs=true`, the pipeline reviews each generated batch and writes
+a shared `generation_run_reviews.*` bundle for the precision report.
+
 Review other public-figure or celebrity image sets by folder:
 
 ```text
@@ -332,6 +342,7 @@ See `docs/gpu-generation-log.md` for RTX 4090 generation smoke results.
 - generated review `generation_run_reviews.csv`: one-command generated-image evaluation + QA + run review via `review-generated`, or directly after Diffusers generation with `generate --review`; includes provider, model, prompt profile, seed, count, steps, size, device, and dtype when `generation_run.json` is present.
 - precision report `precision_report.json`: model centroid, optional `model_audit.json` mean/median vector distance summary, generation settings, generated-image mean/median score components, QA, subject-review, backend-comparison, and subject-backend-comparison summary via `precision-report`.
 - pipeline run `pipeline_run.json`: configured build/audit-model/evaluate/style-evaluate/review/backend-comparison/subject-backend-comparison/precision orchestration via `run-pipeline`.
+- generation sweep `configs/pipelines/generation-sweep.example.json`: repeatable seed/profile generation experiments with per-run manifests and optional shared run comparison.
 - pipeline config `configs/pipelines/full-retinaface-review.example.json`: deterministic continuity plus `deepface-retinaface` neural rank agreement for the precision bundle.
 - backend diagnostics `backend_diagnostics.json`: optional dependency, CUDA, vector backend, and generation-provider visibility.
 - worker diagnostics `worker_diagnostics.json`: local/SSH Python, CUDA, torch, and package readiness for GPU split-run planning.

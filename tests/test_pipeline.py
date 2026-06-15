@@ -494,6 +494,149 @@ class PipelineTests(unittest.TestCase):
             )
             self.assertEqual([step["status"] for step in pipeline_run["steps"]], ["completed"] * 4)
 
+    def test_run_pipeline_generation_sweep_writes_per_run_manifests(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "raw"
+            model_dir = root / "model"
+            sweep_dir = root / "generation_sweep"
+            precision_dir = root / "precision"
+            pipeline_dir = root / "pipeline_run"
+            config_path = root / "pipeline.json"
+            raw.mkdir()
+            _write_face_like_image(raw / "a.png", (235, 205, 190), eye_offset=0)
+            _write_face_like_image(raw / "b.png", (225, 198, 184), eye_offset=2)
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "name": "generation_sweep_pipeline",
+                        "reference_images": str(raw),
+                        "model_out": str(model_dir),
+                        "generation_sweep": {
+                            "out": str(sweep_dir),
+                            "provider": "dry-run",
+                            "count": 1,
+                            "steps": 12,
+                            "runs": [
+                                {
+                                    "name": "balanced_seed_42",
+                                    "prompt_profile": "balanced",
+                                    "seed": 42,
+                                },
+                                {
+                                    "name": "detector_seed_43",
+                                    "prompt_profile": "detector-friendly",
+                                    "seed": 43,
+                                },
+                            ],
+                        },
+                        "precision_out": str(precision_dir),
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                main(["run-pipeline", "--config", str(config_path), "--out", str(pipeline_dir)]),
+                0,
+            )
+
+            first = json.loads(
+                (sweep_dir / "balanced_seed_42" / "generation_run.json").read_text(encoding="utf-8")
+            )
+            second = json.loads(
+                (sweep_dir / "detector_seed_43" / "generation_run.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(first["config"]["seed"], 42)
+            self.assertEqual(first["config"]["steps"], 12)
+            self.assertEqual(first["config"]["prompt_profile"], "balanced")
+            self.assertEqual(second["config"]["seed"], 43)
+            self.assertEqual(second["config"]["prompt_profile"], "detector-friendly")
+            pipeline_run = json.loads((pipeline_dir / "pipeline_run.json").read_text(encoding="utf-8"))
+            self.assertEqual(
+                [step["name"] for step in pipeline_run["steps"]],
+                ["build", "generation-sweep", "precision-report"],
+            )
+            self.assertEqual([step["status"] for step in pipeline_run["steps"]], ["completed"] * 3)
+
+    def test_run_pipeline_generation_sweep_compare_requires_reviewable_runs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "raw"
+            model_dir = root / "model"
+            sweep_dir = root / "generation_sweep"
+            pipeline_dir = root / "pipeline_run"
+            config_path = root / "pipeline.json"
+            raw.mkdir()
+            _write_face_like_image(raw / "a.png", (235, 205, 190), eye_offset=0)
+            _write_face_like_image(raw / "b.png", (225, 198, 184), eye_offset=2)
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "name": "invalid_generation_sweep_pipeline",
+                        "reference_images": str(raw),
+                        "model_out": str(model_dir),
+                        "generation_sweep": {
+                            "out": str(sweep_dir),
+                            "provider": "dry-run",
+                            "compare_runs": True,
+                            "runs": [{"name": "planned_only", "seed": 42}],
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                main(["run-pipeline", "--config", str(config_path), "--out", str(pipeline_dir)]),
+                1,
+            )
+
+            pipeline_run = json.loads((pipeline_dir / "pipeline_run.json").read_text(encoding="utf-8"))
+            self.assertEqual(pipeline_run["steps"][1]["name"], "generation-sweep")
+            self.assertEqual(pipeline_run["steps"][1]["status"], "failed")
+            self.assertIn("compare_runs requires", pipeline_run["steps"][1]["message"])
+
+    def test_run_pipeline_generation_sweep_rejects_output_collisions(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "raw"
+            model_dir = root / "model"
+            sweep_dir = root / "generation_sweep"
+            pipeline_dir = root / "pipeline_run"
+            config_path = root / "pipeline.json"
+            raw.mkdir()
+            _write_face_like_image(raw / "a.png", (235, 205, 190), eye_offset=0)
+            _write_face_like_image(raw / "b.png", (225, 198, 184), eye_offset=2)
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "name": "colliding_generation_sweep_pipeline",
+                        "reference_images": str(raw),
+                        "model_out": str(model_dir),
+                        "generation_sweep": {
+                            "out": str(sweep_dir),
+                            "provider": "dry-run",
+                            "runs": [
+                                {"name": "seed/a", "seed": 42},
+                                {"name": "seed:a", "seed": 43},
+                            ],
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                main(["run-pipeline", "--config", str(config_path), "--out", str(pipeline_dir)]),
+                1,
+            )
+
+            pipeline_run = json.loads((pipeline_dir / "pipeline_run.json").read_text(encoding="utf-8"))
+            self.assertEqual(pipeline_run["steps"][1]["name"], "generation-sweep")
+            self.assertEqual(pipeline_run["steps"][1]["status"], "failed")
+            self.assertIn("output collision", pipeline_run["steps"][1]["message"])
+
     def test_run_pipeline_compares_existing_model_without_rebuild(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -58,7 +58,11 @@ def build_pipeline_plan(config: dict[str, Any], config_path: Path) -> PipelinePl
 
     generation = _generation_config(config)
     generation_out = _path_value(generation, "out") or _path_value(config, "generated_images")
-    if generation and model_out and generation_out:
+    generation_sweep = _generation_sweep_config(config)
+    generation_sweep_out = _path_value(generation_sweep, "out")
+    if generation_sweep and model_out and generation_sweep_out:
+        steps.append(PipelineStep("generation-sweep", "planned", str(generation_sweep_out)))
+    elif generation and model_out and generation_out:
         steps.append(PipelineStep("generate", "planned", str(generation_out)))
 
     generated_images = _path_value(config, "generated_images") or generation_out
@@ -144,6 +148,13 @@ def _generation_config(config: dict[str, Any]) -> dict[str, Any]:
         return generation
     if "provider" in config or "hf_model" in config:
         return config
+    return {}
+
+
+def _generation_sweep_config(config: dict[str, Any]) -> dict[str, Any]:
+    sweep = config.get("generation_sweep")
+    if isinstance(sweep, dict):
+        return sweep
     return {}
 
 

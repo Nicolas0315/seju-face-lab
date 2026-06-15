@@ -579,6 +579,7 @@ def _run_pipeline(args: argparse.Namespace) -> int:
         "build": _run_pipeline_build,
         "audit-model": _run_pipeline_audit_model,
         "generate": _run_pipeline_generate,
+        "generation-sweep": _run_pipeline_generation_sweep,
         "evaluate": _run_pipeline_evaluate,
         "style-evaluate": _run_pipeline_style_evaluate,
         "review-generated": _run_pipeline_review_generated,
@@ -610,31 +611,40 @@ def _run_pipeline_audit_model(config: dict) -> int:
 
 def _run_pipeline_generate(config: dict) -> int:
     generation = _pipeline_generation_config(config)
-    return _generate(
-        argparse.Namespace(
-            model=_pipeline_model(config),
-            out=_pipeline_generated_images(config),
-            provider=str(generation.get("provider", "dry-run")),
-            hf_model=str(generation.get("hf_model", "runwayml/stable-diffusion-v1-5")),
-            count=int(generation.get("count", 4)),
-            seed=int(generation.get("seed", 150315)),
-            steps=int(generation.get("steps", 30)),
-            guidance_scale=float(generation.get("guidance_scale", 7.0)),
-            width=int(generation.get("width", 512)),
-            height=int(generation.get("height", 512)),
-            device=str(generation.get("device", "cuda")),
-            dtype=str(generation.get("dtype", "float16")),
-            variant=str(generation.get("variant", "auto")),
-            prompt_profile=str(generation.get("prompt_profile", "balanced")),
-            prompt=generation.get("prompt"),
-            negative_prompt=generation.get("negative_prompt"),
-            dry_run=bool(generation.get("dry_run", False)),
-            review=bool(generation.get("review", False)),
-            review_out=Path(generation["review_out"]) if generation.get("review_out") else None,
-            review_crop=str(generation.get("review_crop", "center")),
-            review_backend=str(generation.get("review_backend", "deterministic")),
-        )
-    )
+    return _generate(_generation_namespace(config, generation, _pipeline_generated_images(config)))
+
+
+def _run_pipeline_generation_sweep(config: dict) -> int:
+    sweep = _pipeline_generation_sweep_config(config)
+    base_out = Path(sweep["out"])
+    runs = sweep.get("runs")
+    if not isinstance(runs, list) or not runs:
+        raise SystemExit("Pipeline generation_sweep requires at least one run")
+
+    run_dirs: list[Path] = []
+    seen_run_dirs: set[Path] = set()
+    for index, run in enumerate(runs, start=1):
+        if not isinstance(run, dict):
+            raise SystemExit("Pipeline generation_sweep runs must be objects")
+        run_config = _merge_generation_sweep_run(sweep, run)
+        if bool(sweep.get("compare_runs", False)) and not _generation_run_is_reviewable(run_config):
+            raise SystemExit(
+                "Pipeline generation_sweep compare_runs requires non-dry-run runs with review=true"
+            )
+        run_dir = _generation_sweep_run_dir(base_out, run_config, index)
+        run_dir_key = run_dir.resolve(strict=False)
+        if run_dir_key in seen_run_dirs:
+            raise SystemExit(f"Pipeline generation_sweep run output collision: {run_dir}")
+        seen_run_dirs.add(run_dir_key)
+        result = _generate(_generation_namespace(config, run_config, run_dir))
+        if result != 0:
+            return result
+        run_dirs.append(run_dir)
+
+    if bool(sweep.get("compare_runs", False)):
+        review_out = Path(sweep.get("review_out") or (base_out / "run_reviews"))
+        return _compare_runs(run_dirs, review_out)
+    return 0
 
 
 def _run_pipeline_evaluate(config: dict) -> int:
@@ -737,6 +747,60 @@ def _pipeline_generation_config(config: dict) -> dict:
     return config["generation"] if isinstance(config.get("generation"), dict) else config
 
 
+def _pipeline_generation_sweep_config(config: dict) -> dict:
+    sweep = config.get("generation_sweep")
+    return sweep if isinstance(sweep, dict) else {}
+
+
+def _merge_generation_sweep_run(sweep: dict, run: dict) -> dict:
+    ignored = {"runs", "out", "review_out", "compare_runs"}
+    merged = {key: value for key, value in sweep.items() if key not in ignored}
+    merged.update(run)
+    return merged
+
+
+def _generation_sweep_run_dir(base_out: Path, run: dict, index: int) -> Path:
+    if run.get("out"):
+        return Path(run["out"])
+    name = str(run.get("name") or f"run_{index:02d}")
+    safe_name = "".join(char if char.isalnum() or char in ("-", "_") else "_" for char in name)
+    return base_out / safe_name
+
+
+def _generation_run_is_reviewable(generation: dict) -> bool:
+    return (
+        str(generation.get("provider", "dry-run")) != "dry-run"
+        and not bool(generation.get("dry_run", False))
+        and bool(generation.get("review", False))
+    )
+
+
+def _generation_namespace(config: dict, generation: dict, out: Path) -> argparse.Namespace:
+    return argparse.Namespace(
+        model=_pipeline_model(config),
+        out=out,
+        provider=str(generation.get("provider", "dry-run")),
+        hf_model=str(generation.get("hf_model", "runwayml/stable-diffusion-v1-5")),
+        count=int(generation.get("count", 4)),
+        seed=int(generation.get("seed", 150315)),
+        steps=int(generation.get("steps", 30)),
+        guidance_scale=float(generation.get("guidance_scale", 7.0)),
+        width=int(generation.get("width", 512)),
+        height=int(generation.get("height", 512)),
+        device=str(generation.get("device", "cuda")),
+        dtype=str(generation.get("dtype", "float16")),
+        variant=str(generation.get("variant", "auto")),
+        prompt_profile=str(generation.get("prompt_profile", "balanced")),
+        prompt=generation.get("prompt"),
+        negative_prompt=generation.get("negative_prompt"),
+        dry_run=bool(generation.get("dry_run", False)),
+        review=bool(generation.get("review", False)),
+        review_out=Path(generation["review_out"]) if generation.get("review_out") else None,
+        review_crop=str(generation.get("review_crop", "center")),
+        review_backend=str(generation.get("review_backend", "deterministic")),
+    )
+
+
 def _pipeline_generated_images(config: dict) -> Path:
     generation = _pipeline_generation_config(config)
     value = generation.get("out") or config.get("generated_images")
@@ -748,6 +812,11 @@ def _pipeline_generated_images(config: dict) -> Path:
 def _pipeline_generation_review_out(config: dict) -> Path | None:
     if config.get("review_out"):
         return Path(config["review_out"])
+    sweep = _pipeline_generation_sweep_config(config)
+    if sweep.get("review_out"):
+        return Path(sweep["review_out"])
+    if sweep.get("compare_runs"):
+        return Path(sweep["out"]) / "run_reviews"
     generation = _pipeline_generation_config(config)
     if generation.get("review_out"):
         return Path(generation["review_out"])
