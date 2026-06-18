@@ -55,6 +55,22 @@ class OpenCVFaceBackend:
         return vectorize_normalized_image(path, normalized)
 
 
+def align_from_landmarks(
+    image_rgb: np.ndarray,
+    landmarks: np.ndarray,
+    size: int = 112,
+) -> np.ndarray:
+    from insightface.utils import face_align
+
+    return np.asarray(
+        face_align.norm_crop(
+            image_rgb,
+            landmark=np.asarray(landmarks, dtype=np.float32),
+            image_size=size,
+        )
+    )
+
+
 class InsightFaceBackend:
     """InsightFace ArcFace 512D embeddings via ONNX Runtime.
 
@@ -142,6 +158,73 @@ class InsightFaceBackend:
             appearance=appearance,
             descriptors={},
         )
+
+
+class LandmarkAlignBackend:
+    """InsightFace landmarks for pose-normalized deterministic vectors."""
+
+    name: str = "landmark-align"
+    extra: str = "face"
+    description: str = (
+        "InsightFace 5-point landmark alignment before built-in deterministic 1073D vectors. "
+        "Requires: pip install 'seju-face-lab[face]'"
+    )
+
+    def __init__(self, gpu_id: int = 0, model_pack: str = "buffalo_l") -> None:
+        self.gpu_id = gpu_id
+        self.model_pack = model_pack
+        self._app: Any = None
+        self._lock: Lock = Lock()
+
+    def _get_app(self) -> Any:
+        if self._app is not None:
+            return self._app
+        with self._lock:
+            if self._app is not None:
+                return self._app
+            try:
+                from insightface.app import FaceAnalysis
+            except ImportError as exc:
+                raise RuntimeError(
+                    "insightface is not installed. "
+                    "Run: pip install insightface onnxruntime-gpu"
+                ) from exc
+            _prepare_windows_torch_cuda_dlls()
+            providers = (
+                ["CUDAExecutionProvider", "CPUExecutionProvider"]
+                if self.gpu_id >= 0
+                else ["CPUExecutionProvider"]
+            )
+            app = FaceAnalysis(
+                name=self.model_pack,
+                providers=providers,
+                allowed_modules=["detection"],
+            )
+            app.prepare(ctx_id=self.gpu_id)
+            self._app = app
+        return self._app
+
+    def vectorize(self, path: Path, crop: str = "center") -> ImageVector:
+        if crop != "center":
+            raise ValueError("landmark-align backend only supports crop='center'")
+        image = Image.open(path)
+        image = ImageOps.exif_transpose(image).convert("RGB")
+        img_rgb = np.asarray(image, dtype=np.uint8)
+        img_bgr = np.ascontiguousarray(img_rgb[:, :, ::-1])
+
+        app = self._get_app()
+        faces = app.get(img_bgr)
+        if not faces:
+            raise ValueError(f"No face detected in {path}")
+
+        face = max(
+            faces,
+            key=lambda f: (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]),
+        )
+        aligned = align_from_landmarks(img_rgb, face.kps)
+        aligned_pil = Image.fromarray(aligned).convert("RGB")
+        normalized = normalize_image(aligned_pil, crop="none")
+        return vectorize_normalized_image(path, normalized)
 
 
 class DeepFaceBackend:
@@ -240,6 +323,24 @@ def _make_insightface_backend() -> InsightFaceBackend | PlannedBackend:
         )
 
 
+def _make_landmark_align_backend() -> LandmarkAlignBackend | PlannedBackend:
+    """Return LandmarkAlignBackend if InsightFace runtime dependencies are installed."""
+    try:
+        import onnxruntime  # noqa: F401
+        import insightface  # noqa: F401
+        return LandmarkAlignBackend()
+    except ImportError:
+        return PlannedBackend(
+            name="landmark-align",
+            extra="face",
+            description=(
+                "InsightFace 5-point landmark alignment before built-in deterministic 1073D vectors "
+                "(install: pip install insightface onnxruntime-gpu)."
+            ),
+            notes="Uses landmark geometry only to normalize pose/scale before local deterministic vectorization.",
+        )
+
+
 def _make_deepface_backend(
     detector_backend: str = "opencv",
     name: str = "deepface",
@@ -267,6 +368,7 @@ BACKENDS: dict[str, VectorBackend] = {
     "deterministic": DeterministicBackend(),
     "opencv-face": OpenCVFaceBackend(),
     "insightface": _make_insightface_backend(),
+    "landmark-align": _make_landmark_align_backend(),
     "deepface": _make_deepface_backend(),
     "deepface-retinaface": _make_deepface_backend("retinaface", name="deepface-retinaface"),
 }
@@ -341,6 +443,8 @@ def backend_help() -> str:
             state = f"planned extra={backend.extra}"
         elif isinstance(backend, InsightFaceBackend):
             state = "implemented extra=face"
+        elif isinstance(backend, LandmarkAlignBackend):
+            state = f"implemented extra={backend.extra}"
         elif isinstance(backend, DeepFaceBackend):
             state = "implemented extra=deepface"
         elif isinstance(backend, OpenCVFaceBackend):

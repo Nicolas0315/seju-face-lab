@@ -10,6 +10,7 @@ from .backends import (
     GENERATION_PROVIDERS,
     DeepFaceBackend,
     InsightFaceBackend,
+    LandmarkAlignBackend,
     OpenCVFaceBackend,
     PlannedBackend,
 )
@@ -48,7 +49,7 @@ def _backend_status(name: str) -> dict[str, Any]:
     status: dict[str, Any] = {"name": name, "description": backend.description}
     if isinstance(backend, PlannedBackend):
         return status | {"implemented": False, "state": "planned", "extra": backend.extra, "notes": backend.notes}
-    if isinstance(backend, InsightFaceBackend):
+    if isinstance(backend, InsightFaceBackend | LandmarkAlignBackend):
         providers = _onnxruntime_providers()
         return status | {
             "implemented": True,

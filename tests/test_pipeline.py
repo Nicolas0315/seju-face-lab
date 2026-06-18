@@ -1154,6 +1154,98 @@ class PipelineTests(unittest.TestCase):
         self.assertNotIn("diffusion-generation", backends.BACKENDS)
         self.assertIn("diffusers", backends.GENERATION_PROVIDERS)
 
+    def test_landmark_align_backend_is_registered_and_listed(self) -> None:
+        self.assertIn("landmark-align", backends.BACKENDS)
+        self.assertIn("landmark-align", backends.backend_help())
+
+    @unittest.skipUnless(
+        importlib.util.find_spec("insightface") and importlib.util.find_spec("onnxruntime"),
+        "insightface not installed",
+    )
+    def test_landmark_align_backend_vectorize_uses_lazy_app_and_larger_face(self) -> None:
+        class FakeFace:
+            def __init__(self, bbox: list[float], kps: list[list[float]]) -> None:
+                self.bbox = np.asarray(bbox, dtype=np.float32)
+                self.kps = np.asarray(kps, dtype=np.float32)
+
+        class FakeApp:
+            def __init__(self, faces: list[FakeFace]) -> None:
+                self.faces = faces
+                self.seen_bgr: np.ndarray | None = None
+
+            def get(self, bgr: np.ndarray) -> list[FakeFace]:
+                self.seen_bgr = bgr
+                return self.faces
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "face.png"
+            Image.new("RGB", (96, 96), (10, 20, 30)).save(path)
+            small = FakeFace(
+                [10.0, 10.0, 30.0, 30.0],
+                [[20.0, 20.0], [24.0, 20.0], [22.0, 22.0], [20.0, 25.0], [24.0, 25.0]],
+            )
+            large = FakeFace(
+                [8.0, 8.0, 60.0, 70.0],
+                [[30.0, 30.0], [45.0, 30.0], [38.0, 42.0], [31.0, 55.0], [44.0, 55.0]],
+            )
+            fake_app = FakeApp([small, large])
+            backend = backends.LandmarkAlignBackend()
+
+            self.assertIsNone(backend._app)
+            backend._get_app = lambda: fake_app
+
+            from insightface.utils import face_align
+
+            selected: dict[str, np.ndarray] = {}
+
+            def fake_norm_crop(image_rgb: np.ndarray, landmark: np.ndarray, image_size: int) -> np.ndarray:
+                selected["landmark"] = np.asarray(landmark)
+                return np.zeros((image_size, image_size, 3), dtype=np.uint8) + image_rgb[0, 0]
+
+            with (
+                patch.object(face_align, "norm_crop", side_effect=fake_norm_crop),
+                patch("seju_face_lab.backends.normalize_image", wraps=backends.normalize_image) as normalize,
+                patch(
+                    "seju_face_lab.backends.vectorize_normalized_image",
+                    wraps=backends.vectorize_normalized_image,
+                ) as vectorize_normalized,
+            ):
+                vector = backend.vectorize(path)
+
+            self.assertEqual(len(vector.embedding), 1073)
+            np.testing.assert_array_equal(selected["landmark"], large.kps)
+            self.assertIsNotNone(fake_app.seen_bgr)
+            self.assertEqual(fake_app.seen_bgr[0, 0].tolist(), [30, 20, 10])
+            normalize.assert_called_once()
+            vectorize_normalized.assert_called_once()
+            self.assertIsNone(backend._app)
+
+            with self.assertRaisesRegex(ValueError, "crop='center'"):
+                backend.vectorize(path, crop="none")
+
+    @unittest.skipUnless(
+        importlib.util.find_spec("insightface") and importlib.util.find_spec("onnxruntime"),
+        "insightface not installed",
+    )
+    def test_align_from_landmarks_returns_aligned_rgb_array(self) -> None:
+        image = np.zeros((80, 80, 3), dtype=np.uint8)
+        image[20:60, 20:60] = np.asarray([180, 120, 90], dtype=np.uint8)
+        landmarks = np.asarray(
+            [
+                [30.0, 35.0],
+                [50.0, 35.0],
+                [40.0, 45.0],
+                [32.0, 55.0],
+                [48.0, 55.0],
+            ],
+            dtype=np.float32,
+        )
+
+        aligned = backends.align_from_landmarks(image, landmarks, size=112)
+
+        self.assertEqual(aligned.shape, (112, 112, 3))
+        self.assertEqual(aligned.dtype, np.uint8)
+
     def test_backend_diagnostics_writes_report(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / "diagnostics"
