@@ -9,6 +9,11 @@ import numpy as np
 
 from .backends import backend_help, get_vector_backend
 from .agency import write_agency_average_params
+from .agency_centroid import (
+    AGENCY_CENTROID_BOUNDARY,
+    build_agency_centroid,
+    write_agency_centroid,
+)
 from .backend_compare import compare_deepface_detectors, compare_subject_backends, compare_vector_backends
 from .backend_diagnostics import write_backend_diagnostics
 from .benchmark_research import write_benchmark_research
@@ -260,6 +265,14 @@ def main(argv: list[str] | None = None) -> int:
     vectorize_subjects_parser.add_argument("--crop", choices=["center", "none"], default="center")
     vectorize_subjects_parser.add_argument("--backend", default="deterministic")
     vectorize_subjects_parser.add_argument("--workers", type=int, default=4)
+
+    build_agency_centroid_parser = subparsers.add_parser(
+        "build-agency-centroid",
+        help="average per-subject vectors into one local member-vector centroid",
+    )
+    build_agency_centroid_parser.add_argument("--subject-vectors", type=Path, required=True)
+    build_agency_centroid_parser.add_argument("--agency", required=True)
+    build_agency_centroid_parser.add_argument("--out", type=Path, required=True)
 
     subparsers.add_parser("backends", help="list available vector backend plans")
 
@@ -547,6 +560,8 @@ def main(argv: list[str] | None = None) -> int:
         return _review_subjects(args.model, args.subjects, args.out, args.crop, args.backend)
     if args.command == "vectorize-subjects":
         return _vectorize_subjects(args.subjects, args.out, args.crop, args.backend, args.workers)
+    if args.command == "build-agency-centroid":
+        return _build_agency_centroid(args.subject_vectors, args.agency, args.out)
     if args.command == "backends":
         print(backend_help())
         return 0
@@ -1461,6 +1476,16 @@ def _vectorize_subjects(subjects: Path, out: Path, crop: str, backend_name: str,
         f"(empty {manifest['empty_count']}, failed {manifest['failed_count']})"
     )
     print(f"manifest: {out / 'manifest.json'}")
+    return 0
+
+
+def _build_agency_centroid(subject_vectors: Path, agency: str, out: Path) -> int:
+    model = build_agency_centroid(subject_vectors, agency)
+    write_agency_centroid(model, out, agency)
+    print(f"agency: {agency}")
+    print(f"members: {len(model.image_ids)}")
+    print(f"agency centroid: {out}")
+    print(f"boundary: {AGENCY_CENTROID_BOUNDARY}")
     return 0
 
 

@@ -1784,6 +1784,159 @@ class PipelineTests(unittest.TestCase):
         ):
             self.assertEqual(_sources_download(args), 1)
 
+    def test_build_agency_centroid_averages_subject_vectors(self) -> None:
+        import warnings
+
+        from seju_face_lab.agency_centroid import AGENCY_CENTROID_BOUNDARY
+        from seju_face_lab.model import _l2_normalize
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            subject_vectors = root / "subject_vectors" / "test"
+            (subject_vectors / "alice").mkdir(parents=True)
+            (subject_vectors / "bob").mkdir(parents=True)
+            out = root / "agency_centroid"
+
+            alice_embedding = np.asarray([1.0, 0.0, 0.0, 0.0], dtype=np.float32)
+            bob_embedding = np.asarray([0.0, 3.0, 0.0, 0.0], dtype=np.float32)
+            alice_appearance = np.asarray(
+                [
+                    [[0.1, 0.2, 0.3], [0.2, 0.3, 0.4]],
+                    [[0.3, 0.4, 0.5], [0.4, 0.5, 0.6]],
+                ],
+                dtype=np.float32,
+            )
+            bob_appearance = np.asarray(
+                [
+                    [[0.6, 0.5, 0.4], [0.5, 0.4, 0.3]],
+                    [[0.4, 0.3, 0.2], [0.3, 0.2, 0.1]],
+                ],
+                dtype=np.float32,
+            )
+            np.savez_compressed(
+                subject_vectors / "alice" / "vector.npz",
+                mean_embedding=alice_embedding,
+                median_embedding=alice_embedding,
+                mean_appearance=alice_appearance,
+                median_appearance=alice_appearance,
+            )
+            np.savez_compressed(
+                subject_vectors / "bob" / "vector.npz",
+                mean_embedding=bob_embedding,
+                median_embedding=bob_embedding,
+                mean_appearance=bob_appearance,
+                median_appearance=bob_appearance,
+            )
+
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                self.assertEqual(
+                    main(
+                        [
+                            "build-agency-centroid",
+                            "--subject-vectors",
+                            str(subject_vectors),
+                            "--agency",
+                            "test",
+                            "--out",
+                            str(out),
+                        ]
+                    ),
+                    0,
+                )
+
+            self.assertTrue((out / "centroids.npz").exists())
+            self.assertTrue((out / "profile.json").exists())
+            model = load_model(out)
+            expected = _l2_normalize(np.mean(np.stack([alice_embedding, bob_embedding]), axis=0))
+            np.testing.assert_allclose(model.mean_embedding, expected, rtol=1e-6, atol=1e-6)
+            profile = json.loads((out / "profile.json").read_text(encoding="utf-8"))
+            self.assertEqual(profile["image_count"], 2)
+            self.assertEqual(profile["subject_count"], 2)
+            self.assertEqual(profile["model_type"], "agency_centroid")
+            self.assertEqual(profile["agency"], "test")
+            self.assertEqual(profile["boundary"], AGENCY_CENTROID_BOUNDARY)
+            self.assertIn(AGENCY_CENTROID_BOUNDARY, profile["notes"])
+            report = (out / "report.md").read_text(encoding="utf-8")
+            self.assertIn("agency member-vector centroid report", report)
+            self.assertNotIn("seju-face centroid report", report)
+            generation_manifest = json.loads((out / "generation_manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(generation_manifest["boundary"], AGENCY_CENTROID_BOUNDARY)
+            self.assertEqual(generation_manifest["model_label"], "test agency member-vector centroid")
+            self.assertNotIn("outputs/seju_model", generation_manifest["evaluation_command"])
+
+    def test_build_agency_centroid_supports_single_member(self) -> None:
+        import warnings
+
+        from seju_face_lab.agency_centroid import AGENCY_CENTROID_BOUNDARY
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            subject_vectors = root / "subject_vectors" / "solo_agency"
+            (subject_vectors / "solo").mkdir(parents=True)
+            out = root / "agency_centroid"
+
+            embedding = np.asarray([0.0, 1.0, 0.0, 0.0], dtype=np.float32)
+            appearance = np.asarray(
+                [
+                    [[0.2, 0.3, 0.4], [0.3, 0.4, 0.5]],
+                    [[0.4, 0.5, 0.6], [0.5, 0.6, 0.7]],
+                ],
+                dtype=np.float32,
+            )
+            np.savez_compressed(
+                subject_vectors / "solo" / "vector.npz",
+                mean_embedding=embedding,
+                median_embedding=embedding,
+                mean_appearance=appearance,
+                median_appearance=appearance,
+            )
+
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                self.assertEqual(
+                    main(
+                        [
+                            "build-agency-centroid",
+                            "--subject-vectors",
+                            str(subject_vectors),
+                            "--agency",
+                            "solo_agency",
+                            "--out",
+                            str(out),
+                        ]
+                    ),
+                    0,
+                )
+
+            model = load_model(out)
+            np.testing.assert_allclose(model.mean_embedding, embedding, rtol=1e-6, atol=1e-6)
+            profile = json.loads((out / "profile.json").read_text(encoding="utf-8"))
+            self.assertEqual(profile["image_count"], 1)
+            self.assertEqual(profile["subject_count"], 1)
+            self.assertEqual(profile["model_type"], "agency_centroid")
+            self.assertEqual(profile["agency"], "solo_agency")
+            self.assertEqual(profile["boundary"], AGENCY_CENTROID_BOUNDARY)
+
+    def test_build_agency_centroid_rejects_empty_subject_vectors(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            subject_vectors = root / "subject_vectors" / "test"
+            subject_vectors.mkdir(parents=True)
+
+            with self.assertRaisesRegex(SystemExit, "No member vector.npz found"):
+                main(
+                    [
+                        "build-agency-centroid",
+                        "--subject-vectors",
+                        str(subject_vectors),
+                        "--agency",
+                        "test",
+                        "--out",
+                        str(root / "agency_centroid"),
+                    ]
+                )
+
 
 def _write_face_like_image(path: Path, skin: tuple[int, int, int], eye_offset: int) -> None:
     image = Image.new("RGB", (96, 96), (245, 242, 238))

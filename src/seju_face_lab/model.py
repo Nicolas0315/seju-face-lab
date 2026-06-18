@@ -83,7 +83,15 @@ def build_centroid_model(
     )
 
 
-def save_model(model: CentroidModel, out_dir: Path) -> None:
+def save_model(
+    model: CentroidModel,
+    out_dir: Path,
+    *,
+    profile_metadata: dict[str, object] | None = None,
+    report_title: str = "seju-face centroid report",
+    evaluation_model_path: str = "outputs/seju_model",
+    manifest_label: str | None = None,
+) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(
         out_dir / "centroids.npz",
@@ -111,6 +119,8 @@ def save_model(model: CentroidModel, out_dir: Path) -> None:
             "Generated-image scores are approximate vector similarity, not ground truth.",
         ],
     }
+    if profile_metadata:
+        profile.update(profile_metadata)
     (out_dir / "profile.json").write_text(json.dumps(profile, ensure_ascii=False, indent=2), encoding="utf-8")
     prompt = prompt_from_descriptors(model.descriptors["median"])
     prompt_profiles = {
@@ -151,16 +161,20 @@ def save_model(model: CentroidModel, out_dir: Path) -> None:
             "keep_prompt_constant": True,
         },
         "evaluation_command": (
-            "python -m seju_face_lab evaluate --model outputs/seju_model "
+            f"python -m seju_face_lab evaluate --model {evaluation_model_path} "
             "--images outputs/generated --out outputs/evaluation"
         ),
         "boundary": "Aggregate-trait synthesis only; do not copy or identify a real person.",
     }
+    if manifest_label is not None:
+        manifest["model_label"] = manifest_label
+    if "boundary" in profile:
+        manifest["boundary"] = str(profile["boundary"])
     (out_dir / "generation_manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    (out_dir / "report.md").write_text(_render_report(profile, prompt), encoding="utf-8")
+    (out_dir / "report.md").write_text(_render_report(profile, prompt, report_title), encoding="utf-8")
 
 
 def load_model(model_dir: Path) -> CentroidModel:
@@ -182,9 +196,9 @@ def load_model(model_dir: Path) -> CentroidModel:
     )
 
 
-def _render_report(profile: dict, prompt: str) -> str:
+def _render_report(profile: dict, prompt: str, title: str = "seju-face centroid report") -> str:
     lines = [
-        "# seju-face centroid report",
+        f"# {title}",
         "",
         f"- image_count: {profile['image_count']}",
         f"- centroid_mode: {profile.get('centroid_mode', 'image_weighted')}",
