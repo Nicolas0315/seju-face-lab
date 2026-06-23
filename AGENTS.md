@@ -12,3 +12,7 @@ Repo-specific rules:
 - ベクトルは実人口や客観的な顔タイプを表さない。投入された画像セットだけの近似として説明する。
 - Do not add outputs that imply identity recognition, attractiveness scoring, personal value, or insulting labels.
 - 本人識別、魅力度判定、人格推定、人への侮辱ラベルにつながる出力を追加しない。
+- Do not add demographic or attribute labels, face swap, or person-matching workflows.
+- demographic/attribute ラベル、faceswap、人物照合ワークフローを追加しない。
+- Prefer landmark tracking, alignment, and aggregate/local-set approximation when extending face-related behavior.
+- 顔関連の拡張は landmark tracking / alignment / aggregate-local-set approximation を優先する。
