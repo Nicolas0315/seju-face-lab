@@ -178,7 +178,24 @@ def _model_audit_summary(audit: dict[str, Any]) -> dict[str, Any]:
         "appearance_shape": audit.get("appearance_shape"),
         "mean_median_embedding": _audit_pair_summary(centroids.get("mean_median_embedding")),
         "mean_median_appearance": _audit_pair_summary(centroids.get("mean_median_appearance")),
+        "stability": _audit_stability_summary(audit.get("stability")),
         "descriptor_delta": audit.get("descriptor_delta", {}),
+    }
+
+
+def _audit_stability_summary(stability: Any) -> dict[str, Any]:
+    if not isinstance(stability, dict):
+        return {"available": False}
+    return {
+        "available": bool(stability.get("available", True)),
+        "unit": stability.get("unit"),
+        "unit_count": stability.get("unit_count"),
+        "resamples": stability.get("resamples"),
+        "self_cosine_mean": stability.get("self_cosine_mean"),
+        "self_cosine_low": stability.get("self_cosine_low"),
+        "self_cosine_high": stability.get("self_cosine_high"),
+        "band": stability.get("band"),
+        "note": stability.get("note"),
     }
 
 
@@ -326,7 +343,45 @@ def _generation_summary(
         "qa_pass_rate": _first_present(top_run.get("qa_pass_rate"), _pass_rate(qa_pass_count, qa_total)),
         "evaluated_image_count": _first_present(top_run.get("image_count"), evaluation.get("image_count")),
         "failed_image_count": _first_present(top_run.get("failed_count"), evaluation.get("failed_count")),
+        "null_calibration": _generation_null_calibration(evaluation.get("null_calibration")),
         "by_centroid_kind": _generation_by_centroid_kind(generation.get("by_centroid_kind")),
+    }
+
+
+def _generation_null_calibration(summary: Any) -> dict[str, Any]:
+    fallback = {
+        "available": False,
+        "method": None,
+        "sample_count": None,
+        "seed": None,
+        "embedding_dim": None,
+        "p95": None,
+        "p99": None,
+        "best_centroid_score_percentile": None,
+        "mean_centroid_score_percentile": None,
+        "median_centroid_score_percentile": None,
+        "boundary": None,
+    }
+    if not isinstance(summary, dict):
+        return fallback
+    null_distribution = summary.get("null_distribution")
+    if not isinstance(null_distribution, dict):
+        null_distribution = {}
+    observed = summary.get("observed_percentiles")
+    if not isinstance(observed, dict):
+        observed = {}
+    return {
+        "available": bool(summary.get("available")),
+        "method": summary.get("method"),
+        "sample_count": _first_present(null_distribution.get("sample_count"), summary.get("sample_count")),
+        "seed": _first_present(null_distribution.get("seed"), summary.get("seed")),
+        "embedding_dim": summary.get("embedding_dim"),
+        "p95": null_distribution.get("p95"),
+        "p99": null_distribution.get("p99"),
+        "best_centroid_score_percentile": observed.get("best_centroid_score"),
+        "mean_centroid_score_percentile": observed.get("mean_centroid_score"),
+        "median_centroid_score_percentile": observed.get("median_centroid_score"),
+        "boundary": summary.get("boundary"),
     }
 
 
@@ -682,6 +737,13 @@ def _render_precision_report(report: dict[str, Any]) -> str:
         f"- mean_median_embedding_euclidean: {_value(_audit_field(model, 'mean_median_embedding', 'euclidean'))}",
         f"- mean_median_appearance_cosine: {_value(_audit_field(model, 'mean_median_appearance', 'cosine'))}",
         f"- mean_median_appearance_euclidean: {_value(_audit_field(model, 'mean_median_appearance', 'euclidean'))}",
+        f"- centroid_stability_available: {_value(_audit_field(model, 'stability', 'available'))}",
+        f"- centroid_stability_unit: {_value(_audit_field(model, 'stability', 'unit'))}",
+        f"- centroid_stability_unit_count: {_value(_audit_field(model, 'stability', 'unit_count'))}",
+        f"- centroid_stability_resamples: {_value(_audit_field(model, 'stability', 'resamples'))}",
+        f"- centroid_stability_self_cosine_mean: {_value(_audit_field(model, 'stability', 'self_cosine_mean'))}",
+        f"- centroid_stability_self_cosine_ci: {_value(_audit_field(model, 'stability', 'self_cosine_low'))} .. {_value(_audit_field(model, 'stability', 'self_cosine_high'))}",
+        f"- centroid_stability_band: {_value(_audit_field(model, 'stability', 'band'))}",
         "",
         "## Face Ingredients",
         "",
@@ -732,6 +794,15 @@ def _render_precision_report(report: dict[str, Any]) -> str:
         f"- best_combined_image_id: {_value(generation['best_combined_image_id'])}",
         f"- best_combined_score: {_value(generation['best_combined_score'])}",
         f"- qa_pass: {_value(generation['qa_pass_count'])}/{_value(generation['qa_reviewed_count'])}",
+        f"- null_calibration_available: {_value(generation['null_calibration']['available'])}",
+        f"- null_calibration_method: {_value(generation['null_calibration']['method'])}",
+        f"- null_calibration_sample_count: {_value(generation['null_calibration']['sample_count'])}",
+        f"- null_calibration_p95: {_value(generation['null_calibration']['p95'])}",
+        "- best_centroid_score_null_percentile: "
+        f"{_value(generation['null_calibration']['best_centroid_score_percentile'])}",
+        "- mean_centroid_score_null_percentile: "
+        f"{_value(generation['null_calibration']['mean_centroid_score_percentile'])}",
+        f"- null_calibration_boundary: {_value(generation['null_calibration']['boundary'])}",
         "",
         *_render_generation_by_centroid_kind(generation.get("by_centroid_kind")),
         "## Subject Review",

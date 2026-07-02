@@ -18,6 +18,7 @@ from .backend_compare import compare_deepface_detectors, compare_subject_backend
 from .backend_diagnostics import write_backend_diagnostics
 from .benchmark_research import write_benchmark_research
 from .calibration import write_generation_calibration
+from .drift import write_agency_drift_monitor
 from .embeddings import iter_image_paths, render_appearance
 from .enhancement import write_agency_enhancement_bundle
 from .face_axes import write_face_axis_report
@@ -36,6 +37,7 @@ from .prompting import prompt_from_descriptors
 from .precision import write_precision_report
 from .quality import review_image_quality, write_image_quality
 from .run_reviews import review_generation_runs, write_generation_run_reviews
+from .rubric import write_pairwise_rubric_review
 from .sources import discover_sources, download_source_images, read_source_manifest, write_source_manifest
 from .style import OpenClipStyleBackend, score_style_images, write_style_scores
 from .subject_vectors import vectorize_subjects, write_subject_vectors
@@ -236,6 +238,18 @@ def main(argv: list[str] | None = None) -> int:
     qa_parser.add_argument("--images", type=Path, required=True)
     qa_parser.add_argument("--out", type=Path, required=True)
 
+    pairwise_rubric_parser = subparsers.add_parser(
+        "pairwise-rubric",
+        help="write strict candidate and pairwise review from evaluation evidence",
+    )
+    pairwise_rubric_parser.add_argument("--evaluation", type=Path, required=True)
+    pairwise_rubric_parser.add_argument("--out", type=Path, required=True)
+    pairwise_rubric_parser.add_argument("--quality", type=Path, default=None)
+    pairwise_rubric_parser.add_argument("--face-axes", type=Path, default=None)
+    pairwise_rubric_parser.add_argument("--min-centroid-score", type=float, default=0.35)
+    pairwise_rubric_parser.add_argument("--min-null-percentile", type=float, default=0.95)
+    pairwise_rubric_parser.add_argument("--min-pairwise-gap", type=float, default=0.05)
+
     review_generated_parser = subparsers.add_parser(
         "review-generated",
         help="run evaluate, QA, and one-run comparison for a generated image directory",
@@ -319,6 +333,16 @@ def main(argv: list[str] | None = None) -> int:
     calibrate_agency_parser.add_argument("--target-enhancement-score", type=float, default=0.76)
     calibrate_agency_parser.add_argument("--seed-start", type=int, default=260623)
     calibrate_agency_parser.add_argument("--variants-per-agency", type=int, default=3)
+
+    drift_monitor_parser = subparsers.add_parser(
+        "agency-drift-monitor",
+        help="compare local agency roster metadata with a previous drift snapshot",
+    )
+    drift_monitor_parser.add_argument("--agencies", type=Path, required=True)
+    drift_monitor_parser.add_argument("--out", type=Path, required=True)
+    drift_monitor_parser.add_argument("--previous", type=Path, default=None)
+    drift_monitor_parser.add_argument("--as-of", default=None)
+    drift_monitor_parser.add_argument("--max-age-days", type=int, default=90)
 
     worker_diag_parser = subparsers.add_parser(
         "worker-diagnostics",
@@ -554,6 +578,8 @@ def main(argv: list[str] | None = None) -> int:
         return _run_pipeline(args)
     if args.command == "qa-images":
         return _qa_images(args.images, args.out)
+    if args.command == "pairwise-rubric":
+        return _pairwise_rubric(args)
     if args.command == "review-generated":
         return _review_generated(args)
     if args.command == "review-subjects":
@@ -575,6 +601,8 @@ def main(argv: list[str] | None = None) -> int:
         return _enhance_agencies(args)
     if args.command == "calibrate-agency-generation":
         return _calibrate_agency_generation(args)
+    if args.command == "agency-drift-monitor":
+        return _agency_drift_monitor(args)
     if args.command == "worker-diagnostics":
         return _worker_diagnostics(args.out, args.include_remote, args.timeout_seconds)
     if args.command == "compare-backends":
@@ -811,7 +839,7 @@ def _evaluate(model_dir: Path, images: Path, out: Path, crop: str, backend_name:
     backend = get_vector_backend(backend_name)
     failed_paths: list[str] = []
     scores = score_generated_images(model, images, crop=crop, backend=backend, failed_paths=failed_paths)
-    write_scores(scores, out, failed_paths=failed_paths)
+    write_scores(scores, out, failed_paths=failed_paths, model=model)
     print(f"evaluated images: {len(scores)}")
     print(f"failed images: {len(failed_paths)}")
     print(f"scores: {out / 'scores.csv'}")
@@ -1441,6 +1469,22 @@ def _qa_images(images: Path, out: Path) -> int:
     return 0
 
 
+def _pairwise_rubric(args: argparse.Namespace) -> int:
+    report = write_pairwise_rubric_review(
+        evaluation=args.evaluation,
+        out_dir=args.out,
+        quality=args.quality,
+        face_axes=args.face_axes,
+        min_centroid_score=args.min_centroid_score,
+        min_null_percentile=args.min_null_percentile,
+        min_pairwise_gap=args.min_pairwise_gap,
+    )
+    print(f"rubric candidates: {report['candidate_count']}")
+    print(f"rubric recommendation: {report['recommendation']['decision']}")
+    print(f"rubric report: {args.out / 'pairwise_rubric.md'}")
+    return 0
+
+
 def _review_generated(args: argparse.Namespace) -> int:
     review_out = args.out or (args.images / "run_review")
     evaluation_out = args.images / "evaluation"
@@ -1545,6 +1589,19 @@ def _calibrate_agency_generation(args: argparse.Namespace) -> int:
     print(f"agency generation calibration: {args.out / 'generation_calibration.md'}")
     print(f"agencies: {len(report['agencies'])}")
     print(f"regenerate first: {', '.join(report['summary']['regenerate_first'])}")
+    return 0
+
+
+def _agency_drift_monitor(args: argparse.Namespace) -> int:
+    report = write_agency_drift_monitor(
+        agencies_config=args.agencies,
+        out_dir=args.out,
+        previous=args.previous,
+        as_of=args.as_of,
+        max_age_days=args.max_age_days,
+    )
+    print(f"agency drift monitor: {args.out / 'agency_drift_monitor.md'}")
+    print(f"refresh tasks: {report['summary']['task_count']}")
     return 0
 
 

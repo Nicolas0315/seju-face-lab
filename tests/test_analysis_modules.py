@@ -401,6 +401,25 @@ class AnalysisModuleTests(unittest.TestCase):
                                 "euclidean_to_median": 0.8,
                             }
                         ],
+                        "null_calibration": {
+                            "available": True,
+                            "method": "random_unit_vector_centroid_score",
+                            "sample_count": 4096,
+                            "seed": 260623,
+                            "embedding_dim": 2,
+                            "null_distribution": {
+                                "sample_count": 4096,
+                                "seed": 260623,
+                                "p95": 0.61,
+                                "p99": 0.72,
+                            },
+                            "observed_percentiles": {
+                                "best_centroid_score": 0.93,
+                                "mean_centroid_score": 0.88,
+                                "median_centroid_score": 0.86,
+                            },
+                            "boundary": "Random-unit-vector baseline for this local embedding dimension only.",
+                        },
                     }
                 ),
                 encoding="utf-8",
@@ -543,6 +562,17 @@ class AnalysisModuleTests(unittest.TestCase):
                                 "max_abs_delta": 0.5,
                             },
                         },
+                        "stability": {
+                            "available": True,
+                            "unit": "subject",
+                            "unit_count": 2,
+                            "resamples": 128,
+                            "self_cosine_mean": 0.97,
+                            "self_cosine_low": 0.94,
+                            "self_cosine_high": 0.99,
+                            "band": "stable",
+                            "note": "local confidence signal only",
+                        },
                         "descriptor_delta": {"brightness": 0.1},
                     }
                 ),
@@ -649,6 +679,9 @@ class AnalysisModuleTests(unittest.TestCase):
             self.assertEqual(report["model"]["vector_export"]["vectors"]["mean_embedding"]["values_count"], 2)
             self.assertEqual(report["model"]["model_audit"]["mean_median_embedding"]["cosine"], 0.6)
             self.assertEqual(report["model"]["model_audit"]["mean_median_appearance"]["euclidean"], 1.1)
+            self.assertEqual(report["model"]["model_audit"]["stability"]["band"], "stable")
+            self.assertEqual(report["model"]["model_audit"]["stability"]["unit"], "subject")
+            self.assertEqual(report["model"]["model_audit"]["stability"]["unit_count"], 2)
             self.assertEqual(report["model"]["model_audit"]["descriptor_delta"]["brightness"], 0.1)
             self.assertEqual(report["workflow_readiness"]["ready_count"], 8)
             self.assertEqual(report["workflow_readiness"]["total_count"], 8)
@@ -690,6 +723,16 @@ class AnalysisModuleTests(unittest.TestCase):
             self.assertEqual(report["generation"]["best_cosine_to_median"], 0.43)
             self.assertEqual(report["generation"]["best_euclidean_to_mean"], 0.9)
             self.assertEqual(report["generation"]["best_euclidean_to_median"], 0.8)
+            self.assertTrue(report["generation"]["null_calibration"]["available"])
+            self.assertEqual(
+                report["generation"]["null_calibration"]["method"],
+                "random_unit_vector_centroid_score",
+            )
+            self.assertEqual(report["generation"]["null_calibration"]["sample_count"], 4096)
+            self.assertEqual(
+                report["generation"]["null_calibration"]["best_centroid_score_percentile"],
+                0.93,
+            )
             self.assertEqual(report["generation"]["qa_pass_count"], 1)
             self.assertEqual(report["subjects"]["top_subject"], "near_subject")
             self.assertEqual(report["subjects"]["analysis"]["score_stats"]["reviewed_image_count"], 2)
@@ -758,6 +801,14 @@ class AnalysisModuleTests(unittest.TestCase):
                 (out / "precision_report.md").read_text(encoding="utf-8"),
             )
             self.assertIn(
+                "null_calibration_method: random_unit_vector_centroid_score",
+                (out / "precision_report.md").read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                "best_centroid_score_null_percentile: 0.93",
+                (out / "precision_report.md").read_text(encoding="utf-8"),
+            )
+            self.assertIn(
                 "By Centroid Kind",
                 (out / "precision_report.md").read_text(encoding="utf-8"),
             )
@@ -767,6 +818,14 @@ class AnalysisModuleTests(unittest.TestCase):
             )
             self.assertIn(
                 "mean_median_embedding_cosine: 0.6",
+                (out / "precision_report.md").read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                "centroid_stability_band: stable",
+                (out / "precision_report.md").read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                "centroid_stability_self_cosine_ci: 0.94 .. 0.99",
                 (out / "precision_report.md").read_text(encoding="utf-8"),
             )
             self.assertIn(

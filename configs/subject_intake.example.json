@@ -1,0 +1,40 @@
+{
+  "schema": "seju-face-lab.subject-intake.v1",
+  "boundary": "local consent-cleared subject folders only; do not commit filled manifests, images, vectors, or personal data",
+  "created_at": "YYYY-MM-DD",
+  "operator": "local-operator",
+  "storage_policy": {
+    "images_path": "data/subjects",
+    "filled_manifest_path": "data/processed/subject_intake.local.json",
+    "git_policy": "ignored-local-only",
+    "consent_records": "stored outside this repo"
+  },
+  "allowed_uses": [
+    "local aggregate-vector review",
+    "local subject-folder QA",
+    "local backend comparison"
+  ],
+  "forbidden_uses": [
+    "identity recognition",
+    "person matching",
+    "attractiveness scoring",
+    "demographic or protected-attribute labeling",
+    "claims about a real population"
+  ],
+  "subjects": [
+    {
+      "subject_slug": "subject_001",
+      "local_folder": "data/subjects/subject_001",
+      "consent_record_ref": "external-record-id-or-1password-reference",
+      "consent_scope": [
+        "local analysis",
+        "aggregate reporting"
+      ],
+      "image_count": 0,
+      "reviewed_by_operator": false,
+      "review_date": "YYYY-MM-DD",
+      "retention_review_date": "YYYY-MM-DD",
+      "notes": "Do not include personal data here."
+    }
+  ]
+}

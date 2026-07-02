@@ -173,6 +173,14 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(eval_summary["failed_count"], 1)
             self.assertIn("euclidean_to_mean", eval_summary["top_images"][0])
             self.assertIn("euclidean_to_median", eval_summary["top_images"][0])
+            self.assertTrue(eval_summary["null_calibration"]["available"])
+            self.assertEqual(eval_summary["null_calibration"]["method"], "random_unit_vector_centroid_score")
+            self.assertEqual(eval_summary["null_calibration"]["sample_count"], 4096)
+            self.assertIn("best_centroid_score", eval_summary["null_calibration"]["observed_percentiles"])
+            self.assertIn(
+                "Null Distribution Calibration",
+                (eval_dir / "evaluation.md").read_text(encoding="utf-8"),
+            )
 
             with patch("seju_face_lab.cli.OpenClipStyleBackend", return_value=_FakeStyleBackend()):
                 self.assertEqual(
@@ -1389,9 +1397,109 @@ class PipelineTests(unittest.TestCase):
             })
             self.assertIn("outlier_score", report["summary"]["distribution"])
             self.assertIn("presentation_flags", report["summary"]["distribution"])
+            self.assertTrue(report["summary"]["adaptive_projection"]["available"])
+            self.assertEqual(report["summary"]["adaptive_projection"]["method"], "pca_8_axis")
+            self.assertEqual(len(report["summary"]["adaptive_projection"]["images"]), 2)
+            self.assertIn("explained_variance_ratio", report["summary"]["adaptive_projection"])
+            self.assertIn("condition_strata", report["summary"])
+            self.assertIn("resolution:small", report["summary"]["condition_strata"])
+            self.assertIn("condition_tags", report["images_detail"][0]["image_conditions"])
             self.assertTrue((out / "face_axis_scores.csv").exists())
             self.assertIn("Axis Definitions", (out / "face_axis_report.md").read_text(encoding="utf-8"))
+            self.assertIn("Adaptive Projection", (out / "face_axis_report.md").read_text(encoding="utf-8"))
+            self.assertIn(
+                "Condition-Stratified Robustness",
+                (out / "face_axis_report.md").read_text(encoding="utf-8"),
+            )
             self.assertIn("presentation_flags", (out / "face_axis_scores.csv").read_text(encoding="utf-8-sig"))
+            self.assertIn("adaptive_x", (out / "face_axis_scores.csv").read_text(encoding="utf-8-sig"))
+            self.assertIn("condition_tags", (out / "face_axis_scores.csv").read_text(encoding="utf-8-sig"))
+
+    def test_pairwise_rubric_writes_strict_candidate_comparisons(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            evaluation = root / "evaluation"
+            quality = root / "quality"
+            face_axes = root / "face_axes"
+            out = root / "rubric"
+            evaluation.mkdir()
+            quality.mkdir()
+            face_axes.mkdir()
+            (evaluation / "summary.json").write_text(
+                json.dumps(
+                    {
+                        "image_count": 2,
+                        "failed_count": 0,
+                        "best_image_id": "good",
+                        "best_centroid_score": 0.52,
+                        "top_images": [
+                            {"image_id": "good", "path": "good.png", "centroid_score": 0.52},
+                            {"image_id": "close", "path": "close.png", "centroid_score": 0.46},
+                        ],
+                        "null_calibration": {
+                            "available": True,
+                            "observed_percentiles": {"best_centroid_score": 0.98},
+                        },
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            (quality / "image_quality.json").write_text(
+                json.dumps(
+                    {
+                        "images": [
+                            {"image_id": "good", "qa_pass": True, "reason": "single centered face"},
+                            {"image_id": "close", "qa_pass": False, "reason": "detected face is off center"},
+                        ]
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            (face_axes / "face_axis_report.json").write_text(
+                json.dumps(
+                    {
+                        "images_detail": [
+                            {"image_id": "good", "presentation_flags": ["no_major_presentation_flags"]},
+                            {
+                                "image_id": "close",
+                                "presentation_flags": ["off_center_or_asymmetric_visibility"],
+                            },
+                        ]
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                main(
+                    [
+                        "pairwise-rubric",
+                        "--evaluation",
+                        str(evaluation),
+                        "--quality",
+                        str(quality),
+                        "--face-axes",
+                        str(face_axes),
+                        "--out",
+                        str(out),
+                    ]
+                ),
+                0,
+            )
+
+            report = json.loads((out / "pairwise_rubric.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["recommendation"]["decision"], "promote")
+            self.assertEqual(report["candidates"][0]["image_id"], "good")
+            self.assertEqual(report["candidates"][1]["recommendation"], "reject")
+            self.assertEqual(report["pairwise_comparisons"][0]["decision"], "clear_win")
+            self.assertTrue(report["batch_null_review"]["pass"])
+            self.assertTrue((out / "pairwise_rubric.csv").exists())
+            md = (out / "pairwise_rubric.md").read_text(encoding="utf-8")
+            self.assertIn("Pairwise Comparisons", md)
+            self.assertIn("local generated-image triage only", md)
 
     def test_enhance_agencies_fuses_hypothesis_scores_and_image_axes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1661,6 +1769,14 @@ class PipelineTests(unittest.TestCase):
                             {
                                 "slug": "seju",
                                 "imagegen_prompt": "Base fictional aggregate prompt.",
+                                "descriptor_offsets": {
+                                    "contrast": -0.04,
+                                    "edge_density": -0.03,
+                                    "luminance": 0.12,
+                                    "middle_luminance": 0.10,
+                                    "lower_luminance": 0.08,
+                                    "symmetry": 0.05,
+                                },
                             }
                         ]
                     }
@@ -1687,9 +1803,97 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(report["summary"]["priority_counts"]["regenerate"], 1)
             self.assertEqual(report["agencies"][0]["priority"], "regenerate")
             self.assertIn("Axis corrections", report["agencies"][0]["calibrated_prompt"])
+            self.assertTrue(report["agencies"][0]["prompt_attribution"])
+            self.assertEqual(report["agencies"][0]["prompt_attribution"][0]["axis"], "soft_defined")
+            self.assertIn("descriptor_delta", report["agencies"][0]["prompt_attribution"][0])
+            self.assertIn("measured_effect", report["agencies"][0]["prompt_attribution"][0])
             self.assertIn("underexposed face", report["agencies"][0]["negative_prompt"])
             self.assertTrue((out / "prompts" / "seju_calibrated.txt").exists())
             self.assertTrue((out / "generation_calibration.csv").exists())
+            report_md = (out / "generation_calibration.md").read_text(encoding="utf-8")
+            self.assertIn("Prompt Attribution", report_md)
+            self.assertIn("descriptor_delta", report_md)
+            self.assertIn("softer lower-contrast facial separation", report_md)
+
+    def test_agency_drift_monitor_writes_refresh_tasks_for_changed_sources(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            baseline = root / "baseline.json"
+            changed = root / "changed.json"
+            baseline_out = root / "baseline_drift"
+            changed_out = root / "changed_drift"
+            baseline.write_text(
+                json.dumps(
+                    {
+                        "retrieved_at": "2026-06-15",
+                        "agencies": [
+                            {
+                                "slug": "seju",
+                                "name": "seju",
+                                "official_sources": [{"url": "https://seju.tokyo/"}],
+                                "public_examples": ["example-a"],
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            changed.write_text(
+                json.dumps(
+                    {
+                        "retrieved_at": "2026-06-15",
+                        "agencies": [
+                            {
+                                "slug": "seju",
+                                "name": "seju",
+                                "official_sources": [{"url": "https://seju.tokyo/talents/"}],
+                                "public_examples": ["example-a", "example-b"],
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                main(
+                    [
+                        "agency-drift-monitor",
+                        "--agencies",
+                        str(baseline),
+                        "--out",
+                        str(baseline_out),
+                        "--as-of",
+                        "2026-07-01",
+                    ]
+                ),
+                0,
+            )
+            self.assertEqual(
+                main(
+                    [
+                        "agency-drift-monitor",
+                        "--agencies",
+                        str(changed),
+                        "--previous",
+                        str(baseline_out / "agency_drift_monitor.json"),
+                        "--out",
+                        str(changed_out),
+                        "--as-of",
+                        "2026-10-01",
+                        "--max-age-days",
+                        "30",
+                    ]
+                ),
+                0,
+            )
+
+            report = json.loads((changed_out / "agency_drift_monitor.json").read_text(encoding="utf-8"))
+            reasons = {task["reason"] for task in report["refresh_tasks"]}
+            self.assertIn("source_fingerprint_changed", reasons)
+            self.assertIn("retrieval_stale", reasons)
+            self.assertTrue((changed_out / "agency_drift_tasks.csv").exists())
+            self.assertIn("Refresh Tasks", (changed_out / "agency_drift_monitor.md").read_text(encoding="utf-8"))
 
     def test_compare_backends_writes_rank_agreement(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

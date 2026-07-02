@@ -117,7 +117,7 @@ def write_agency_enhancement_bundle(
     backend = get_vector_backend(backend_name)
     failed_paths: list[str] = []
     scores = score_generated_images(model, images, crop=crop, backend=backend, failed_paths=failed_paths)
-    write_scores(scores, out_dir / "image_scores", failed_paths=failed_paths)
+    write_scores(scores, out_dir / "image_scores", failed_paths=failed_paths, model=model)
     axis_report = write_face_axis_report(
         images=images,
         out_dir=out_dir / "face_axes",
@@ -375,4 +375,3 @@ def _round_optional(value: float | None) -> float | None:
     if value is None:
         return None
     return round(float(value), 6)
-

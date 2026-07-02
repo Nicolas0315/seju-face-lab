@@ -5,6 +5,9 @@ import json
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+from PIL import Image, ImageOps
+
 from .backends import get_vector_backend
 from .embeddings import iter_image_paths
 
@@ -111,6 +114,7 @@ def write_face_axis_report(
                 "path": str(path),
                 "descriptors": vector.descriptors,
                 **distribution,
+                "image_conditions": _image_conditions(path, distribution),
             }
         )
     summary = _summary(rows)
@@ -141,7 +145,10 @@ def write_face_axis_report(
 
 def _summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     if not rows:
-        return {"available": False}
+        return {
+            "available": False,
+            "adaptive_projection": _adaptive_projection(rows),
+        }
     axis_means = {
         axis: _round(sum(row["axes"][axis] for row in rows) / len(rows))
         for axis in AXES
@@ -155,8 +162,122 @@ def _summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "available": True,
         "axis_means": axis_means,
         "distribution": axis_distribution(axis_means),
+        "adaptive_projection": _adaptive_projection(rows),
+        "condition_strata": _condition_strata(rows),
         "quadrant_counts": quadrant_counts,
         "cross_counts": cross_counts,
+    }
+
+
+def _image_conditions(path: Path, distribution: dict[str, Any]) -> dict[str, Any]:
+    with Image.open(path) as raw:
+        image = ImageOps.exif_transpose(raw)
+        width = int(image.width)
+        height = int(image.height)
+    aspect_ratio = width / height if height else 0.0
+    resolution_bucket = _resolution_bucket(width, height)
+    aspect_bucket = _aspect_bucket(aspect_ratio)
+    flags = set(distribution.get("presentation_flags", []))
+    lighting = "underlit" if "dark_or_underlit_image" in flags else "lighting_ok"
+    crop_quality = "off_center" if "off_center_or_asymmetric_visibility" in flags else "centered"
+    condition_tags = [
+        f"resolution:{resolution_bucket}",
+        f"aspect:{aspect_bucket}",
+        f"lighting:{lighting}",
+        f"crop:{crop_quality}",
+    ]
+    condition_tags.extend(f"presentation:{flag}" for flag in sorted(flags))
+    return {
+        "width": width,
+        "height": height,
+        "aspect_ratio": _round(aspect_ratio),
+        "resolution_bucket": resolution_bucket,
+        "aspect_bucket": aspect_bucket,
+        "lighting": lighting,
+        "crop_quality": crop_quality,
+        "condition_tags": condition_tags,
+    }
+
+
+def _condition_strata(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    strata: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        conditions = row.get("image_conditions", {})
+        tags = conditions.get("condition_tags", []) if isinstance(conditions, dict) else []
+        for tag in tags:
+            strata.setdefault(str(tag), []).append(row)
+    return {
+        tag: {
+            "image_count": len(items),
+            "axis_means": {
+                axis: _round(sum(item["axes"][axis] for item in items) / len(items))
+                for axis in AXES
+            },
+            "mean_outlier_score": _round(sum(item["outlier_score"] for item in items) / len(items)),
+        }
+        for tag, items in sorted(strata.items())
+        if items
+    }
+
+
+def _resolution_bucket(width: int, height: int) -> str:
+    short_edge = min(width, height)
+    if short_edge < 512:
+        return "small"
+    if short_edge < 1024:
+        return "medium"
+    return "large"
+
+
+def _aspect_bucket(aspect_ratio: float) -> str:
+    if aspect_ratio <= 0:
+        return "unknown"
+    if aspect_ratio < 0.85:
+        return "portrait"
+    if aspect_ratio > 1.15:
+        return "landscape"
+    return "squareish"
+
+
+def _adaptive_projection(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    if len(rows) < 2:
+        return {"available": False, "reason": "requires_at_least_two_images"}
+    matrix = np.asarray([[row["axes"][axis] for axis in AXES] for row in rows], dtype=np.float64)
+    centered = matrix - np.mean(matrix, axis=0, keepdims=True)
+    if float(np.linalg.norm(centered)) < 1e-12:
+        return {"available": False, "reason": "no_axis_variance"}
+    _, singular_values, vh = np.linalg.svd(centered, full_matrices=False)
+    component_count = min(2, vh.shape[0])
+    raw_coordinates = centered @ vh[:component_count].T
+    if component_count == 1:
+        raw_coordinates = np.column_stack([raw_coordinates[:, 0], np.zeros(len(rows), dtype=np.float64)])
+    scales = np.max(np.abs(raw_coordinates[:, :2]), axis=0)
+    normalized = raw_coordinates[:, :2] / np.maximum(scales, 1e-12)
+    variance = singular_values**2
+    total_variance = float(np.sum(variance))
+    explained = variance[:component_count] / total_variance if total_variance > 1e-12 else np.zeros(component_count)
+    if component_count == 1:
+        explained = np.asarray([explained[0], 0.0], dtype=np.float64)
+    loadings = [
+        {axis: _round(float(vh[index, axis_index])) for axis_index, axis in enumerate(AXES)}
+        for index in range(component_count)
+    ]
+    return {
+        "available": True,
+        "method": "pca_8_axis",
+        "component_count": component_count,
+        "explained_variance_ratio": [_round(float(value)) for value in explained[:2]],
+        "loadings": loadings,
+        "images": [
+            {
+                "image_id": row["image_id"],
+                "path": row["path"],
+                "x": _round(float(normalized[index, 0])),
+                "y": _round(float(normalized[index, 1])),
+            }
+            for index, row in enumerate(rows)
+        ],
+        "boundary": "Adaptive projection is a local PCA view of the 8 visual axes, not a person label.",
     }
 
 
@@ -171,14 +292,26 @@ def _write_axis_csv(rows: list[dict[str, Any]], path: Path) -> None:
         "cross_label",
         "outlier_score",
         "presentation_flags",
+        "condition_tags",
+        "width",
+        "height",
+        "aspect_ratio",
+        "adaptive_x",
+        "adaptive_y",
         "cross_x",
         "cross_y",
         *AXES,
     ]
+    adaptive_by_id = {
+        item["image_id"]: item
+        for item in _adaptive_projection(rows).get("images", [])
+        if isinstance(item, dict)
+    }
     with path.open("w", encoding="utf-8-sig", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=headers)
         writer.writeheader()
         for row in rows:
+            adaptive = adaptive_by_id.get(row["image_id"], {})
             flat = {
                 "image_id": row["image_id"],
                 "path": row["path"],
@@ -189,6 +322,12 @@ def _write_axis_csv(rows: list[dict[str, Any]], path: Path) -> None:
                 "cross_label": row["cross_label"],
                 "outlier_score": row["outlier_score"],
                 "presentation_flags": ";".join(row["presentation_flags"]),
+                "condition_tags": ";".join(row["image_conditions"]["condition_tags"]),
+                "width": row["image_conditions"]["width"],
+                "height": row["image_conditions"]["height"],
+                "aspect_ratio": row["image_conditions"]["aspect_ratio"],
+                "adaptive_x": adaptive.get("x", ""),
+                "adaptive_y": adaptive.get("y", ""),
                 "cross_x": row["cross_x"],
                 "cross_y": row["cross_y"],
             }
@@ -234,6 +373,37 @@ def _render_axis_report(report: dict[str, Any]) -> str:
         )
         for axis, value in summary["axis_means"].items():
             lines.append(f"| {axis} | {value} |")
+        adaptive = summary.get("adaptive_projection", {})
+        if adaptive.get("available"):
+            lines.extend(
+                [
+                    "",
+                    "## Adaptive Projection",
+                    "",
+                    f"- method: {adaptive['method']}",
+                    f"- explained_variance_ratio: {adaptive['explained_variance_ratio']}",
+                    "",
+                    "| image_id | x | y |",
+                    "| --- | ---: | ---: |",
+                ]
+            )
+            for item in adaptive["images"]:
+                lines.append(f"| {item['image_id']} | {item['x']} | {item['y']} |")
+        condition_strata = summary.get("condition_strata", {})
+        if condition_strata:
+            lines.extend(
+                [
+                    "",
+                    "## Condition-Stratified Robustness",
+                    "",
+                    "| condition | images | mean_outlier_score |",
+                    "| --- | ---: | ---: |",
+                ]
+            )
+            for condition, values in condition_strata.items():
+                lines.append(
+                    f"| {condition} | {values['image_count']} | {values['mean_outlier_score']} |"
+                )
     lines.extend(["", "## Boundary", "", report["boundary"], ""])
     return "\n".join(lines)
 

@@ -104,23 +104,33 @@ Items:
    - method: PCA first; UMAP optional if dependency is available.
    - keep fixed quadrant map as reference.
    - done when: page shows fixed quadrant plus adaptive projection.
+   - status 2026-07-01: implemented in `face-axes` report output as local PCA over the 8 visual axes.
 
 2. Prompt attribution
    - table: descriptor delta -> 8-axis delta -> prompt clause -> measured effect.
    - done when: a generated image can be reviewed by which prompt clauses moved which axes.
+   - status 2026-07-01: implemented in `calibrate-agency-generation` as `prompt_attribution` JSON plus a Markdown table.
 
 3. Condition-stratified robustness
    - strata: source type, resolution, crop quality, aspect ratio, detector acceptance, lighting/presentation flags.
    - done when: reports show whether scores are stable across quality strata.
+   - status 2026-07-01: implemented in `face-axes` as condition tags and strata summaries for resolution, aspect ratio, crop, lighting, and presentation flags.
 
 4. Drift monitor
    - inputs: official agency roster URLs and retrieval dates.
    - done when: changed official pages create a refresh task before old names/source examples are reused.
+   - status 2026-07-01: implemented as `agency-drift-monitor`, which fingerprints local roster metadata and creates refresh tasks for changed or stale sources before reuse.
+
+5. Pairwise strict rubric review
+   - inputs: evaluation `summary.json`, optional `image_quality.json`, and optional `face_axis_report.json`.
+   - done when: generated candidates get strict promote/review/reject checks plus pairwise score-gap decisions.
+   - status 2026-07-01: implemented as `pairwise-rubric`, writing JSON, CSV, and Markdown review evidence.
 
 Verification:
 
 ```powershell
 python -m seju_face_lab face-axes --images outputs/agency_generation_refined/v2_contrast/images --out outputs/agency_generation_refined/v2_contrast/face_axes_next
+python -m seju_face_lab pairwise-rubric --evaluation outputs/agency_generation_refined/v2_contrast/images/evaluation --quality outputs/agency_generation_refined/v2_contrast/quality --face-axes outputs/agency_generation_refined/v2_contrast/face_axes_next --out outputs/agency_generation_refined/v2_contrast/pairwise_rubric
 python scripts/build_agency_site.py --average-params outputs/agency_reviews/seju_like_v2/agency_average_params.json --enhancement outputs/agency_generation_refined/v2_contrast/enhancement/agency_enhancement_report.json --images outputs/agency_generation_refined/v2_contrast/images
 ```
 

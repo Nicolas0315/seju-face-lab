@@ -231,7 +231,7 @@ def _run_backend(reference_images: Path, images: Path, out_dir: Path, backend_na
         _write_reference_failures(model_dir, failures)
         failed_paths: list[str] = []
         scores = score_generated_images(model, images, crop=crop, backend=backend, failed_paths=failed_paths)
-        write_scores(scores, evaluation_dir, failed_paths=failed_paths)
+        write_scores(scores, evaluation_dir, failed_paths=failed_paths, model=model)
         return _completed_run(
             backend_name, model_dir, evaluation_dir, len(vectors), len(failures), model.embedding_dim, scores, len(failed_paths)
         )
@@ -331,7 +331,7 @@ def _run_deepface_detector(
         _write_reference_failures(model_dir, failures)
         failed_paths: list[str] = []
         scores = _score_image_paths(model, image_paths, crop=crop, backend=backend, failed_paths=failed_paths)
-        write_scores(scores, evaluation_dir, failed_paths=failed_paths)
+        write_scores(scores, evaluation_dir, failed_paths=failed_paths, model=model)
         _write_detector_run_config(
             out_dir,
             detector_backend,

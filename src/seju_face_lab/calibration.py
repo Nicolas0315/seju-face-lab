@@ -12,6 +12,28 @@ DEFAULT_TARGETS = {
     "enhancement_score": 0.76,
 }
 
+AXIS_PROMPT_RULES = [
+    ("soft_defined", "softer lower-contrast facial separation", "more defined facial separation"),
+    ("cool_warm", "cooler neutral skin balance", "warmer skin balance"),
+    ("deep_bright", "deeper shaded tone", "brighter airy tone"),
+    ("natural_styled", "more natural styling", "more visibly styled makeup"),
+    ("muted_vivid", "more muted color", "more vivid color"),
+    ("soft_crisp", "softer hairline and silhouette", "crisper hairline detail"),
+    ("light_dark_hair", "lighter upper hair band", "darker upper hair band"),
+    ("dynamic_symmetric", "more dynamic asymmetry", "more centered symmetry"),
+]
+
+AXIS_DESCRIPTOR_SOURCES = {
+    "soft_defined": ("contrast", "edge_density"),
+    "cool_warm": ("warmth",),
+    "deep_bright": ("luminance", "middle_luminance", "lower_luminance"),
+    "natural_styled": ("contrast", "saturation"),
+    "muted_vivid": ("saturation",),
+    "soft_crisp": ("edge_density",),
+    "light_dark_hair": ("upper_band_darkness",),
+    "dynamic_symmetric": ("symmetry",),
+}
+
 
 def write_generation_calibration(
     enhancement_report: Path,
@@ -116,6 +138,10 @@ def _agency_calibration(
     }
     priority = _priority(gaps)
     prompt = _calibrated_prompt(agency, param, gaps)
+    axis_delta = _axis_delta(
+        agency.get("hypothesis_axis_vector", {}),
+        agency.get("observed_axis_vector", {}),
+    )
     return {
         "slug": agency["slug"],
         "name": agency["name"],
@@ -129,10 +155,8 @@ def _agency_calibration(
         "priority": priority,
         "presentation_flags": agency.get("presentation_flags", []),
         "improvement_actions": agency.get("improvement_actions", []),
-        "axis_delta": _axis_delta(
-            agency.get("hypothesis_axis_vector", {}),
-            agency.get("observed_axis_vector", {}),
-        ),
+        "axis_delta": axis_delta,
+        "prompt_attribution": _prompt_attribution(agency, param, axis_delta),
         "calibrated_prompt": prompt,
         "negative_prompt": _negative_prompt(agency),
         "generation_plan": {
@@ -208,21 +232,49 @@ def _axis_notes(expected: dict[str, Any], observed: dict[str, Any]) -> list[str]
     if not expected or not observed:
         return ["collect a measured image sample for this agency"]
     notes = []
-    for axis, low_label, high_label in [
-        ("soft_defined", "softer lower-contrast facial separation", "more defined facial separation"),
-        ("cool_warm", "cooler neutral skin balance", "warmer skin balance"),
-        ("deep_bright", "deeper shaded tone", "brighter airy tone"),
-        ("natural_styled", "more natural styling", "more visibly styled makeup"),
-        ("muted_vivid", "more muted color", "more vivid color"),
-        ("soft_crisp", "softer hairline and silhouette", "crisper hairline detail"),
-        ("light_dark_hair", "lighter upper hair band", "darker upper hair band"),
-        ("dynamic_symmetric", "more dynamic asymmetry", "more centered symmetry"),
-    ]:
+    for axis, low_label, high_label in AXIS_PROMPT_RULES:
         delta = float(expected.get(axis, 0.0)) - float(observed.get(axis, 0.0))
         if abs(delta) < 0.25:
             continue
         notes.append(high_label if delta > 0 else low_label)
     return notes or ["keep current visual axis balance"]
+
+
+def _prompt_attribution(
+    agency: dict[str, Any],
+    param: dict[str, Any],
+    axis_delta: dict[str, float],
+) -> list[dict[str, Any]]:
+    expected = agency.get("hypothesis_axis_vector", {})
+    observed = agency.get("observed_axis_vector", {})
+    descriptor_offsets = param.get("descriptor_offsets", {})
+    if not isinstance(descriptor_offsets, dict):
+        descriptor_offsets = {}
+    rows = []
+    for axis, low_label, high_label in AXIS_PROMPT_RULES:
+        delta = float(axis_delta.get(axis, 0.0))
+        descriptor_delta = {
+            key: round(float(descriptor_offsets.get(key, 0.0)), 6)
+            for key in AXIS_DESCRIPTOR_SOURCES.get(axis, ())
+            if descriptor_offsets.get(key) not in (None, 0, 0.0)
+        }
+        if abs(delta) < 0.25 and not descriptor_delta:
+            continue
+        prompt_clause = high_label if delta > 0 else low_label
+        rows.append(
+            {
+                "axis": axis,
+                "descriptor_delta": descriptor_delta,
+                "axis_delta": round(delta, 6),
+                "prompt_clause": prompt_clause,
+                "measured_effect": {
+                    "hypothesis_axis": _round_optional(_float_or_none(expected.get(axis))),
+                    "observed_axis": _round_optional(_float_or_none(observed.get(axis))),
+                    "gap": round(delta, 6),
+                },
+            }
+        )
+    return rows
 
 
 def _action_notes(actions: list[str]) -> list[str]:
@@ -349,6 +401,29 @@ def _render_report(report: dict[str, Any]) -> str:
             f"{_display(current['enhancement_score'])} | "
             f"{agency['generation_plan']['recommended_output_dir']} |"
         )
+    lines.extend(["", "## Prompt Attribution", ""])
+    for agency in report["agencies"]:
+        lines.extend(
+            [
+                f"### {agency['name']}",
+                "",
+                "| axis | descriptor_delta | axis_delta | prompt_clause | measured_effect |",
+                "| --- | --- | ---: | --- | --- |",
+            ]
+        )
+        attribution = agency.get("prompt_attribution", [])
+        if not attribution:
+            lines.append("|  |  |  | keep current visual axis balance | no measured axis gap |")
+            continue
+        for item in attribution:
+            measured = item["measured_effect"]
+            lines.append(
+                f"| {item['axis']} | {_display_descriptor_delta(item['descriptor_delta'])} | "
+                f"{_display(item['axis_delta'])} | {item['prompt_clause']} | "
+                f"hypothesis={_display(measured.get('hypothesis_axis'))}, "
+                f"observed={_display(measured.get('observed_axis'))}, "
+                f"gap={_display(measured.get('gap'))} |"
+            )
     lines.extend(["", "## Boundary", "", report["boundary"], ""])
     return "\n".join(lines)
 
@@ -379,6 +454,12 @@ def _display(value: float | None) -> str:
     if value is None:
         return ""
     return f"{float(value):.6f}"
+
+
+def _display_descriptor_delta(values: dict[str, float]) -> str:
+    if not values:
+        return ""
+    return "; ".join(f"{key}={_display(value)}" for key, value in values.items())
 
 
 def _dedupe(values: list[str]) -> list[str]:

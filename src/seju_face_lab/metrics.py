@@ -109,7 +109,12 @@ def write_subject_reviews(reviews: list[SubjectReview], out_dir: Path) -> None:
     )
 
 
-def write_scores(scores: list[Score], out_dir: Path, failed_paths: list[str] | None = None) -> None:
+def write_scores(
+    scores: list[Score],
+    out_dir: Path,
+    failed_paths: list[str] | None = None,
+    model: CentroidModel | None = None,
+) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     csv_lines = [
         "image_id,path,cosine_to_mean,cosine_to_median,euclidean_to_mean,euclidean_to_median,centroid_score"
@@ -130,11 +135,11 @@ def write_scores(scores: list[Score], out_dir: Path, failed_paths: list[str] | N
         )
     (out_dir / "scores.csv").write_text("\n".join(csv_lines) + "\n", encoding="utf-8-sig")
     (out_dir / "evaluation.md").write_text(
-        _render_scores(scores, failed_paths or []),
+        _render_scores(scores, failed_paths or [], model=model),
         encoding="utf-8",
     )
     (out_dir / "summary.json").write_text(
-        json.dumps(_score_summary(scores, failed_paths or []), ensure_ascii=False, indent=2),
+        json.dumps(_score_summary(scores, failed_paths or [], model=model), ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
 
@@ -214,7 +219,11 @@ def _cosine(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.dot(a, b) / denom)
 
 
-def _render_scores(scores: list[Score], failed_paths: list[str]) -> str:
+def _render_scores(
+    scores: list[Score],
+    failed_paths: list[str],
+    model: CentroidModel | None = None,
+) -> str:
     lines = ["# generated-image centroid evaluation", ""]
     if not scores:
         lines.extend(["No generated images found.", ""])
@@ -232,9 +241,27 @@ def _render_scores(scores: list[Score], failed_paths: list[str]) -> str:
         lines.append("")
         lines.extend(f"- {path}" for path in failed_paths)
         lines.append("")
+    calibration = _score_null_calibration(scores, model)
+    if calibration.get("available"):
+        null_distribution = calibration["null_distribution"]
+        observed = calibration["observed_percentiles"]
+        lines.extend(
+            [
+                "## Null Distribution Calibration",
+                "",
+                f"- sample_count: {null_distribution['sample_count']}",
+                f"- seed: {null_distribution['seed']}",
+                f"- p95: {_optional_float(null_distribution['p95'])}",
+                f"- p99: {_optional_float(null_distribution['p99'])}",
+                f"- best_score_percentile: {_optional_float(observed.get('best_centroid_score'))}",
+                f"- mean_score_percentile: {_optional_float(observed.get('mean_centroid_score'))}",
+                "",
+            ]
+        )
     lines.extend(
         [
             "Scores are approximate vector similarity against this local centroid model.",
+            "Null calibration uses random unit vectors as a local sanity baseline, not a population claim.",
             "",
         ]
     )
@@ -429,7 +456,11 @@ def _image_src(value: str) -> str:
         return value
 
 
-def _score_summary(scores: list[Score], failed_paths: list[str]) -> dict:
+def _score_summary(
+    scores: list[Score],
+    failed_paths: list[str],
+    model: CentroidModel | None = None,
+) -> dict:
     if not scores:
         return {
             "image_count": 0,
@@ -440,6 +471,7 @@ def _score_summary(scores: list[Score], failed_paths: list[str]) -> dict:
             "mean_centroid_score": None,
             "median_centroid_score": None,
             "top_images": [],
+            "null_calibration": _score_null_calibration(scores, model),
         }
     centroid_scores = np.asarray([score.centroid_score for score in scores], dtype=np.float32)
     best = scores[0]
@@ -463,8 +495,71 @@ def _score_summary(scores: list[Score], failed_paths: list[str]) -> dict:
             }
             for score in scores[:5]
         ],
+        "null_calibration": _score_null_calibration(scores, model),
         "boundary": "Approximate vector similarity for this local centroid model only.",
     }
+
+
+def _score_null_calibration(
+    scores: list[Score],
+    model: CentroidModel | None,
+    sample_count: int = 4096,
+    seed: int = 260623,
+) -> dict[str, object]:
+    if model is None:
+        return {"available": False, "reason": "model_not_supplied"}
+    if model.mean_embedding.size == 0 or model.median_embedding.size == 0:
+        return {"available": False, "reason": "empty_centroid"}
+    rng = np.random.default_rng(seed)
+    samples = rng.normal(size=(sample_count, model.mean_embedding.shape[0])).astype(np.float32)
+    norms = np.linalg.norm(samples, axis=1, keepdims=True)
+    samples = samples / np.maximum(norms, 1e-12)
+    mean = _unit(model.mean_embedding)
+    median = _unit(model.median_embedding)
+    null_scores = (samples @ mean + samples @ median) / 2.0
+    observed_scores = np.asarray([score.centroid_score for score in scores], dtype=np.float32)
+    best_score = float(np.max(observed_scores)) if observed_scores.size else None
+    mean_score = float(np.mean(observed_scores)) if observed_scores.size else None
+    median_score = float(np.median(observed_scores)) if observed_scores.size else None
+    return {
+        "available": True,
+        "method": "random_unit_vector_centroid_score",
+        "sample_count": sample_count,
+        "seed": seed,
+        "embedding_dim": int(model.mean_embedding.shape[0]),
+        "null_distribution": {
+            "sample_count": sample_count,
+            "seed": seed,
+            "mean": round(float(np.mean(null_scores)), 6),
+            "std": round(float(np.std(null_scores)), 6),
+            "p50": round(float(np.percentile(null_scores, 50)), 6),
+            "p90": round(float(np.percentile(null_scores, 90)), 6),
+            "p95": round(float(np.percentile(null_scores, 95)), 6),
+            "p99": round(float(np.percentile(null_scores, 99)), 6),
+        },
+        "observed_percentiles": {
+            "best_centroid_score": _null_percentile(null_scores, best_score),
+            "mean_centroid_score": _null_percentile(null_scores, mean_score),
+            "median_centroid_score": _null_percentile(null_scores, median_score),
+        },
+        "boundary": (
+            "Random-unit-vector baseline for this local embedding dimension only; "
+            "not demographic, identity, attractiveness, or population calibration."
+        ),
+    }
+
+
+def _unit(vector: np.ndarray) -> np.ndarray:
+    norm = float(np.linalg.norm(vector))
+    if norm < 1e-12:
+        return np.zeros_like(vector, dtype=np.float32)
+    return (vector / norm).astype(np.float32)
+
+
+def _null_percentile(null_scores: np.ndarray, observed: float | None) -> float | None:
+    if observed is None:
+        return None
+    return round(float(np.mean(null_scores <= observed)), 6)
 
 
 def _subject_review_summary(reviews: list[SubjectReview]) -> dict:

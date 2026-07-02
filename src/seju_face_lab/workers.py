@@ -205,7 +205,7 @@ def run_local_evaluate(
         key=lambda item: item.centroid_score,
         reverse=True,
     )
-    write_scores(scores, out_dir, failed_paths=failed_paths)
+    write_scores(scores, out_dir, failed_paths=failed_paths, model=model)
     return [
         {
             "image_id": s.image_id, "path": s.path,
