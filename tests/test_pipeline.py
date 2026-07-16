@@ -591,9 +591,13 @@ class PipelineTests(unittest.TestCase):
             )
 
             with patch("seju_face_lab.cli.OpenClipStyleBackend", return_value=_FakeStyleBackend()):
+                result = main(
+                    ["run-pipeline", "--config", str(config_path), "--out", str(pipeline_dir)]
+                )
                 self.assertEqual(
-                    main(["run-pipeline", "--config", str(config_path), "--out", str(pipeline_dir)]),
+                    result,
                     0,
+                    (pipeline_dir / "pipeline_run.json").read_text(encoding="utf-8"),
                 )
 
             pipeline_run = json.loads((pipeline_dir / "pipeline_run.json").read_text(encoding="utf-8"))

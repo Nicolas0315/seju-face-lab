@@ -725,7 +725,7 @@ def _image_src(value: str, run_dir: Path) -> str:
         run_path = (run_dir / path).resolve(strict=False)
         path = cwd_path if cwd_path.exists() else run_path
     try:
-        return path.as_uri()
+        return path.resolve(strict=False).as_uri()
     except ValueError:
         return value
 

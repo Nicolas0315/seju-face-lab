@@ -449,9 +449,9 @@ def _image_src(value: str) -> str:
         return ""
     path = Path(value).expanduser()
     if not path.is_absolute():
-        path = (Path.cwd() / path).resolve(strict=False)
+        path = Path.cwd() / path
     try:
-        return path.as_uri()
+        return path.resolve(strict=False).as_uri()
     except ValueError:
         return value
 
