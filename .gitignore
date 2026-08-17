@@ -17,3 +17,6 @@ outputs/
 *.egg-info/
 *.npz
 *.npy
+node_modules/
+dist/
+build/
