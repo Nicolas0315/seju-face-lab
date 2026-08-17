@@ -1,30 +1,35 @@
 {
-  "name": "full_local_review",
-  "reference_images": "data/raw/seju_official",
-  "model_out": "outputs/seju_model_official",
-  "model_audit_out": "outputs/seju_model_official/audit",
-  "vector_export_out": "outputs/seju_model_official/vectors.json",
-  "face_ingredients_out": "outputs/seju_model_official/face_ingredients",
-  "benchmark_research_out": "outputs/benchmark_research",
-  "generated_images": "outputs/generated_detector",
-  "evaluation_out": "outputs/generated_detector/evaluation",
-  "review_out": "outputs/generated_detector/review",
-  "subjects": "data/subjects",
-  "subject_review_out": "outputs/subject_reviews",
-  "backend_comparison": {
-    "out": "outputs/backend_compare",
-    "backends": ["deterministic", "opencv-face", "insightface", "deepface"]
-  },
-  "subject_backend_comparison": {
-    "out": "outputs/subject_backend_compare",
-    "backends": ["deterministic", "opencv-face", "insightface", "deepface-retinaface"]
-  },
-  "precision_out": "outputs/precision_report",
-  "vector_backend": "deterministic",
-  "crop": "center",
-  "notes": [
-    "Run only after reviewed local image folders exist.",
-    "Generated images and raw subject images remain Git-ignored.",
-    "Use optional neural backends in separate configs for cross-checking."
-  ]
+	"name": "full_local_review",
+	"reference_images": "data/raw/seju_official",
+	"model_out": "outputs/seju_model_official",
+	"model_audit_out": "outputs/seju_model_official/audit",
+	"vector_export_out": "outputs/seju_model_official/vectors.json",
+	"face_ingredients_out": "outputs/seju_model_official/face_ingredients",
+	"benchmark_research_out": "outputs/benchmark_research",
+	"generated_images": "outputs/generated_detector",
+	"evaluation_out": "outputs/generated_detector/evaluation",
+	"review_out": "outputs/generated_detector/review",
+	"subjects": "data/subjects",
+	"subject_review_out": "outputs/subject_reviews",
+	"backend_comparison": {
+		"out": "outputs/backend_compare",
+		"backends": ["deterministic", "opencv-face", "insightface", "deepface"]
+	},
+	"subject_backend_comparison": {
+		"out": "outputs/subject_backend_compare",
+		"backends": [
+			"deterministic",
+			"opencv-face",
+			"insightface",
+			"deepface-retinaface"
+		]
+	},
+	"precision_out": "outputs/precision_report",
+	"vector_backend": "deterministic",
+	"crop": "center",
+	"notes": [
+		"Run only after reviewed local image folders exist.",
+		"Generated images and raw subject images remain Git-ignored.",
+		"Use optional neural backends in separate configs for cross-checking."
+	]
 }

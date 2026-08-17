@@ -1,9 +1,10 @@
 {
-  "scripts": {
-    "build:agency-site": "python scripts/build_agency_site.py",
-    "deploy:agency-site": "wrangler pages deploy outputs/agency_site --project-name seju-face-lab-agency-research"
-  },
-  "devDependencies": {
-    "wrangler": "^4.100.0"
-  }
+	"scripts": {
+		"build:agency-site": "python scripts/build_agency_site.py",
+		"deploy:agency-site": "wrangler pages deploy outputs/agency_site --project-name seju-face-lab-agency-research"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.5.8",
+		"wrangler": "^4.100.0"
+	}
 }
