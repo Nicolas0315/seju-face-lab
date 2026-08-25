@@ -18,6 +18,7 @@ Scores only mean similarity to a centroid built from the images you provide.
 - [Safety Boundary / 重要な境界](#safety-boundary--重要な境界)
 - [Setup / セットアップ](#setup--セットアップ)
 - [Quick Start / 最短実行](#quick-start--最短実行)
+- [Vector Model v1 / Seju近似スコア](#vector-model-v1--seju近似スコア)
 - [Common Commands / よく使うコマンド](#common-commands--よく使うコマンド)
 - [Repository Layout / ディレクトリ構成](#repository-layout--ディレクトリ構成)
 - [Development / 開発](#development--開発)
@@ -162,6 +163,23 @@ Generate calibrated next-round prompts from the measured precision gaps /
 ```powershell
 python -m seju_face_lab calibrate-agency-generation --enhancement outputs/agency_enhancement/agency_enhancement_report.json --agency-params outputs/agency_reviews/seju_like/agency_average_params.json --out outputs/agency_generation_calibration
 ```
+
+## Vector Model v1 / Seju近似スコア
+
+`Vector Model v1`は、画像枚数ではなく人物を等重みにした顔ベクトル分析です。出自・hash・asset種別を先に監査し、1顔だけを受理します。InsightFaceの512次元neural vectorと106点geometry vectorは別々に保存し、人物内robust template、人物分離LOSO、摂動試験を通過したモデルだけをスコアリングに使います。
+
+`Seju近似スコア`はcleanなローカルSeju snapshot内の相対百分位です。本人識別、所属確率、魅力度、人気予測ではありません。
+
+```powershell
+python -m seju_face_lab audit-face-dataset --source-manifest <source.jsonl> --download-manifest <download.jsonl> --images <image-dir> --out outputs/vector_model_v1/audit
+python -m seju_face_lab build-face-observations --manifest outputs/vector_model_v1/audit/clean_manifest.jsonl --images <image-dir> --contract <contract.json> --out outputs/vector_model_v1/observations
+python -m seju_face_lab build-vector-model --observations outputs/vector_model_v1/observations --out outputs/vector_model_v1/model
+python -m seju_face_lab evaluate-vector-perturbations --manifest outputs/vector_model_v1/audit/clean_manifest.jsonl --images <image-dir> --contract <contract.json> --model outputs/vector_model_v1/model --out outputs/vector_model_v1/perturbations
+python -m seju_face_lab evaluate-vector-model --model outputs/vector_model_v1/model --perturbations outputs/vector_model_v1/perturbations/perturbation_evidence.json --out outputs/vector_model_v1/evaluation
+python -m seju_face_lab score-face --image <face.jpg> --evaluation outputs/vector_model_v1/evaluation --out outputs/vector_model_v1/score.json
+```
+
+全体仕様、フローチャート、ER図、シーケンス図、スイムレーン図は [`docs/seju-vector-system-overview-ja.md`](docs/seju-vector-system-overview-ja.md)、実測結果は [`docs/validation/seju-vector-model-v1-2026-08-25.md`](docs/validation/seju-vector-model-v1-2026-08-25.md) を参照してください。raw画像、ベクトル、生成画像、個別スコアはコミットしません。
 
 ## Common Commands / よく使うコマンド
 

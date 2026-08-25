@@ -432,7 +432,7 @@ C1は、LOSO安定性の改善に対するbootstrap下限が正であり、worst
 | `audit-face-dataset` | source/download manifest、画像 | clean/rejected manifest、audit | fail closed |
 | `build-face-observations` | clean manifest | observation、neural/geometry vector | 画像単位で理由記録 |
 | `build-vector-model` | observations | subject templates、model contract | 証拠不足はdiagnostic |
-| `decompose-vectors` | templates | center、components、stability | 不安定成分を棄却 |
+| `build-vector-model`（分解を内包） | observations | templates、center、components | 最低人物数・独立portrait不足で停止 |
 | `evaluate-vector-model` | model、folds | LOSO・摂動・promotion report | leakage/契約不一致で停止 |
 | `score-face` | image、promoted model | score内訳・CI・support | ゲート不合格はscoreなし |
 | `plan-fictional-candidates` | promoted model、探索設定 | candidate manifest | promotion前は拒否 |

@@ -10,6 +10,8 @@
 
 **Spec:** `docs/superpowers/specs/2026-08-25-seju-vector-decomposition-candidate-search-design.md`（日本語レビュー: `docs/seju-vector-system-overview-ja.md`）
 
+**Execution status (2026-08-25):** Tasks 1–7 and Task 8 Steps 1–4 were executed and verified. The repository update was committed on `codex/seju-vector-model-v1-20260825`. B1 passed promotion; C1 was evaluated and rejected by its predefined selection gates. Candidate generation/publication remains a separate post-promotion delivery gate and was not executed.
+
 ## Global Constraints
 
 - 本人識別、nearest-person、魅力度、人格、人口統計、顔からの人気予測を実装しない。
