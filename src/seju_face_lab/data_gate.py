@@ -82,10 +82,19 @@ def audit_face_dataset(
 
     audit = gate_download_rows(merged, allowed_hosts=allowed)
     out_dir.mkdir(parents=True, exist_ok=True)
-    _write_jsonl(out_dir / "clean_manifest.jsonl", audit.clean)
+    clean_manifest_path = out_dir / "clean_manifest.jsonl"
+    _write_jsonl(clean_manifest_path, audit.clean)
     _write_jsonl(out_dir / "rejected_manifest.jsonl", audit.rejected)
+    summary = audit.summary()
+    summary.update(
+        {
+            "source_manifest_sha256": _sha256_file(source_manifest),
+            "download_manifest_sha256": _sha256_file(download_manifest),
+            "clean_manifest_sha256": _sha256_file(clean_manifest_path),
+        }
+    )
     (out_dir / "dataset_audit.json").write_text(
-        json.dumps(audit.summary(), ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
     return audit
 

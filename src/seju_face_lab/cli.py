@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
+import subprocess
 from pathlib import Path
 
 import numpy as np
@@ -27,6 +28,7 @@ from .drift import write_agency_drift_monitor
 from .embeddings import iter_image_paths, render_appearance
 from .enhancement import write_agency_enhancement_bundle
 from .face_axes import write_face_axis_report
+from .face_observations import InsightFaceObservationExtractor, build_face_observations
 from .generation import (
     build_generation_config,
     run_diffusers_generation,
@@ -41,6 +43,7 @@ from .metrics import (
     write_subject_reviews,
 )
 from .model import build_centroid_model, load_model, save_model
+from .model_contract import insightface_contract
 from .model_audit import centroid_stability, write_model_audit
 from .pipeline import run_pipeline_config
 from .precision import write_precision_report
@@ -93,6 +96,21 @@ def main(argv: list[str] | None = None) -> int:
     dataset_audit_parser.add_argument("--download-manifest", type=Path, required=True)
     dataset_audit_parser.add_argument("--images", type=Path, required=True)
     dataset_audit_parser.add_argument("--out", type=Path, required=True)
+
+    observations_parser = subparsers.add_parser(
+        "build-face-observations",
+        help="extract single-face neural and 106-point geometry observations",
+    )
+    observations_parser.add_argument("--manifest", type=Path, required=True)
+    observations_parser.add_argument("--images", type=Path, required=True)
+    observations_parser.add_argument("--backend", choices=["insightface"], default="insightface")
+    observations_parser.add_argument("--gpu-id", type=int, default=0)
+    observations_parser.add_argument(
+        "--model-dir",
+        type=Path,
+        default=Path.home() / ".insightface" / "models" / "buffalo_l",
+    )
+    observations_parser.add_argument("--out", type=Path, required=True)
 
     prompt_parser = subparsers.add_parser("prompt", help="print a generation prompt from a built model")
     prompt_parser.add_argument("--model", type=Path, required=True)
@@ -579,6 +597,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.command == "audit-face-dataset":
         return _audit_face_dataset(args)
+    if args.command == "build-face-observations":
+        return _build_face_observations(args)
     if args.command == "build":
         return _build(args.images, args.out, args.crop, args.backend, args.balance)
     if args.command == "prompt":
@@ -750,6 +770,37 @@ def _audit_face_dataset(args: argparse.Namespace) -> int:
     print(f"subjects: {summary['subject_count']}")
     print(f"audit: {args.out / 'dataset_audit.json'}")
     return 0
+
+
+def _build_face_observations(args: argparse.Namespace) -> int:
+    audit_path = args.manifest.parent / "dataset_audit.json"
+    if not audit_path.is_file():
+        raise ValueError(f"dataset audit is required beside clean manifest: {audit_path}")
+    audit = json.loads(audit_path.read_text(encoding="utf-8"))
+    contract = insightface_contract(
+        source_manifest_sha256=str(audit["source_manifest_sha256"]),
+        clean_manifest_sha256=str(audit["clean_manifest_sha256"]),
+        code_commit=_git_commit(),
+        model_dir=args.model_dir,
+    )
+    rows = [json.loads(line) for line in args.manifest.read_text(encoding="utf-8").splitlines() if line.strip()]
+    extractor = InsightFaceObservationExtractor(gpu_id=args.gpu_id)
+    summary = build_face_observations(rows, extractor, contract, args.out)
+    print(f"accepted: {summary['accepted_count']}")
+    print(f"rejected: {summary['rejected_count']}")
+    print(f"subjects: {summary['subject_count']}")
+    print(f"contract: {summary['contract_hash']}")
+    return 0
+
+
+def _git_commit() -> str:
+    result = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout.strip()
 
 
 def _subject_id_for_path(root: Path, image_path: Path) -> str:
