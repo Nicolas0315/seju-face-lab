@@ -8,7 +8,7 @@ from typing import Any
 import numpy as np
 
 from .approximation_score import ScoreCalibration, score_vector
-from .component_model import ComponentModel
+from .component_model import ComponentModel, project_component
 from .face_observations import FaceObservationExtractor, extract_face_observation
 from .model_contract import ModelContract
 from .vector_pipeline import load_component_model
@@ -61,6 +61,7 @@ def score_face_image(
         bundle.component_model,
         bundle.calibration,
     )
+    coordinates = project_component(bundle.component_model, observation.neural_vector)
     return {
         "schema_version": "seju_face_score_v1",
         "image_id": image_path.stem,
@@ -69,6 +70,7 @@ def score_face_image(
         "seju_approximation": score.seju_approximation,
         "out_of_support": score.out_of_support,
         "quality": observation.quality,
+        "component_coordinates": [float(value) for value in coordinates],
         "score_definition_version": score.definition_version,
         "algorithm": bundle.evaluation["score_algorithm"],
         "boundary": score.boundary,

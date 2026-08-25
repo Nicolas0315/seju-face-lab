@@ -277,6 +277,7 @@ GitHub Actions でも同系統の検証を走らせます。開発手順は
 - [`docs/research-tracking.md`](docs/research-tracking.md): issues, TODO, evidence / 研究Issue、ToDo、検証ログ
 - [`docs/strengthening-engine-review.md`](docs/strengthening-engine-review.md): data-quality weaknesses and strengthening backlog / データ品質の弱点レビューと強化項目
 - [`docs/strengthening-next-plan.md`](docs/strengthening-next-plan.md): next execution plan and verification gates / 次の強化実行計画と検証ゲート
+- [`docs/seju-vector-strengthening-loop-ja.md`](docs/seju-vector-strengthening-loop-ja.md): fictional-candidate strengthening loop, review gates, and publication boundary / 架空候補の強化ループ、レビューgate、公開境界
 - [`docs/web-source-strategy.md`](docs/web-source-strategy.md): web source boundaries / Webソース収集境界
 - [`docs/gpu-generation-log.md`](docs/gpu-generation-log.md): GPU generation logs / GPU生成・評価ログ
 

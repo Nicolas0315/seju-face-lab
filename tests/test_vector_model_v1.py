@@ -34,7 +34,7 @@ from seju_face_lab.perturbations import (
 )
 from seju_face_lab.preference_review import make_blind_bundle
 from seju_face_lab.robust_templates import SubjectTemplate, build_global_center
-from seju_face_lab.score_face import load_score_bundle
+from seju_face_lab.score_face import ScoreBundle, load_score_bundle, score_face_image
 from seju_face_lab.vector_evaluation import (
     build_loso_folds,
     decide_promotion,
@@ -469,6 +469,44 @@ class VectorModelV1Tests(unittest.TestCase):
 
             with self.assertRaisesRegex(ValueError, "promoted evaluation required"):
                 load_score_bundle(root)
+
+    def test_score_face_emits_component_coordinates_for_local_candidate_planning(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            image = root / "candidate.png"
+            Image.new("RGB", (32, 32), (200, 160, 140)).save(image)
+            bundle = ScoreBundle(
+                evaluation={"score_algorithm": "B1"},
+                component_model=ComponentModel(
+                    center=np.array([1.0, 0.0]),
+                    components=np.array([[0.0, 1.0]]),
+                    explained_variance_ratio=np.array([1.0]),
+                    support_low=np.array([-2.0]),
+                    support_high=np.array([2.0]),
+                ),
+                calibration=ScoreCalibration(
+                    center_agreements=np.array([0.0, 0.5]),
+                    reconstruction_residuals=np.array([0.0, 1.0]),
+                    definition_version="loso_hmean_v1",
+                ),
+                contract=ModelContract.from_mapping(
+                    contract_fixture(embedding_dimension=2, component_count=1)
+                ),
+            )
+            face = {
+                "embedding": np.array([0.0, 1.0]),
+                "bbox": np.array([2.0, 2.0, 30.0, 30.0]),
+                "detector_confidence": 0.95,
+                "relative_face_area": 0.75,
+                "landmarks_5": landmark_fixture_106()[:5],
+                "landmarks_106": landmark_fixture_106(),
+            }
+
+            with patch("seju_face_lab.score_face.load_score_bundle", return_value=bundle):
+                result = score_face_image(image, root, FakeExtractor([face]))
+
+            self.assertEqual(len(result["component_coordinates"]), 1)
+            self.assertAlmostEqual(result["component_coordinates"][0], np.pi / 2.0)
 
 
 if __name__ == "__main__":
