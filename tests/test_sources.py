@@ -9,7 +9,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 import bootstrap  # noqa: F401
-from typing_extensions import Self
 
 from seju_face_lab.sources import (
     SourceCandidate,
@@ -188,7 +187,7 @@ class SourceParsingTests(unittest.TestCase):
         class FakeRobotsResponse:
             reads = 0
 
-            def __enter__(self) -> Self:
+            def __enter__(self) -> "FakeRobotsResponse":  # noqa: PYI034, UP037
                 type(self).reads += 1
                 return self
 
