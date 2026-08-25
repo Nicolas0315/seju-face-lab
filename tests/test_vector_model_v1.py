@@ -5,8 +5,10 @@ import unittest
 from pathlib import Path
 
 import bootstrap  # noqa: F401
+from PIL import Image
 
 from scripts.verify_mermaid_blocks import extract_mermaid_blocks
+from seju_face_lab.data_gate import cluster_near_duplicates, gate_download_rows
 from seju_face_lab.model_contract import ModelContract, assert_compatible
 
 
@@ -60,6 +62,62 @@ class VectorModelV1Tests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "model contract mismatch"):
             assert_compatible(left, right)
+
+    def test_dataset_gate_rejects_signature_before_face_detection(self) -> None:
+        audit = gate_download_rows(
+            [
+                {
+                    "profile_url": "https://seju.tokyo/talents/example/",
+                    "image_url": "https://seju.tokyo/uploads/example_sign.png",
+                    "talent_slug": "example",
+                    "path": "example_sign.png",
+                    "sha256": "a" * 64,
+                }
+            ],
+            allowed_hosts={"seju.tokyo"},
+        )
+
+        self.assertEqual(audit.rejected[0]["rejection_reason"], "signature_asset")
+        self.assertEqual(audit.clean, [])
+
+    def test_dataset_gate_rejects_signature_prefix_and_version_suffix(self) -> None:
+        rows = []
+        for filename in ("sign_example.png", "example_sign_2503.png"):
+            rows.append(
+                {
+                    "profile_url": "https://seju.tokyo/talents/example/",
+                    "image_url": f"https://seju.tokyo/uploads/{filename}",
+                    "talent_slug": "example",
+                    "path": filename,
+                    "sha256": "a" * 64,
+                }
+            )
+
+        audit = gate_download_rows(rows, allowed_hosts={"seju.tokyo"})
+
+        self.assertEqual(len(audit.rejected), 2)
+        self.assertEqual(
+            {row["rejection_reason"] for row in audit.rejected}, {"signature_asset"}
+        )
+
+    def test_near_duplicate_gate_keeps_highest_quality_within_subject(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            pixels = Image.new("RGB", (96, 96), (220, 180, 150))
+            high = root / "high.png"
+            low = root / "low.jpg"
+            pixels.save(high)
+            pixels.resize((48, 48)).save(low, quality=70)
+            rows = [
+                {"subject_id": "a", "image_id": "high", "path": str(high), "quality": 0.9},
+                {"subject_id": "a", "image_id": "low", "path": str(low), "quality": 0.4},
+            ]
+
+            clusters = cluster_near_duplicates(rows)
+
+            self.assertEqual(len(clusters), 1)
+            self.assertEqual(clusters[0]["representative_id"], "high")
+            self.assertEqual(clusters[0]["suppressed_ids"], ["low"])
 
 
 if __name__ == "__main__":

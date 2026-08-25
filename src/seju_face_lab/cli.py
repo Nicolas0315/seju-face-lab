@@ -22,6 +22,7 @@ from .backend_diagnostics import write_backend_diagnostics
 from .backends import backend_help, get_vector_backend
 from .benchmark_research import write_benchmark_research
 from .calibration import write_generation_calibration
+from .data_gate import audit_face_dataset
 from .drift import write_agency_drift_monitor
 from .embeddings import iter_image_paths, render_appearance
 from .enhancement import write_agency_enhancement_bundle
@@ -83,6 +84,15 @@ def main(argv: list[str] | None = None) -> int:
         default="image",
         help="centroid aggregation mode; subject balances one folder/person as one template",
     )
+
+    dataset_audit_parser = subparsers.add_parser(
+        "audit-face-dataset",
+        help="build a fail-closed clean manifest from source and download evidence",
+    )
+    dataset_audit_parser.add_argument("--source-manifest", type=Path, required=True)
+    dataset_audit_parser.add_argument("--download-manifest", type=Path, required=True)
+    dataset_audit_parser.add_argument("--images", type=Path, required=True)
+    dataset_audit_parser.add_argument("--out", type=Path, required=True)
 
     prompt_parser = subparsers.add_parser("prompt", help="print a generation prompt from a built model")
     prompt_parser.add_argument("--model", type=Path, required=True)
@@ -567,6 +577,8 @@ def main(argv: list[str] | None = None) -> int:
                             default=["instagram", "twitter"])
 
     args = parser.parse_args(argv)
+    if args.command == "audit-face-dataset":
+        return _audit_face_dataset(args)
     if args.command == "build":
         return _build(args.images, args.out, args.crop, args.backend, args.balance)
     if args.command == "prompt":
@@ -722,6 +734,21 @@ def _build(images: Path, out: Path, crop: str, backend_name: str, balance: str =
     print(f"centroid_stability: {stability.get('band')} (self_cosine_mean={stability.get('self_cosine_mean')})")
     print(f"embedding_dim: {model.embedding_dim}")
     print(f"prompt: {out / 'prompt.txt'}")
+    return 0
+
+
+def _audit_face_dataset(args: argparse.Namespace) -> int:
+    audit = audit_face_dataset(
+        args.source_manifest,
+        args.download_manifest,
+        args.images,
+        args.out,
+    )
+    summary = audit.summary()
+    print(f"clean: {summary['clean_count']}")
+    print(f"rejected: {summary['rejected_count']}")
+    print(f"subjects: {summary['subject_count']}")
+    print(f"audit: {args.out / 'dataset_audit.json'}")
     return 0
 
 
