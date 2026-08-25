@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import argparse
+import json
+import shutil
 from base64 import b64encode
 from datetime import date
 from html import escape
-import json
 from pathlib import Path
-import shutil
 from typing import Any
-
 
 AXIS_LABELS = {
     "soft_defined": ("soft", "defined"),
@@ -143,7 +142,7 @@ def _render_html(
     calibration_rows = "\n".join(_calibration_row(agency) for agency in agencies)
     axis_map = _axis_map_section(agencies)
     nav = "\n".join(f'<a href="#{escape(agency["slug"])}">{escape(agency["name"])}</a>' for agency in agencies)
-    generated_at = date.today().isoformat()
+    generated_at = date.today().isoformat()  # noqa: DTZ011 - report uses the local calendar date.
     retrieved_at = config.get("retrieved_at", "unknown")
     summary = enhancement.get("summary", {})
     calibration_summary = calibration.get("summary", {})

@@ -9,11 +9,12 @@ from pathlib import Path
 from unittest.mock import patch
 
 import bootstrap  # noqa: F401
+
 from seju_face_lab.sources import (
     SourceCandidate,
-    _RobotsPolicyCache,
     _is_supported_content_type,
     _quote_url,
+    _RobotsPolicyCache,
     download_source_images,
     parse_profile,
     parse_talent_links,
@@ -186,7 +187,7 @@ class SourceParsingTests(unittest.TestCase):
         class FakeRobotsResponse:
             reads = 0
 
-            def __enter__(self) -> "FakeRobotsResponse":
+            def __enter__(self) -> "FakeRobotsResponse":  # noqa: PYI034, UP037
                 type(self).reads += 1
                 return self
 

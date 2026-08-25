@@ -14,7 +14,6 @@ import csv
 import json
 from pathlib import Path
 
-
 COLUMNS = [
     "talent_slug", "name", "platform", "handle",
     "followers", "following", "posts", "total_engagement", "engagement_rate",

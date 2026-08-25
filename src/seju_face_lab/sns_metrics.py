@@ -7,12 +7,12 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import urllib.robotparser
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path
 from threading import Lock
-from typing import Iterable
 
 # SNS URL patterns for handle extraction
 _SNS_PATTERNS: dict[str, re.Pattern[str]] = {
@@ -186,7 +186,7 @@ def fetch_instagram_engagement(handle: str) -> SnsEngagement:
         })
         try:
             session.get("https://www.instagram.com/", timeout=10)
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 - session warm-up is best-effort.
             pass
         session_error: str | None = None
         resp = session.get(api_url, timeout=15)
@@ -302,7 +302,7 @@ def fetch_twitter_engagement(handle: str) -> SnsEngagement:
     except urllib.error.HTTPError as exc:
         if exc.code == 404:
             pass
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001, S110 - this provider is an optional fallback.
         pass
 
     # Strategy 2: Nitter public instances.
@@ -325,7 +325,7 @@ def fetch_twitter_engagement(handle: str) -> SnsEngagement:
                 fetch_status="ok" if followers is not None else "partial",
                 fetch_error=None, retrieved_at=retrieved_at,
             )
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001, S112 - try the next public instance.
             continue
 
     # Strategy 3: direct X page metadata.
@@ -382,7 +382,7 @@ def fetch_tiktok_engagement(handle: str) -> SnsEngagement:
                 display_name=user.get("nickname") or None,
                 fetch_status="ok", fetch_error=None, retrieved_at=retrieved_at,
             )
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001, S110 - this provider is an optional fallback.
         pass
 
     # Strategy 2: HTML page with SIGI_STATE / UNIVERSAL_DATA

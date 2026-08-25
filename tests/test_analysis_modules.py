@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import csv
 import base64
+import csv
 import json
 import os
 import subprocess
@@ -16,6 +16,7 @@ from unittest.mock import patch
 import bootstrap  # noqa: F401
 import numpy as np
 from PIL import Image
+
 from scripts.organize_by_talent import _talent_slug_from_filename
 from seju_face_lab import backends as backends_module
 from seju_face_lab.backends import DeepFaceBackend, InsightFaceBackend
@@ -26,8 +27,8 @@ from seju_face_lab.correlation import (
     write_correlation_report,
 )
 from seju_face_lab.generation import build_generation_config, run_openai_image_generation
-from seju_face_lab.precision import write_precision_report
 from seju_face_lab.model_audit import centroid_stability, write_model_audit
+from seju_face_lab.precision import write_precision_report
 from seju_face_lab.quality import ImageQuality, judge_face_quality, review_image_quality
 from seju_face_lab.run_reviews import review_generation_runs, write_generation_run_reviews
 from seju_face_lab.sns_metrics import (
@@ -38,9 +39,9 @@ from seju_face_lab.sns_metrics import (
     fetch_instagram_engagement,
     fetch_tiktok_engagement,
     fetch_twitter_engagement,
+    import_engagement_csv,
     read_engagement_manifest,
     read_handles_manifest,
-    import_engagement_csv,
     write_engagement_manifest,
     write_handles_manifest,
 )
@@ -91,23 +92,25 @@ class AnalysisModuleTests(unittest.TestCase):
             out = root / "review"
             images.mkdir()
 
-            with patch("seju_face_lab.cli._evaluate") as evaluate:
-                with patch("seju_face_lab.cli._qa_images") as qa_images:
-                    with patch("seju_face_lab.cli._compare_runs") as compare_runs:
-                        self.assertEqual(
-                            main(
-                                [
-                                    "review-generated",
-                                    "--model",
-                                    str(model),
-                                    "--images",
-                                    str(images),
-                                    "--out",
-                                    str(out),
-                                ]
-                            ),
-                            0,
-                        )
+            with (
+                patch("seju_face_lab.cli._evaluate") as evaluate,
+                patch("seju_face_lab.cli._qa_images") as qa_images,
+                patch("seju_face_lab.cli._compare_runs") as compare_runs,
+            ):
+                self.assertEqual(
+                    main(
+                        [
+                            "review-generated",
+                            "--model",
+                            str(model),
+                            "--images",
+                            str(images),
+                            "--out",
+                            str(out),
+                        ]
+                    ),
+                    0,
+                )
 
             evaluate.assert_called_once_with(model, images, images / "evaluation", "center", "deterministic")
             qa_images.assert_called_once_with(images, images / "quality")
@@ -126,26 +129,28 @@ class AnalysisModuleTests(unittest.TestCase):
                 generated_images=[str(out / "candidate.png")],
             )
 
-            with patch("seju_face_lab.cli.build_generation_config", return_value=config):
-                with patch("seju_face_lab.cli.run_diffusers_generation", return_value=result):
-                    with patch("seju_face_lab.cli._review_generated") as review_generated:
-                        self.assertEqual(
-                            main(
-                                [
-                                    "generate",
-                                    "--model",
-                                    str(model),
-                                    "--out",
-                                    str(out),
-                                    "--provider",
-                                    "diffusers",
-                                    "--review",
-                                    "--review-out",
-                                    str(review_out),
-                                ]
-                            ),
-                            0,
-                        )
+            with (
+                patch("seju_face_lab.cli.build_generation_config", return_value=config),
+                patch("seju_face_lab.cli.run_diffusers_generation", return_value=result),
+                patch("seju_face_lab.cli._review_generated") as review_generated,
+            ):
+                self.assertEqual(
+                    main(
+                        [
+                            "generate",
+                            "--model",
+                            str(model),
+                            "--out",
+                            str(out),
+                            "--provider",
+                            "diffusers",
+                            "--review",
+                            "--review-out",
+                            str(review_out),
+                        ]
+                    ),
+                    0,
+                )
 
             review_generated.assert_called_once()
             review_args = review_generated.call_args.args[0]
@@ -167,26 +172,28 @@ class AnalysisModuleTests(unittest.TestCase):
                 generated_images=[str(out / "candidate.png")],
             )
 
-            with patch("seju_face_lab.cli.build_generation_config", return_value=config) as build_config:
-                with patch("seju_face_lab.cli.run_openai_image_generation", return_value=result):
-                    with patch("seju_face_lab.cli._review_generated") as review_generated:
-                        self.assertEqual(
-                            main(
-                                [
-                                    "generate",
-                                    "--model",
-                                    str(model),
-                                    "--out",
-                                    str(out),
-                                    "--provider",
-                                    "openai-image",
-                                    "--review",
-                                    "--review-out",
-                                    str(review_out),
-                                ]
-                            ),
-                            0,
-                        )
+            with (
+                patch("seju_face_lab.cli.build_generation_config", return_value=config) as build_config,
+                patch("seju_face_lab.cli.run_openai_image_generation", return_value=result),
+                patch("seju_face_lab.cli._review_generated") as review_generated,
+            ):
+                self.assertEqual(
+                    main(
+                        [
+                            "generate",
+                            "--model",
+                            str(model),
+                            "--out",
+                            str(out),
+                            "--provider",
+                            "openai-image",
+                            "--review",
+                            "--review-out",
+                            str(review_out),
+                        ]
+                    ),
+                    0,
+                )
 
             review_generated.assert_called_once()
             review_args = review_generated.call_args.args[0]
@@ -258,24 +265,26 @@ class AnalysisModuleTests(unittest.TestCase):
                 generated_images=[],
             )
 
-            with patch("seju_face_lab.cli.build_generation_config", return_value=config):
-                with patch("seju_face_lab.cli.write_generation_plan", return_value=result):
-                    with patch("seju_face_lab.cli._review_generated") as review_generated:
-                        self.assertEqual(
-                            main(
-                                [
-                                    "generate",
-                                    "--model",
-                                    str(model),
-                                    "--out",
-                                    str(out),
-                                    "--provider",
-                                    "dry-run",
-                                    "--review",
-                                ]
-                            ),
-                            0,
-                        )
+            with (
+                patch("seju_face_lab.cli.build_generation_config", return_value=config),
+                patch("seju_face_lab.cli.write_generation_plan", return_value=result),
+                patch("seju_face_lab.cli._review_generated") as review_generated,
+            ):
+                self.assertEqual(
+                    main(
+                        [
+                            "generate",
+                            "--model",
+                            str(model),
+                            "--out",
+                            str(out),
+                            "--provider",
+                            "dry-run",
+                            "--review",
+                        ]
+                    ),
+                    0,
+                )
 
             review_generated.assert_not_called()
 
@@ -1382,14 +1391,7 @@ class AnalysisModuleTests(unittest.TestCase):
                 encoding="utf-8",
             )
             (evaluation / "scores.csv").write_text(
-                "\n".join(
-                    [
-                        "image_id,path,cosine_to_mean,cosine_to_median,euclidean_to_mean,"
-                        "euclidean_to_median,centroid_score",
-                        "raw_top,raw.png,0.990000,0.980000,0.100000,0.200000,0.985000",
-                        "qa_winner_below_top_five,qa.png,0.410000,0.430000,0.900000,0.800000,0.420000",
-                    ]
-                )
+                "image_id,path,cosine_to_mean,cosine_to_median,euclidean_to_mean,euclidean_to_median,centroid_score\nraw_top,raw.png,0.990000,0.980000,0.100000,0.200000,0.985000\nqa_winner_below_top_five,qa.png,0.410000,0.430000,0.900000,0.800000,0.420000"
                 + "\n",
                 encoding="utf-8-sig",
             )
@@ -1444,13 +1446,7 @@ class AnalysisModuleTests(unittest.TestCase):
                 encoding="utf-8",
             )
             (evaluation / "scores.csv").write_text(
-                "\n".join(
-                    [
-                        "image_id,path,cosine_to_mean,cosine_to_median,euclidean_to_mean,"
-                        "euclidean_to_median,centroid_score",
-                        "candidate,candidate.png,0.410000,0.430000,0.900000,0.800000,0.420000",
-                    ]
-                )
+                "image_id,path,cosine_to_mean,cosine_to_median,euclidean_to_mean,euclidean_to_median,centroid_score\ncandidate,candidate.png,0.410000,0.430000,0.900000,0.800000,0.420000"
                 + "\n",
                 encoding="utf-8-sig",
             )
@@ -1612,19 +1608,17 @@ class AnalysisModuleTests(unittest.TestCase):
             self.assertEqual(report["model"]["model_audit"]["mean_median_embedding"]["cosine"], 0.99)
 
     def test_image_quality_records_per_file_failures(self) -> None:
-        with patch("seju_face_lab.quality._import_cv2", return_value=object()):
-            with patch(
-                "seju_face_lab.quality.iter_image_paths",
-                return_value=[Path("bad.png"), Path("good.png")],
-            ):
-                with patch(
-                    "seju_face_lab.quality._review_one_image",
-                    side_effect=[
-                        ValueError("broken image"),
-                        ImageQuality("good", "good.png", 1, 0.2, 0.1, True, "single centered face"),
-                    ],
-                ):
-                    reviews = review_image_quality(Path("images"))
+        with patch("seju_face_lab.quality._import_cv2", return_value=object()), patch(
+            "seju_face_lab.quality.iter_image_paths",
+            return_value=[Path("bad.png"), Path("good.png")],
+        ), patch(
+            "seju_face_lab.quality._review_one_image",
+            side_effect=[
+                ValueError("broken image"),
+                ImageQuality("good", "good.png", 1, 0.2, 0.1, True, "single centered face"),
+            ],
+        ):
+            reviews = review_image_quality(Path("images"))
 
         self.assertEqual(len(reviews), 2)
         self.assertFalse(reviews[0].qa_pass)
@@ -1770,18 +1764,17 @@ class AnalysisModuleTests(unittest.TestCase):
             router._remote_ig,
             "fetch_batch",
             return_value={"talent_a": {"followers": None, "status": "ssh_error"}},
-        ):
-            with patch(
-                "seju_face_lab.sns_explorer._fetch_instagram_local",
-                return_value=SnsProfile(
-                    platform="instagram",
-                    handle="talent_a",
-                    profile_url="https://www.instagram.com/talent_a/",
-                    followers=1500,
-                    source="local_ig",
-                ),
-            ) as local_fetch:
-                profiles = router.fetch_batch([("instagram", "talent_a")], delay_between=0)
+        ), patch(
+            "seju_face_lab.sns_explorer._fetch_instagram_local",
+            return_value=SnsProfile(
+                platform="instagram",
+                handle="talent_a",
+                profile_url="https://www.instagram.com/talent_a/",
+                followers=1500,
+                source="local_ig",
+            ),
+        ) as local_fetch:
+            profiles = router.fetch_batch([("instagram", "talent_a")], delay_between=0)
 
         local_fetch.assert_called_once_with("talent_a")
         self.assertEqual(profiles[0].followers, 1500)
@@ -2003,12 +1996,11 @@ class AnalysisModuleTests(unittest.TestCase):
             '<meta property="og:description" content="1,234 Followers, 50 Following, 10 Posts">'
             '<meta property="og:title" content="Talent (@talent)">'
         )
-        with patch.dict("sys.modules", {"requests": None}):
-            with patch(
-                "seju_face_lab.sns_metrics._Fetcher.fetch_text",
-                side_effect=[RuntimeError("api blocked"), html],
-            ):
-                engagement = fetch_instagram_engagement("talent")
+        with patch.dict("sys.modules", {"requests": None}), patch(
+            "seju_face_lab.sns_metrics._Fetcher.fetch_text",
+            side_effect=[RuntimeError("api blocked"), html],
+        ):
+            engagement = fetch_instagram_engagement("talent")
 
         self.assertEqual(engagement.fetch_status, "partial")
         self.assertEqual(engagement.followers, 1234)
@@ -2025,12 +2017,11 @@ class AnalysisModuleTests(unittest.TestCase):
             hdrs=None,
             fp=None,
         )
-        with patch.dict("sys.modules", {"requests": None}):
-            with patch(
-                "seju_face_lab.sns_metrics._Fetcher.fetch_text",
-                side_effect=[http_404, html],
-            ):
-                engagement = fetch_instagram_engagement("talent")
+        with patch.dict("sys.modules", {"requests": None}), patch(
+            "seju_face_lab.sns_metrics._Fetcher.fetch_text",
+            side_effect=[http_404, html],
+        ):
+            engagement = fetch_instagram_engagement("talent")
 
         self.assertEqual(engagement.fetch_status, "partial")
         self.assertEqual(engagement.followers, 2345)
@@ -2047,17 +2038,16 @@ class AnalysisModuleTests(unittest.TestCase):
             hdrs=None,
             fp=None,
         )
-        with patch("urllib.request.urlopen", side_effect=http_404):
-            with patch(
-                "seju_face_lab.sns_metrics._Fetcher.fetch_text",
-                side_effect=[
-                    RuntimeError("nitter 1"),
-                    RuntimeError("nitter 2"),
-                    RuntimeError("nitter 3"),
-                    html,
-                ],
-            ):
-                engagement = fetch_twitter_engagement("talent")
+        with patch("urllib.request.urlopen", side_effect=http_404), patch(
+            "seju_face_lab.sns_metrics._Fetcher.fetch_text",
+            side_effect=[
+                RuntimeError("nitter 1"),
+                RuntimeError("nitter 2"),
+                RuntimeError("nitter 3"),
+                html,
+            ],
+        ):
+            engagement = fetch_twitter_engagement("talent")
 
         self.assertEqual(engagement.fetch_status, "partial")
         self.assertEqual(engagement.followers, 1200)
@@ -2196,26 +2186,12 @@ class AnalysisModuleTests(unittest.TestCase):
                 encoding="utf-8",
             )
             (run / "scores.csv").write_text(
-                "\n".join(
-                    [
-                        "image_id,path,centroid_score",
-                        '"face_only","face.png",1.000000',
-                        '"style_only","style.png",0.000000',
-                        '"balanced","balanced.png",0.700000',
-                    ]
-                )
+                'image_id,path,centroid_score\n"face_only","face.png",1.000000\n"style_only","style.png",0.000000\n"balanced","balanced.png",0.700000'
                 + "\n",
                 encoding="utf-8-sig",
             )
             (run / "style_scores.csv").write_text(
-                "\n".join(
-                    [
-                        "image_id,path,style_score",
-                        '"face_only","face.png",0.000000',
-                        '"style_only","style.png",1.000000',
-                        '"balanced","balanced.png",0.700000',
-                    ]
-                )
+                'image_id,path,style_score\n"face_only","face.png",0.000000\n"style_only","style.png",1.000000\n"balanced","balanced.png",0.700000'
                 + "\n",
                 encoding="utf-8-sig",
             )
@@ -2268,24 +2244,12 @@ class AnalysisModuleTests(unittest.TestCase):
                 encoding="utf-8",
             )
             (run_a / "evaluation" / "scores.csv").write_text(
-                "\n".join(
-                    [
-                        "image_id,path,centroid_score",
-                        '"collage","collage.png",1.000000',
-                        '"single_low","single_low.png",0.400000',
-                    ]
-                )
+                'image_id,path,centroid_score\n"collage","collage.png",1.000000\n"single_low","single_low.png",0.400000'
                 + "\n",
                 encoding="utf-8-sig",
             )
             (run_a / "quality" / "image_quality.csv").write_text(
-                "\n".join(
-                    [
-                        "image_id,path,qa_pass",
-                        '"collage","collage.png",false',
-                        '"single_low","single_low.png",true',
-                    ]
-                )
+                'image_id,path,qa_pass\n"collage","collage.png",false\n"single_low","single_low.png",true'
                 + "\n",
                 encoding="utf-8-sig",
             )
@@ -2308,22 +2272,12 @@ class AnalysisModuleTests(unittest.TestCase):
                 encoding="utf-8",
             )
             (run_b / "evaluation" / "scores.csv").write_text(
-                "\n".join(
-                    [
-                        "image_id,path,centroid_score",
-                        '"single_high","single_high.png",0.600000',
-                    ]
-                )
+                'image_id,path,centroid_score\n"single_high","single_high.png",0.600000'
                 + "\n",
                 encoding="utf-8-sig",
             )
             (run_b / "quality" / "image_quality.csv").write_text(
-                "\n".join(
-                    [
-                        "image_id,path,qa_pass",
-                        '"single_high","single_high.png",true',
-                    ]
-                )
+                'image_id,path,qa_pass\n"single_high","single_high.png",true'
                 + "\n",
                 encoding="utf-8-sig",
             )
@@ -2381,24 +2335,12 @@ class AnalysisModuleTests(unittest.TestCase):
                 encoding="utf-8",
             )
             (run / "scores.csv").write_text(
-                "\n".join(
-                    [
-                        "image_id,path,centroid_score",
-                        '"dup","a/dup.png",1.000000',
-                        '"dup","b/dup.png",0.000000',
-                    ]
-                )
+                'image_id,path,centroid_score\n"dup","a/dup.png",1.000000\n"dup","b/dup.png",0.000000'
                 + "\n",
                 encoding="utf-8-sig",
             )
             (run / "style_scores.csv").write_text(
-                "\n".join(
-                    [
-                        "image_id,path,style_score",
-                        '"dup","b/dup.png",1.000000',
-                        '"dup","a/dup.png",0.000000',
-                    ]
-                )
+                'image_id,path,style_score\n"dup","b/dup.png",1.000000\n"dup","a/dup.png",0.000000'
                 + "\n",
                 encoding="utf-8-sig",
             )
@@ -2507,12 +2449,7 @@ class AnalysisModuleTests(unittest.TestCase):
                 encoding="utf-8",
             )
             (run / "evaluation" / "scores.csv").write_text(
-                "\n".join(
-                    [
-                        "image_id,path,centroid_score",
-                        '"candidate","candidate.png",0.600000',
-                    ]
-                )
+                'image_id,path,centroid_score\n"candidate","candidate.png",0.600000'
                 + "\n",
                 encoding="utf-8-sig",
             )
@@ -2563,12 +2500,7 @@ class AnalysisModuleTests(unittest.TestCase):
                 encoding="utf-8",
             )
             (evaluation / "scores.csv").write_text(
-                "\n".join(
-                    [
-                        "image_id,path,centroid_score",
-                        '"candidate","candidate.png",0.600000',
-                    ]
-                )
+                'image_id,path,centroid_score\n"candidate","candidate.png",0.600000'
                 + "\n",
                 encoding="utf-8-sig",
             )
@@ -2652,11 +2584,13 @@ class AnalysisModuleTests(unittest.TestCase):
 
     def test_insightface_no_face_raises_instead_of_mixing_dimensions(self) -> None:
         backend = InsightFaceBackend()
-        backend._app = _NoFaceApp()  # noqa: SLF001 - direct injection keeps this test offline.
+        backend._app = _NoFaceApp()
 
-        with patch("seju_face_lab.backends._import_cv2", return_value=_FakeCV2()):
-            with self.assertRaisesRegex(ValueError, "No face detected"):
-                backend.vectorize(Path("missing-face.jpg"))
+        with (
+            patch("seju_face_lab.backends._import_cv2", return_value=_FakeCV2()),
+            self.assertRaisesRegex(ValueError, "No face detected"),
+        ):
+            backend.vectorize(Path("missing-face.jpg"))
 
     def test_prepare_windows_torch_cuda_dlls_adds_torch_lib_once(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -2668,8 +2602,8 @@ class AnalysisModuleTests(unittest.TestCase):
             (dll_dir / "cublasLt64_12.dll").write_text("", encoding="utf-8")
             fake_torch = SimpleNamespace(__file__=str(torch_init))
 
-            backends_module._ADDED_DLL_DIRS.clear()  # noqa: SLF001
-            backends_module._DLL_DIRECTORY_HANDLES.clear()  # noqa: SLF001
+            backends_module._ADDED_DLL_DIRS.clear()
+            backends_module._DLL_DIRECTORY_HANDLES.clear()
             with (
                 patch("seju_face_lab.backends._is_windows", return_value=True),
                 patch("seju_face_lab.backends.importlib.util.find_spec", return_value=object()),
@@ -2677,8 +2611,8 @@ class AnalysisModuleTests(unittest.TestCase):
                 patch.dict(os.environ, {"PATH": "C:\\base"}),
                 patch("seju_face_lab.backends._add_windows_dll_directory") as add_dll_directory,
             ):
-                first = backends_module._prepare_windows_torch_cuda_dlls()  # noqa: SLF001
-                second = backends_module._prepare_windows_torch_cuda_dlls()  # noqa: SLF001
+                first = backends_module._prepare_windows_torch_cuda_dlls()
+                second = backends_module._prepare_windows_torch_cuda_dlls()
 
             self.assertEqual(first, dll_dir.resolve())
             self.assertEqual(second, dll_dir.resolve())
@@ -2686,7 +2620,7 @@ class AnalysisModuleTests(unittest.TestCase):
 
     def test_prepare_windows_torch_cuda_dlls_ignores_non_windows(self) -> None:
         with patch("seju_face_lab.backends._is_windows", return_value=False):
-            self.assertIsNone(backends_module._prepare_windows_torch_cuda_dlls())  # noqa: SLF001
+            self.assertIsNone(backends_module._prepare_windows_torch_cuda_dlls())
 
     def test_prepare_windows_torch_cuda_dlls_ignores_broken_torch_import(self) -> None:
         real_import = __import__
@@ -2701,7 +2635,7 @@ class AnalysisModuleTests(unittest.TestCase):
             patch("seju_face_lab.backends.importlib.util.find_spec", return_value=object()),
             patch("builtins.__import__", side_effect=broken_torch_import),
         ):
-            self.assertIsNone(backends_module._prepare_windows_torch_cuda_dlls())  # noqa: SLF001
+            self.assertIsNone(backends_module._prepare_windows_torch_cuda_dlls())
 
     def test_prepare_utf8_console_for_deepface_reconfigures_windows_streams(self) -> None:
         fake_stdout = _FakeReconfigurableStream()
@@ -2712,7 +2646,7 @@ class AnalysisModuleTests(unittest.TestCase):
             patch.object(sys, "stderr", fake_stderr),
             patch.dict(os.environ, {}, clear=True),
         ):
-            backends_module._prepare_utf8_console_for_deepface()  # noqa: SLF001
+            backends_module._prepare_utf8_console_for_deepface()
             self.assertEqual(os.environ["PYTHONIOENCODING"], "utf-8")
 
         self.assertEqual(fake_stdout.calls, [{"encoding": "utf-8", "errors": "replace"}])
@@ -2753,13 +2687,15 @@ class AnalysisModuleTests(unittest.TestCase):
             Image.new("RGB", (32, 32), (0, 0, 0)).save(image_path)
             backend = DeepFaceBackend()
 
-            with patch("seju_face_lab.backends._import_deepface", return_value=_FakeDeepFace([])):
-                with self.assertRaisesRegex(ValueError, "No face detected"):
-                    backend.vectorize(image_path)
+            with (
+                patch("seju_face_lab.backends._import_deepface", return_value=_FakeDeepFace([])),
+                self.assertRaisesRegex(ValueError, "No face detected"),
+            ):
+                backend.vectorize(image_path)
 
     def test_deepface_retinaface_backend_factory_uses_retinaface_detector(self) -> None:
         with patch("seju_face_lab.backends.importlib.util.find_spec", return_value=object()):
-            backend = backends_module._make_deepface_backend("retinaface", name="deepface-retinaface")  # noqa: SLF001
+            backend = backends_module._make_deepface_backend("retinaface", name="deepface-retinaface")
 
         self.assertIsInstance(backend, DeepFaceBackend)
         self.assertEqual(backend.name, "deepface-retinaface")
@@ -2768,7 +2704,7 @@ class AnalysisModuleTests(unittest.TestCase):
 
     def test_deepface_retinaface_backend_factory_stays_dependency_gated(self) -> None:
         with patch("seju_face_lab.backends.importlib.util.find_spec", return_value=None):
-            backend = backends_module._make_deepface_backend("retinaface", name="deepface-retinaface")  # noqa: SLF001
+            backend = backends_module._make_deepface_backend("retinaface", name="deepface-retinaface")
 
         self.assertIsInstance(backend, backends_module.PlannedBackend)
         self.assertEqual(backend.name, "deepface-retinaface")

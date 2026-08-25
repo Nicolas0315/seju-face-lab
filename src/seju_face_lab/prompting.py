@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 PROMPT_PROFILES = ("balanced", "detector-friendly")
 
 

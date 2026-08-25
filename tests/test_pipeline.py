@@ -8,10 +8,10 @@ from argparse import Namespace
 from pathlib import Path
 from unittest.mock import patch
 
+import bootstrap  # noqa: F401
 import numpy as np
 from PIL import Image, ImageDraw
 
-import bootstrap  # noqa: F401
 from seju_face_lab import backends
 from seju_face_lab.cli import _sources_download, _subject_id_for_path, main
 from seju_face_lab.model import load_model

@@ -6,8 +6,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
-from typing import Any
-from typing import Protocol
+from typing import Any, Protocol
 
 import numpy as np
 from PIL import Image, ImageOps
@@ -311,8 +310,8 @@ class GenerationProvider:
 def _make_insightface_backend() -> InsightFaceBackend | PlannedBackend:
     """Return InsightFaceBackend if onnxruntime-gpu is installed, else PlannedBackend."""
     try:
-        import onnxruntime  # noqa: F401
         import insightface  # noqa: F401
+        import onnxruntime  # noqa: F401
         return InsightFaceBackend()
     except ImportError:
         return PlannedBackend(
@@ -326,8 +325,8 @@ def _make_insightface_backend() -> InsightFaceBackend | PlannedBackend:
 def _make_landmark_align_backend() -> LandmarkAlignBackend | PlannedBackend:
     """Return LandmarkAlignBackend if InsightFace runtime dependencies are installed."""
     try:
-        import onnxruntime  # noqa: F401
         import insightface  # noqa: F401
+        import onnxruntime  # noqa: F401
         return LandmarkAlignBackend()
     except ImportError:
         return PlannedBackend(
@@ -408,7 +407,7 @@ def get_vector_backend(name: str) -> VectorBackend:
         choices = ", ".join(sorted(BACKENDS))
         raise ValueError(f"Unknown backend '{name}'. Choices: {choices}") from exc
     if isinstance(backend, PlannedBackend):
-        raise RuntimeError(
+        raise RuntimeError(  # noqa: TRY004 - a planned backend is a state error, not a caller type error.
             f"Backend '{name}' is not implemented yet. Planned optional extra: {backend.extra}. "
             f"Notes: {backend.notes}"
         )
@@ -517,7 +516,7 @@ def _prepare_windows_torch_cuda_dlls() -> Path | None:
         return None
     try:
         import torch
-    except Exception:
+    except Exception:  # noqa: BLE001 - optional torch import must not break deterministic backends.
         return None
 
     torch_file = getattr(torch, "__file__", None)
@@ -604,7 +603,7 @@ def _opencv_face_crop(cv2: Any, image: Image.Image, path: Path) -> Image.Image:
 
 
 def _square_bounds(x: int, y: int, width: int, height: int, image_width: int, image_height: int) -> tuple[int, int, int, int]:
-    margin = int(round(max(width, height) * 0.25))
+    margin = round(max(width, height) * 0.25)
     center_x = x + width // 2
     center_y = y + height // 2
     side = max(width, height) + margin * 2

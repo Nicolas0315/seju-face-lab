@@ -2,26 +2,34 @@ from __future__ import annotations
 
 import argparse
 import json
-from pathlib import Path
 import shutil
+import subprocess
+from pathlib import Path
 
 import numpy as np
 
-from .backends import backend_help, get_vector_backend
 from .agency import write_agency_average_params
 from .agency_centroid import (
     AGENCY_CENTROID_BOUNDARY,
     build_agency_centroid,
     write_agency_centroid,
 )
-from .backend_compare import compare_deepface_detectors, compare_subject_backends, compare_vector_backends
+from .backend_compare import (
+    compare_deepface_detectors,
+    compare_subject_backends,
+    compare_vector_backends,
+)
 from .backend_diagnostics import write_backend_diagnostics
+from .backends import backend_help, get_vector_backend
 from .benchmark_research import write_benchmark_research
 from .calibration import write_generation_calibration
+from .candidate_search import plan_candidates
+from .data_gate import audit_face_dataset
 from .drift import write_agency_drift_monitor
 from .embeddings import iter_image_paths, render_appearance
 from .enhancement import write_agency_enhancement_bundle
 from .face_axes import write_face_axis_report
+from .face_observations import InsightFaceObservationExtractor, build_face_observations
 from .generation import (
     build_generation_config,
     run_diffusers_generation,
@@ -29,20 +37,45 @@ from .generation import (
     write_generation_plan,
 )
 from .ingredients import write_ingredients_report
-from .metrics import review_subject_directories, score_generated_images, write_scores, write_subject_reviews
+from .metrics import (
+    review_subject_directories,
+    score_generated_images,
+    write_scores,
+    write_subject_reviews,
+)
 from .model import build_centroid_model, load_model, save_model
 from .model_audit import centroid_stability, write_model_audit
+from .model_contract import insightface_contract
+from .perturbations import evaluate_vector_perturbations
 from .pipeline import run_pipeline_config
-from .prompting import prompt_from_descriptors
 from .precision import write_precision_report
+from .preference_review import (
+    aggregate_pairwise,
+    make_blind_bundle,
+    make_private_review_mapping,
+)
+from .prompting import prompt_from_descriptors
 from .quality import review_image_quality, write_image_quality
-from .run_reviews import review_generation_runs, write_generation_run_reviews
 from .rubric import write_pairwise_rubric_review
-from .sources import discover_sources, download_source_images, read_source_manifest, write_source_manifest
+from .run_reviews import review_generation_runs, write_generation_run_reviews
+from .score_face import score_face_image
+from .sources import (
+    discover_sources,
+    download_source_images,
+    read_source_manifest,
+    write_source_manifest,
+)
 from .style import OpenClipStyleBackend, score_style_images, write_style_scores
 from .subject_vectors import vectorize_subjects, write_subject_vectors
+from .vector_evaluation import evaluate_vector_model_dir
 from .vector_export import write_vector_export
-from .workers import DEFAULT_DIAGNOSTIC_WORKERS, LOCAL_4090, distribute_vectorize, write_worker_diagnostics
+from .vector_pipeline import build_vector_model
+from .workers import (
+    DEFAULT_DIAGNOSTIC_WORKERS,
+    LOCAL_4090,
+    distribute_vectorize,
+    write_worker_diagnostics,
+)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -64,6 +97,84 @@ def main(argv: list[str] | None = None) -> int:
         default="image",
         help="centroid aggregation mode; subject balances one folder/person as one template",
     )
+
+    dataset_audit_parser = subparsers.add_parser(
+        "audit-face-dataset",
+        help="build a fail-closed clean manifest from source and download evidence",
+    )
+    dataset_audit_parser.add_argument("--source-manifest", type=Path, required=True)
+    dataset_audit_parser.add_argument("--download-manifest", type=Path, required=True)
+    dataset_audit_parser.add_argument("--images", type=Path, required=True)
+    dataset_audit_parser.add_argument("--out", type=Path, required=True)
+
+    observations_parser = subparsers.add_parser(
+        "build-face-observations",
+        help="extract single-face neural and 106-point geometry observations",
+    )
+    observations_parser.add_argument("--manifest", type=Path, required=True)
+    observations_parser.add_argument("--images", type=Path, required=True)
+    observations_parser.add_argument("--backend", choices=["insightface"], default="insightface")
+    observations_parser.add_argument("--gpu-id", type=int, default=0)
+    observations_parser.add_argument(
+        "--model-dir",
+        type=Path,
+        default=Path.home() / ".insightface" / "models" / "buffalo_l",
+    )
+    observations_parser.add_argument("--out", type=Path, required=True)
+
+    vector_model_parser = subparsers.add_parser(
+        "build-vector-model",
+        help="build robust subject templates and tangent components from observations",
+    )
+    vector_model_parser.add_argument("--observations", type=Path, required=True)
+    vector_model_parser.add_argument("--out", type=Path, required=True)
+
+    vector_evaluation_parser = subparsers.add_parser(
+        "evaluate-vector-model",
+        help="run subject-disjoint LOSO calibration and promotion gates",
+    )
+    vector_evaluation_parser.add_argument("--model", type=Path, required=True)
+    vector_evaluation_parser.add_argument("--out", type=Path, required=True)
+    vector_evaluation_parser.add_argument("--seed", type=int, default=20260825)
+    vector_evaluation_parser.add_argument("--perturbations", type=Path, default=None)
+
+    perturbation_parser = subparsers.add_parser(
+        "evaluate-vector-perturbations",
+        help="measure deterministic image and detector perturbations on accepted observations",
+    )
+    perturbation_parser.add_argument("--observations", type=Path, required=True)
+    perturbation_parser.add_argument("--model", type=Path, required=True)
+    perturbation_parser.add_argument("--out", type=Path, required=True)
+    perturbation_parser.add_argument("--gpu-id", type=int, default=0)
+
+    candidate_plan_parser = subparsers.add_parser(
+        "plan-fictional-candidates",
+        help="filter measured fictional candidates after vector-model promotion",
+    )
+    candidate_plan_parser.add_argument("--evaluation", type=Path, required=True)
+    candidate_plan_parser.add_argument("--candidates", type=Path, required=True)
+    candidate_plan_parser.add_argument("--out", type=Path, required=True)
+    candidate_plan_parser.add_argument("--min-score", type=float, default=70.0)
+    candidate_plan_parser.add_argument("--max-score", type=float, default=90.0)
+
+    candidate_review_parser = subparsers.add_parser(
+        "review-fictional-candidates",
+        help="create a blinded fictional-candidate bundle or aggregate responses",
+    )
+    candidate_review_parser.add_argument("--frontier", type=Path, required=True)
+    candidate_review_parser.add_argument("--out", type=Path, required=True)
+    candidate_review_parser.add_argument("--seed", type=int, default=20260825)
+    candidate_review_parser.add_argument("--responses", type=Path, default=None)
+    candidate_review_parser.add_argument("--panel-scope", default="single_operator")
+
+    score_face_parser = subparsers.add_parser(
+        "score-face",
+        help="score one quality-passing face with a promoted local Seju model",
+    )
+    score_face_parser.add_argument("--evaluation", type=Path, required=True)
+    score_face_parser.add_argument("--image", type=Path, required=True)
+    score_face_parser.add_argument("--out", type=Path, required=True)
+    score_face_parser.add_argument("--gpu-id", type=int, default=0)
 
     prompt_parser = subparsers.add_parser("prompt", help="print a generation prompt from a built model")
     prompt_parser.add_argument("--model", type=Path, required=True)
@@ -548,6 +659,22 @@ def main(argv: list[str] | None = None) -> int:
                             default=["instagram", "twitter"])
 
     args = parser.parse_args(argv)
+    if args.command == "audit-face-dataset":
+        return _audit_face_dataset(args)
+    if args.command == "build-face-observations":
+        return _build_face_observations(args)
+    if args.command == "build-vector-model":
+        return _build_vector_model(args)
+    if args.command == "evaluate-vector-model":
+        return _evaluate_vector_model(args)
+    if args.command == "evaluate-vector-perturbations":
+        return _evaluate_vector_perturbations(args)
+    if args.command == "plan-fictional-candidates":
+        return _plan_fictional_candidates(args)
+    if args.command == "review-fictional-candidates":
+        return _review_fictional_candidates(args)
+    if args.command == "score-face":
+        return _score_face(args)
     if args.command == "build":
         return _build(args.images, args.out, args.crop, args.backend, args.balance)
     if args.command == "prompt":
@@ -703,6 +830,160 @@ def _build(images: Path, out: Path, crop: str, backend_name: str, balance: str =
     print(f"centroid_stability: {stability.get('band')} (self_cosine_mean={stability.get('self_cosine_mean')})")
     print(f"embedding_dim: {model.embedding_dim}")
     print(f"prompt: {out / 'prompt.txt'}")
+    return 0
+
+
+def _audit_face_dataset(args: argparse.Namespace) -> int:
+    audit = audit_face_dataset(
+        args.source_manifest,
+        args.download_manifest,
+        args.images,
+        args.out,
+    )
+    summary = audit.summary()
+    print(f"clean: {summary['clean_count']}")
+    print(f"rejected: {summary['rejected_count']}")
+    print(f"subjects: {summary['subject_count']}")
+    print(f"audit: {args.out / 'dataset_audit.json'}")
+    return 0
+
+
+def _build_face_observations(args: argparse.Namespace) -> int:
+    audit_path = args.manifest.parent / "dataset_audit.json"
+    if not audit_path.is_file():
+        raise ValueError(f"dataset audit is required beside clean manifest: {audit_path}")
+    audit = json.loads(audit_path.read_text(encoding="utf-8"))
+    contract = insightface_contract(
+        source_manifest_sha256=str(audit["source_manifest_sha256"]),
+        clean_manifest_sha256=str(audit["clean_manifest_sha256"]),
+        code_commit=_git_commit(),
+        model_dir=args.model_dir,
+    )
+    rows = [json.loads(line) for line in args.manifest.read_text(encoding="utf-8").splitlines() if line.strip()]
+    extractor = InsightFaceObservationExtractor(gpu_id=args.gpu_id)
+    summary = build_face_observations(rows, extractor, contract, args.out)
+    print(f"accepted: {summary['accepted_count']}")
+    print(f"rejected: {summary['rejected_count']}")
+    print(f"subjects: {summary['subject_count']}")
+    print(f"contract: {summary['contract_hash']}")
+    return 0
+
+
+def _git_commit() -> str:
+    result = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout.strip()
+
+
+def _build_vector_model(args: argparse.Namespace) -> int:
+    summary = build_vector_model(args.observations, args.out)
+    print(f"status: {summary['status']}")
+    print(f"valid subjects: {summary['valid_subject_count']}")
+    print(f"components: {summary['component_count']}")
+    print(f"model: {args.out}")
+    return 0
+
+
+def _evaluate_vector_model(args: argparse.Namespace) -> int:
+    report = evaluate_vector_model_dir(
+        args.model,
+        args.out,
+        seed=args.seed,
+        perturbation_evidence=args.perturbations,
+    )
+    promotion = report["promotion"]
+    print(f"LOSO folds: {report['loso_fold_count']}")
+    print(f"median score: {report['score_median']}")
+    print(f"promotion: {promotion['status']}")
+    print(f"failed gates: {', '.join(promotion['failed_gates'])}")
+    print(f"evaluation: {args.out / 'evaluation.json'}")
+    return 0
+
+
+def _evaluate_vector_perturbations(args: argparse.Namespace) -> int:
+    standard = InsightFaceObservationExtractor(gpu_id=args.gpu_id, det_size=(640, 640))
+    detector_change = InsightFaceObservationExtractor(gpu_id=args.gpu_id, det_size=(320, 320))
+    summary = evaluate_vector_perturbations(
+        args.observations,
+        args.model,
+        args.out,
+        standard,
+        detector_change,
+    )
+    print(f"gate pass: {summary['gate_pass']}")
+    print(f"runtime seconds: {summary['runtime_seconds']}")
+    print(f"evidence: {args.out / 'perturbation_evidence.json'}")
+    return 0
+
+
+def _plan_fictional_candidates(args: argparse.Namespace) -> int:
+    evaluation = json.loads(args.evaluation.read_text(encoding="utf-8"))
+    candidates = [
+        json.loads(line)
+        for line in args.candidates.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    frontier = plan_candidates(
+        evaluation,
+        candidates,
+        score_band=(args.min_score, args.max_score),
+    )
+    args.out.mkdir(parents=True, exist_ok=True)
+    path = args.out / "candidate_frontier.json"
+    path.write_text(
+        json.dumps(frontier, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    print(f"eligible: {frontier['eligible_count']}")
+    print(f"frontier: {path}")
+    return 0
+
+
+def _review_fictional_candidates(args: argparse.Namespace) -> int:
+    frontier = json.loads(args.frontier.read_text(encoding="utf-8"))
+    candidates = list(frontier.get("frontier", []))
+    args.out.mkdir(parents=True, exist_ok=True)
+    public_bundle = make_blind_bundle(candidates, seed=args.seed)
+    private_mapping = make_private_review_mapping(candidates, seed=args.seed)
+    (args.out / "blind_review_bundle.json").write_text(
+        json.dumps(public_bundle, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    (args.out / "private_review_mapping.json").write_text(
+        json.dumps(private_mapping, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    if args.responses is not None:
+        responses = [
+            json.loads(line)
+            for line in args.responses.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        summary = aggregate_pairwise(responses, panel_scope=args.panel_scope)
+        (args.out / "preference_summary.json").write_text(
+            json.dumps(summary, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+            encoding="utf-8",
+        )
+    print(f"review items: {len(candidates)}")
+    print(f"bundle: {args.out / 'blind_review_bundle.json'}")
+    return 0
+
+
+def _score_face(args: argparse.Namespace) -> int:
+    extractor = InsightFaceObservationExtractor(gpu_id=args.gpu_id)
+    result = score_face_image(args.image, args.evaluation, extractor)
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    args.out.write_text(
+        json.dumps(result, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    print(f"Seju approximation: {result['seju_approximation']}")
+    print(f"out of support: {result['out_of_support']}")
+    print(f"score: {args.out}")
     return 0
 
 
@@ -1803,8 +2084,8 @@ def _explore_profile(args: argparse.Namespace) -> int:
 
 
 def _explore_batch(args: argparse.Namespace) -> int:
-    from .sns_metrics import SnsEngagement, TalentEngagementRecord, write_engagement_manifest
     from .sns_explorer import build_router
+    from .sns_metrics import SnsEngagement, TalentEngagementRecord, write_engagement_manifest
 
     handles_path: Path = args.handles
     records_raw = []
@@ -1933,7 +2214,11 @@ def _explore_discover(args: argparse.Namespace) -> int:
 
 
 def _analyze_correlation(args: argparse.Namespace) -> int:
-    from .correlation import build_correlation_dataset, compute_correlations, write_correlation_report
+    from .correlation import (
+        build_correlation_dataset,
+        compute_correlations,
+        write_correlation_report,
+    )
 
     print(f"loading face scores: {args.face_scores}")
     print(f"loading engagement data: {args.engagement}")

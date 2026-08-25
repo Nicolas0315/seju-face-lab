@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import csv
 import json
-from pathlib import Path
 import tempfile
+from pathlib import Path
 from typing import Any
 
 from .agency import build_agency_average_params
@@ -11,7 +11,6 @@ from .backends import get_vector_backend
 from .face_axes import AXES, write_face_axis_report
 from .metrics import score_generated_images, write_scores
 from .model import load_model
-
 
 DEFAULT_WEIGHTS = {
     "descriptor_similarity": 0.35,

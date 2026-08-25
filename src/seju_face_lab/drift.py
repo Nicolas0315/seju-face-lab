@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import csv
-from datetime import date, datetime
 import hashlib
 import json
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -40,11 +40,12 @@ def build_agency_drift_monitor(
     config = json.loads(agencies_config.read_text(encoding="utf-8"))
     current = _current_sources(config)
     previous_rows = _previous_sources(previous)
-    tasks = _refresh_tasks(current, previous_rows, _parse_date(as_of) or date.today(), max_age_days)
+    today = date.today()  # noqa: DTZ011 - drift reports use the local calendar date.
+    tasks = _refresh_tasks(current, previous_rows, _parse_date(as_of) or today, max_age_days)
     return {
         "agencies_config": str(agencies_config),
         "previous": str(previous) if previous else None,
-        "as_of": as_of or date.today().isoformat(),
+        "as_of": as_of or today.isoformat(),
         "max_age_days": max_age_days,
         "retrieved_at": config.get("retrieved_at"),
         "agency_count": len(current),

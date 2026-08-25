@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 import argparse
-from collections import Counter, defaultdict
 import hashlib
-from html import escape
 import json
+from collections import Counter, defaultdict
+from html import escape
 from pathlib import Path
 from typing import Any
 
 from PIL import Image, UnidentifiedImageError
-
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 

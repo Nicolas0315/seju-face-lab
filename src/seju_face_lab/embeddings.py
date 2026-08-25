@@ -182,7 +182,7 @@ def _region_features(gray: np.ndarray, rgb: np.ndarray) -> np.ndarray:
 
 def vectorize_batch_parallel(
     paths: list[Path],
-    backend: "VectorBackend",
+    backend: VectorBackend,
     crop: str = "center",
     workers: int = 4,
 ) -> list[ImageVector]:
