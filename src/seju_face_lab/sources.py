@@ -1,20 +1,20 @@
 from __future__ import annotations
 
-import json
 import hashlib
+import json
 import re
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 import urllib.robotparser
+from collections.abc import Callable, Iterable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
 from datetime import date, datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path
 from threading import Lock
-from typing import Callable, Iterable
 
 IMAGE_RE = re.compile(r"\.(?:jpg|jpeg|png|webp|bmp)(?:\?|$)", re.IGNORECASE)
 BIRTHDATE_RE = re.compile(r"(\d{4})年\s*(\d{1,2})月\s*(\d{1,2})日")
@@ -59,7 +59,7 @@ def discover_sources(
     delay_seconds: float,
     user_agent: str,
 ) -> list[SourceCandidate]:
-    as_of_date = date.fromisoformat(as_of) if as_of else date.today()
+    as_of_date = date.fromisoformat(as_of) if as_of else date.today()  # noqa: DTZ011 - source age uses local date.
     fetcher = _ThrottledFetcher(user_agent=user_agent, delay_seconds=delay_seconds)
     robots_cache = _RobotsPolicyCache()
     robots_cache.assert_allowed(index_url, user_agent)

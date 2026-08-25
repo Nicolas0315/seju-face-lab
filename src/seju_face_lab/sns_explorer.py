@@ -26,10 +26,10 @@ import subprocess
 import time
 import urllib.error
 import urllib.request
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable
 
 # ─── Data models ─────────────────────────────────────────────────────────────
 
@@ -195,10 +195,10 @@ class RemoteInstagramFetcher:
         try:
             result = subprocess.run(
                 ["ssh", "-o", "ConnectTimeout=5", "-o", "BatchMode=yes", self.ssh_host, "echo ok"],
-                capture_output=True, text=True, timeout=8,
+                capture_output=True, text=True, timeout=8, check=False,
             )
             return result.returncode == 0 and "ok" in result.stdout
-        except Exception:
+        except (OSError, subprocess.SubprocessError, ValueError):
             return False
 
     def fetch_batch(self, handles: list[str]) -> dict[str, dict]:
@@ -211,7 +211,7 @@ class RemoteInstagramFetcher:
             result = subprocess.run(
                 cmd,
                 input=script,
-                capture_output=True, text=True, timeout=self.timeout,
+                capture_output=True, text=True, timeout=self.timeout, check=False,
             )
             if result.returncode != 0:
                 raise RuntimeError(result.stderr[:200])
@@ -221,7 +221,7 @@ class RemoteInstagramFetcher:
                 if line.startswith("{"):
                     return json.loads(line)
             raise ValueError("no JSON in output")
-        except Exception as exc:
+        except (OSError, subprocess.SubprocessError, RuntimeError, ValueError) as exc:
             return {h: {"followers": None, "status": f"ssh_error: {exc}"} for h in handles}
 
     def fetch(self, handle: str) -> SnsProfile:
@@ -275,7 +275,7 @@ def _fetch_instagram_local(handle: str) -> SnsProfile:
     })
     try:
         s.get("https://www.instagram.com/", timeout=10)
-    except Exception:
+    except Exception:  # noqa: BLE001, S110 - session warm-up is best-effort before the real request.
         pass
     try:
         r = s.get(
@@ -311,7 +311,7 @@ def _fetch_instagram_local(handle: str) -> SnsProfile:
             source="local_ig",
             fetch_status="ok" if fol is not None else "partial",
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - third-party HTTP/JSON adapters return a blocked profile.
         return SnsProfile(platform="instagram", handle=handle,
                           profile_url=f"https://www.instagram.com/{handle}/",
                           fetch_status="blocked", fetch_error=str(exc)[:200], source="local_ig")
@@ -351,7 +351,7 @@ def _fetch_twitter_fxtwitter(handle: str) -> SnsProfile:
         return SnsProfile(platform="twitter", handle=handle,
                           profile_url=f"https://x.com/{handle}",
                           fetch_status="blocked", fetch_error=f"HTTP {exc.code}", source="fxtwitter")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - third-party HTTP/JSON adapters return a blocked profile.
         return SnsProfile(platform="twitter", handle=handle,
                           profile_url=f"https://x.com/{handle}",
                           fetch_status="error", fetch_error=str(exc)[:200], source="fxtwitter")
@@ -374,7 +374,7 @@ def _fetch_tiktok_oembed(handle: str) -> SnsProfile:
             fetch_status="partial",  # oEmbed doesn't include follower count
             fetch_error="oEmbed: no follower count available",
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - third-party HTTP/JSON adapters return a blocked profile.
         return SnsProfile(platform="tiktok", handle=handle,
                           profile_url=f"https://www.tiktok.com/@{handle}",
                           fetch_status="blocked", fetch_error=str(exc)[:200], source="tiktok_oembed")
@@ -421,8 +421,8 @@ def _fetch_tiktok_kalodata_search(handle: str) -> SnsProfile | None:
                     source="kalodata",
                     fetch_status="ok" if fol else "partial",
                 )
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception:  # noqa: BLE001 - optional Kalodata integration is a best-effort fallback.
+        return None
     return None
 
 
@@ -504,7 +504,7 @@ class SnsRouter:
                         source="nitter_fallback",
                         fetch_status=legacy.fetch_status,
                     )
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001, S110 - try the already-defined fallback result.
                 pass
             return p
 

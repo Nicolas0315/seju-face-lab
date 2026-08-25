@@ -5,7 +5,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-
 DEFAULT_TARGETS = {
     "image_centroid_score": 0.35,
     "axis_alignment": 0.62,

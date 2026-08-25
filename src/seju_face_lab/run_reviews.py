@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import csv
+import json
 from dataclasses import asdict, dataclass
 from html import escape
-import json
 from pathlib import Path
 
 
@@ -218,12 +218,12 @@ def _is_evaluation_output_dir(run_dir: Path) -> bool:
 
 def _render_generation_run_reviews_csv(reviews: list[GenerationRunReview]) -> str:
     lines = [
-        "rank,run_dir,provider,model_id,status,centroid_kind,image_count,best_image_id,"
+        ("rank,run_dir,provider,model_id,status,centroid_kind,image_count,best_image_id,"
         "failed_count,best_centroid_score,mean_centroid_score,median_centroid_score,"
         "best_style_score,mean_style_score,median_style_score,best_combined_image_id,"
         "best_combined_path,best_combined_score,qa_pass_count,qa_fail_count,qa_pass_rate,"
         "best_qa_image_id,best_qa_path,best_qa_centroid_score,prompt_profile,seed,"
-        "planned_count,steps,guidance_scale,size,device,dtype,prompt_words"
+        "planned_count,steps,guidance_scale,size,device,dtype,prompt_words")
     ]
     for rank, review in enumerate(reviews, start=1):
         lines.append(
@@ -328,8 +328,8 @@ def _render_generation_run_reviews_html(reviews: list[GenerationRunReview]) -> s
             "<body>",
             "<h1>generation run comparison</h1>",
             cards or "<p>No generation runs provided.</p>",
-            '<p class="boundary">Scores are approximate local triage against this centroid model. '
-            "They are not identity, attractiveness, ethnicity, or objective face-type labels.</p>",
+            ('<p class="boundary">Scores are approximate local triage against this centroid model. '
+            "They are not identity, attractiveness, ethnicity, or objective face-type labels.</p>"),
             "</body>",
             "</html>",
             "",

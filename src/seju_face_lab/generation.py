@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import json
 import base64
+import json
 import subprocess
 import urllib.request
 from dataclasses import asdict, dataclass

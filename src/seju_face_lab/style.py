@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -117,7 +117,7 @@ def score_style_images(
     for path in iter_image_paths(images_dir):
         try:
             vector = active_backend.encode_path(path)
-        except Exception:  # noqa: BLE001 - keep batch evaluation running and report failures.
+        except Exception:
             if failed_paths is None:
                 raise
             failed_paths.append(str(path))

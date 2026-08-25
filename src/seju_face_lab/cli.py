@@ -2,20 +2,24 @@ from __future__ import annotations
 
 import argparse
 import json
-from pathlib import Path
 import shutil
+from pathlib import Path
 
 import numpy as np
 
-from .backends import backend_help, get_vector_backend
 from .agency import write_agency_average_params
 from .agency_centroid import (
     AGENCY_CENTROID_BOUNDARY,
     build_agency_centroid,
     write_agency_centroid,
 )
-from .backend_compare import compare_deepface_detectors, compare_subject_backends, compare_vector_backends
+from .backend_compare import (
+    compare_deepface_detectors,
+    compare_subject_backends,
+    compare_vector_backends,
+)
 from .backend_diagnostics import write_backend_diagnostics
+from .backends import backend_help, get_vector_backend
 from .benchmark_research import write_benchmark_research
 from .calibration import write_generation_calibration
 from .drift import write_agency_drift_monitor
@@ -29,20 +33,35 @@ from .generation import (
     write_generation_plan,
 )
 from .ingredients import write_ingredients_report
-from .metrics import review_subject_directories, score_generated_images, write_scores, write_subject_reviews
+from .metrics import (
+    review_subject_directories,
+    score_generated_images,
+    write_scores,
+    write_subject_reviews,
+)
 from .model import build_centroid_model, load_model, save_model
 from .model_audit import centroid_stability, write_model_audit
 from .pipeline import run_pipeline_config
-from .prompting import prompt_from_descriptors
 from .precision import write_precision_report
+from .prompting import prompt_from_descriptors
 from .quality import review_image_quality, write_image_quality
-from .run_reviews import review_generation_runs, write_generation_run_reviews
 from .rubric import write_pairwise_rubric_review
-from .sources import discover_sources, download_source_images, read_source_manifest, write_source_manifest
+from .run_reviews import review_generation_runs, write_generation_run_reviews
+from .sources import (
+    discover_sources,
+    download_source_images,
+    read_source_manifest,
+    write_source_manifest,
+)
 from .style import OpenClipStyleBackend, score_style_images, write_style_scores
 from .subject_vectors import vectorize_subjects, write_subject_vectors
 from .vector_export import write_vector_export
-from .workers import DEFAULT_DIAGNOSTIC_WORKERS, LOCAL_4090, distribute_vectorize, write_worker_diagnostics
+from .workers import (
+    DEFAULT_DIAGNOSTIC_WORKERS,
+    LOCAL_4090,
+    distribute_vectorize,
+    write_worker_diagnostics,
+)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1803,8 +1822,8 @@ def _explore_profile(args: argparse.Namespace) -> int:
 
 
 def _explore_batch(args: argparse.Namespace) -> int:
-    from .sns_metrics import SnsEngagement, TalentEngagementRecord, write_engagement_manifest
     from .sns_explorer import build_router
+    from .sns_metrics import SnsEngagement, TalentEngagementRecord, write_engagement_manifest
 
     handles_path: Path = args.handles
     records_raw = []
@@ -1933,7 +1952,11 @@ def _explore_discover(args: argparse.Namespace) -> int:
 
 
 def _analyze_correlation(args: argparse.Namespace) -> int:
-    from .correlation import build_correlation_dataset, compute_correlations, write_correlation_report
+    from .correlation import (
+        build_correlation_dataset,
+        compute_correlations,
+        write_correlation_report,
+    )
 
     print(f"loading face scores: {args.face_scores}")
     print(f"loading engagement data: {args.engagement}")

@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import zipfile
 from pathlib import Path
 from typing import Any
-import zipfile
 
 import numpy as np
 
@@ -288,8 +288,8 @@ def _render_model_audit(audit: dict[str, Any]) -> str:
                 f"- unit_count: {_value(stability.get('unit_count'))}",
                 f"- resamples: {_value(stability.get('resamples'))}",
                 f"- self_cosine_mean: {_value(stability.get('self_cosine_mean'))}",
-                f"- self_cosine_ci: {_value(stability.get('self_cosine_low'))} .. "
-                f"{_value(stability.get('self_cosine_high'))}",
+                (f"- self_cosine_ci: {_value(stability.get('self_cosine_low'))} .. "
+                f"{_value(stability.get('self_cosine_high'))}"),
                 f"- band: {_value(stability.get('band'))} (heuristic candidate)",
             ]
         )

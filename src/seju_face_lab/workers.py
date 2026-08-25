@@ -224,7 +224,7 @@ def check_remote_worker(worker: WorkerConfig) -> bool:
         return True  # local worker is always available
     try:
         cmd = _ssh_cmd(worker, f'"{worker.python}" -m seju_face_lab backends')
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30, check=False)
         return result.returncode == 0
     except Exception:  # noqa: BLE001
         return False
@@ -307,6 +307,7 @@ def _diagnose_worker(worker: WorkerConfig, timeout_seconds: int) -> dict[str, An
                 capture_output=True,
                 text=True,
                 timeout=timeout_seconds,
+                check=False,
             )
         except Exception as exc:  # noqa: BLE001 - diagnostics must record failures.
             return _worker_probe_failure(worker, type(exc).__name__, str(exc))
@@ -319,6 +320,7 @@ def _diagnose_worker(worker: WorkerConfig, timeout_seconds: int) -> dict[str, An
             capture_output=True,
             text=True,
             timeout=timeout_seconds,
+            check=False,
         )
     except Exception as exc:  # noqa: BLE001 - diagnostics must record failures.
         return _worker_probe_failure(worker, type(exc).__name__, str(exc))

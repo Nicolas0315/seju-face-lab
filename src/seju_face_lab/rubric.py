@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-
 STRICT_RUBRIC_BOUNDARY = (
     "Strict rubric review is local generated-image triage only. It is not identity, "
     "attractiveness, ethnicity, personality, or person-matching analysis."

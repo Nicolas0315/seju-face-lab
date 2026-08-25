@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from html import escape
-import json
 from pathlib import Path
 
 import numpy as np
@@ -50,7 +50,7 @@ def score_generated_images(
     for path in iter_image_paths(images_dir):
         try:
             vectors.append(active_backend.vectorize(path, crop=crop))
-        except Exception:  # noqa: BLE001 - keep batch evaluation running and report failures.
+        except Exception:
             if failed_paths is None:
                 raise
             failed_paths.append(str(path))
@@ -80,8 +80,8 @@ def review_subject_directories(
 def write_subject_reviews(reviews: list[SubjectReview], out_dir: Path) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     csv_lines = [
-        "subject,image_count,failed_count,best_image_id,best_image_path,best_centroid_score,"
-        "mean_centroid_score,median_centroid_score,mean_cosine_to_mean,mean_cosine_to_median"
+        ("subject,image_count,failed_count,best_image_id,best_image_path,best_centroid_score,"
+        "mean_centroid_score,median_centroid_score,mean_cosine_to_mean,mean_cosine_to_median")
     ]
     for review in reviews:
         csv_lines.append(
@@ -370,8 +370,8 @@ def _render_subject_reviews_html(reviews: list[SubjectReview]) -> str:
             "<h1>subject seju-face similarity review</h1>",
             f'<div class="subjects">{cards}</div>' if cards else "<p>No subject directories found.</p>",
             analysis,
-            '<p class="boundary">Scores are approximate local triage against this centroid model. '
-            "They are not identity, attractiveness, ethnicity, or objective face-type labels.</p>",
+            ('<p class="boundary">Scores are approximate local triage against this centroid model. '
+            "They are not identity, attractiveness, ethnicity, or objective face-type labels.</p>"),
             "</body>",
             "</html>",
             "",

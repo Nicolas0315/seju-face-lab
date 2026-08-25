@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
 import json
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from PIL import Image, ImageOps
 import numpy as np
+from PIL import Image, ImageOps
 
 from .backends import _import_cv2
 from .embeddings import iter_image_paths

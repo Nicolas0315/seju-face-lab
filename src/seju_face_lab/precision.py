@@ -4,9 +4,9 @@ import csv
 import hashlib
 import json
 import math
+import zipfile
 from pathlib import Path
 from typing import Any
-import zipfile
 
 import numpy as np
 
@@ -798,10 +798,10 @@ def _render_precision_report(report: dict[str, Any]) -> str:
         f"- null_calibration_method: {_value(generation['null_calibration']['method'])}",
         f"- null_calibration_sample_count: {_value(generation['null_calibration']['sample_count'])}",
         f"- null_calibration_p95: {_value(generation['null_calibration']['p95'])}",
-        "- best_centroid_score_null_percentile: "
-        f"{_value(generation['null_calibration']['best_centroid_score_percentile'])}",
-        "- mean_centroid_score_null_percentile: "
-        f"{_value(generation['null_calibration']['mean_centroid_score_percentile'])}",
+        ("- best_centroid_score_null_percentile: "
+        f"{_value(generation['null_calibration']['best_centroid_score_percentile'])}"),
+        ("- mean_centroid_score_null_percentile: "
+        f"{_value(generation['null_calibration']['mean_centroid_score_percentile'])}"),
         f"- null_calibration_boundary: {_value(generation['null_calibration']['boundary'])}",
         "",
         *_render_generation_by_centroid_kind(generation.get("by_centroid_kind")),

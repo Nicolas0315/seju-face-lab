@@ -8,7 +8,6 @@ from typing import Any
 from .face_axes import axis_distribution, axis_vector_from_descriptors
 from .prompting import prompt_from_descriptors
 
-
 DESCRIPTOR_KEYS = [
     "luminance",
     "contrast",

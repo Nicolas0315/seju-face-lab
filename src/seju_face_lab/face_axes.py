@@ -11,7 +11,6 @@ from PIL import Image, ImageOps
 from .backends import get_vector_backend
 from .embeddings import iter_image_paths
 
-
 AXES = [
     "soft_defined",
     "cool_warm",
