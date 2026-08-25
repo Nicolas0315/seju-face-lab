@@ -1,6 +1,6 @@
 # Discord Evidence to Seju Face Artifact Validation
 
-Status: design for review
+Status: superseded on 2026-08-25 by `2026-08-25-seju-vector-decomposition-candidate-search-design.md`
 
 Date: 2026-08-24
 
