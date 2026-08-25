@@ -1,10 +1,12 @@
 # Seju Face Vector Decomposition and Fictional Candidate Search
 
-Status: design for review
+Status: approved for implementation by operator direction; Japanese review companion added
 
 Date: 2026-08-25
 
 Supersedes: `2026-08-24-discord-seju-face-validation-design.md`
+
+Japanese review companion: `docs/seju-vector-system-overview-ja.md`
 
 ## 1. Objective
 
@@ -570,4 +572,4 @@ The fictional-candidate slice is complete only when:
 8. fictional candidate planner and small generation loop;
 9. blinded preference review.
 
-Implementation starts only after this written specification is reviewed and approved.
+Implementation proceeds under the operator's 2026-08-25 direction. The Japanese review companion is normative for diagrams and operator-facing semantics; this document remains normative for algorithm details.
