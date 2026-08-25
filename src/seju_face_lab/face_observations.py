@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Protocol
+from typing import Any, Protocol
 
 import numpy as np
 
+from .backends import _prepare_windows_torch_cuda_dlls
 from .geometry_vectors import GeometryVector, geometry_vector
 from .model_contract import ModelContract
 
@@ -77,15 +79,22 @@ def extract_face_observation(
 
 
 class InsightFaceObservationExtractor:
-    def __init__(self, gpu_id: int = 0, model_pack: str = "buffalo_l") -> None:
+    def __init__(
+        self,
+        gpu_id: int = 0,
+        model_pack: str = "buffalo_l",
+        det_size: tuple[int, int] = (640, 640),
+    ) -> None:
         self.gpu_id = gpu_id
         self.model_pack = model_pack
+        self.det_size = det_size
         self._app: Any = None
 
     def _get_app(self) -> Any:
         if self._app is None:
             from insightface.app import FaceAnalysis
 
+            _prepare_windows_torch_cuda_dlls()
             providers = (
                 ["CUDAExecutionProvider", "CPUExecutionProvider"]
                 if self.gpu_id >= 0
@@ -96,7 +105,7 @@ class InsightFaceObservationExtractor:
                 providers=providers,
                 allowed_modules=["detection", "recognition", "landmark_2d_106"],
             )
-            self._app.prepare(ctx_id=self.gpu_id)
+            self._app.prepare(ctx_id=self.gpu_id, det_size=self.det_size)
         return self._app
 
     def detect(self, path: Path) -> list[Mapping[str, Any]]:

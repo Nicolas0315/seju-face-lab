@@ -3,9 +3,10 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any
 from urllib.parse import urlparse
 
 import numpy as np
@@ -127,27 +128,16 @@ def cluster_near_duplicates(
         pixels = [_duplicate_pixels(Path(str(row["path"]))) for row in subject_rows]
         parents = list(range(len(subject_rows)))
 
-        def find(index: int) -> int:
-            while parents[index] != index:
-                parents[index] = parents[parents[index]]
-                index = parents[index]
-            return index
-
-        def union(left: int, right: int) -> None:
-            root_left, root_right = find(left), find(right)
-            if root_left != root_right:
-                parents[root_right] = root_left
-
         for left in range(len(subject_rows)):
             for right in range(left + 1, len(subject_rows)):
                 if hamming_distance(hashes[left], hashes[right]) > hamming_threshold:
                     continue
                 if structural_similarity(pixels[left], pixels[right]) >= ssim_threshold:
-                    union(left, right)
+                    _union_parents(parents, left, right)
 
         groups: dict[int, list[dict[str, Any]]] = {}
         for index, row in enumerate(subject_rows):
-            groups.setdefault(find(index), []).append(row)
+            groups.setdefault(_find_parent(parents, index), []).append(row)
         for group_index, members in enumerate(groups.values(), start=1):
             ordered = sorted(
                 members,
@@ -187,6 +177,20 @@ def _duplicate_pixels(path: Path) -> np.ndarray:
     return np.asarray(image.resize((64, 64), Image.Resampling.LANCZOS), dtype=np.float64)
 
 
+def _find_parent(parents: list[int], index: int) -> int:
+    while parents[index] != index:
+        parents[index] = parents[parents[index]]
+        index = parents[index]
+    return index
+
+
+def _union_parents(parents: list[int], left: int, right: int) -> None:
+    root_left = _find_parent(parents, left)
+    root_right = _find_parent(parents, right)
+    if root_left != root_right:
+        parents[root_right] = root_left
+
+
 def _row_rejection_reason(row: Mapping[str, Any], allowed_hosts: set[str]) -> str | None:
     if not row.get("source_manifest_present", True):
         return "missing_source_manifest"
@@ -218,7 +222,7 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
             continue
         value = json.loads(line)
         if not isinstance(value, dict):
-            raise ValueError(f"JSONL row {line_number} is not an object: {path}")
+            raise TypeError(f"JSONL row {line_number} is not an object: {path}")
         rows.append(value)
     return rows
 
