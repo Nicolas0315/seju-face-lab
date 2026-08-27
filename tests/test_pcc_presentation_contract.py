@@ -8,11 +8,40 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import bootstrap  # noqa: F401
+from seju_face_lab.pcc_presentation import build_pcc_presentation_review
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 class PccPresentationContractTests(unittest.TestCase):
+    def test_cli_rejects_duplicate_json_keys_in_contract(self) -> None:
+        """Catches ambiguous contract fields accepted by JSON's last-key-wins default."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            contract_path = root / "contract.json"
+            duplicate_contract = json.dumps(self._contract()).replace(
+                '"contract_version": "pcc-seju-presentation/v1",',
+                '"contract_version": "pcc-seju-presentation/v1", '
+                '"contract_version": "pcc-seju-presentation/v1",',
+                1,
+            )
+            contract_path.write_text(duplicate_contract, encoding="utf-8")
+            out = root / "out"
+
+            result = self._run_review(contract_path, None, out)
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertFalse(out.exists())
+
+    def test_public_review_builder_rejects_unvalidated_contract_data(self) -> None:
+        """Catches callers bypassing CLI schema validation with private task fields."""
+        contract = self._contract()
+        contract["tasks"][0]["prompt_text"] = "private prompt"  # type: ignore[index]
+        with self.assertRaises(ValueError):
+            build_pcc_presentation_review(contract, [])
+
     def test_cli_rejects_contract_task_fields_outside_the_public_schema(self) -> None:
         """Catches private prompt or attribute data hidden in task metadata."""
         with tempfile.TemporaryDirectory() as tmp:

@@ -76,23 +76,36 @@ ALLOWED_PRESENTATION_FLAGS = {
 }
 
 
+def _reject_duplicate_json_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    value: dict[str, Any] = {}
+    for key, item in pairs:
+        if key in value:
+            raise ValueError(f"duplicate JSON object key: {key}")
+        value[key] = item
+    return value
+
+
+def _load_json(raw: str, source: str) -> Any:
+    try:
+        return json.loads(raw, object_pairs_hook=_reject_duplicate_json_keys)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{source} is not valid JSON") from exc
+
+
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
         if not line.strip():
             continue
-        try:
-            value = json.loads(line)
-        except json.JSONDecodeError as exc:
-            raise ValueError(f"observations line {number} is not valid JSON") from exc
+        value = _load_json(line, f"observations line {number}")
         if not isinstance(value, dict):
             raise ValueError(f"observations line {number} must be a JSON object")
         rows.append(value)
     return rows
 
 
-def load_pcc_contract(path: Path) -> dict[str, Any]:
-    contract = json.loads(path.read_text(encoding="utf-8"))
+def validate_pcc_contract(contract: dict[str, Any]) -> dict[str, Any]:
+    """Fail closed unless a contract contains only approved aggregate metadata."""
     if not isinstance(contract, dict):
         raise ValueError("contract must be a JSON object")
     if contract.get("contract_version") != CONTRACT_VERSION:
@@ -157,7 +170,13 @@ def load_pcc_contract(path: Path) -> dict[str, Any]:
     return contract
 
 
+def load_pcc_contract(path: Path) -> dict[str, Any]:
+    contract = _load_json(path.read_text(encoding="utf-8"), "contract")
+    return validate_pcc_contract(contract)
+
+
 def build_pcc_presentation_review(contract: dict[str, Any], observations: list[dict[str, Any]]) -> dict[str, Any]:
+    contract = validate_pcc_contract(contract)
     tasks = {str(task["task_id"]): task for task in contract["tasks"]}
     records: list[dict[str, Any]] = []
     seen_pairs: set[tuple[str, str]] = set()
