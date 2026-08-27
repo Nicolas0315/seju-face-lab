@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import importlib.util
 import tempfile
 import unittest
 from pathlib import Path
@@ -211,6 +212,10 @@ class VectorModelV1Tests(unittest.TestCase):
             self.assertTrue((root / "out" / "neural_vectors.npz").exists())
             self.assertTrue((root / "out" / "geometry_vectors.npz").exists())
 
+    @unittest.skipUnless(
+        importlib.util.find_spec("insightface") is not None,
+        "requires the optional face dependency",
+    )
     def test_insightface_observation_extractor_prepares_windows_cuda_dlls(self) -> None:
         extractor = InsightFaceObservationExtractor(gpu_id=0)
         with (
