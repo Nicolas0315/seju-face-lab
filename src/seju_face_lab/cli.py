@@ -48,6 +48,7 @@ from .model_audit import centroid_stability, write_model_audit
 from .model_contract import insightface_contract
 from .perturbations import evaluate_vector_perturbations
 from .pipeline import run_pipeline_config
+from .pcc_presentation import write_pcc_presentation_review
 from .precision import write_precision_report
 from .preference_review import (
     aggregate_pairwise,
@@ -370,6 +371,19 @@ def main(argv: list[str] | None = None) -> int:
     review_generated_parser.add_argument("--out", type=Path, default=None)
     review_generated_parser.add_argument("--crop", choices=["center", "none"], default="center")
     review_generated_parser.add_argument("--backend", default="deterministic")
+
+    pcc_presentation_parser = subparsers.add_parser(
+        "pcc-presentation-review",
+        help="aggregate privacy-preserving PCC-NH task observations for presentation QA",
+    )
+    pcc_presentation_parser.add_argument("--contract", type=Path, required=True)
+    pcc_presentation_parser.add_argument(
+        "--observations",
+        type=Path,
+        default=None,
+        help="anonymous JSONL task observations; omit to start an honest zero-observation review",
+    )
+    pcc_presentation_parser.add_argument("--out", type=Path, required=True)
 
     review_parser = subparsers.add_parser(
         "review-subjects",
@@ -709,6 +723,8 @@ def main(argv: list[str] | None = None) -> int:
         return _pairwise_rubric(args)
     if args.command == "review-generated":
         return _review_generated(args)
+    if args.command == "pcc-presentation-review":
+        return _pcc_presentation_review(args.contract, args.observations, args.out)
     if args.command == "review-subjects":
         return _review_subjects(args.model, args.subjects, args.out, args.crop, args.backend)
     if args.command == "vectorize-subjects":
@@ -760,6 +776,14 @@ def main(argv: list[str] | None = None) -> int:
         return _explore_load_cache(args)
     parser.error(f"Unknown command: {args.command}")
     return 2
+
+
+def _pcc_presentation_review(contract: Path, observations: Path | None, out: Path) -> int:
+    review = write_pcc_presentation_review(contract, observations, out)
+    print(f"PCC presentation observations: {review['mapped_count']} / {review['task_count']}")
+    print(f"presentation clear: {review['presentation_clear_count']}")
+    print(f"review: {out / 'pcc_presentation_review.json'}")
+    return 0
 
 
 def _build(images: Path, out: Path, crop: str, backend_name: str, balance: str = "image") -> int:

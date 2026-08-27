@@ -216,6 +216,20 @@ python -m seju_face_lab qa-images --images outputs/generated --out outputs/gener
 python -m seju_face_lab review-generated --model outputs/seju_model --images outputs/generated --out outputs/generated/review
 ```
 
+PCC-NH contract review / PCC-NH実験契約のレビュー:
+
+```text
+python -m seju_face_lab pcc-presentation-review --contract <pcc_seju_presentation_v1.json> --out outputs/pcc_review
+python -m seju_face_lab pcc-presentation-review --contract <pcc_seju_presentation_v1.json> --observations <anonymous_observations.jsonl> --out outputs/pcc_review
+```
+
+The contract contains only task metadata and prompt fingerprints. Optional
+observations are JSON Lines objects with `task_id`, `image_id`,
+`face_qa_pass`, and `presentation_flags`. This command never reads image files,
+face vectors, identity data, age/demographic labels, or attractiveness scores;
+it keeps the full task denominator and never promotes a candidate without
+blinded human review.
+
 Subject-folder review / 人物フォルダ別レビュー:
 
 ```text
