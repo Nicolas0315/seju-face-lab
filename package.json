@@ -4,7 +4,7 @@
 		"deploy:agency-site": "wrangler pages deploy outputs/agency_site --project-name seju-face-lab-agency-research"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "2.5.8",
-		"wrangler": "^4.131.0"
+		"@biomejs/biome": "2.5.14",
+		"wrangler": "^4.135.0"
 	}
 }
