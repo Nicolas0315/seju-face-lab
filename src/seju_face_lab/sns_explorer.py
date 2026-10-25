@@ -21,6 +21,7 @@ Usage:
 from __future__ import annotations
 
 import json
+import shlex
 import sqlite3
 import subprocess
 import time
@@ -206,7 +207,7 @@ class RemoteInstagramFetcher:
         handles_json = json.dumps(handles)
         script = _REMOTE_IG_SCRIPT.strip()
         cmd = ["ssh", "-o", "ConnectTimeout=10", self.ssh_host,
-               f"{self.python_bin} - {handles_json!r}"]
+               f"{shlex.quote(self.python_bin)} - {shlex.quote(handles_json)}"]
         try:
             result = subprocess.run(
                 cmd,
